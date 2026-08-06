@@ -117,7 +117,7 @@ export default function ImportPage() {
                   accept=".ofx,.csv"
                   onChange={handleFileChange}
                 />
-                <Button variant="outline" size="sm" className="w-full pointer-events-none">
+                <Button variant="secondary" size="sm" className="w-full pointer-events-none">
                   Selecionar Arquivo
                 </Button>
               </div>

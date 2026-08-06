@@ -34,7 +34,7 @@ export default function TransactionsPage() {
     description: '',
     date: new Date().toISOString().split('T')[0],
     category_id: '',
-    status: 'pago' as 'pago' | 'pendente',
+    status: 'pago' as 'pago' | 'pendente' | 'cancelado',
     payment_method: 'conta' as 'conta' | 'cartao',
     credit_card_id: '',
     installments: '1'
@@ -170,14 +170,14 @@ export default function TransactionsPage() {
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
           <div className="flex gap-2">
             <Button 
-              variant={filterType === 'all' ? 'primary' : 'outline'} 
+              variant={filterType === 'all' ? 'primary' : 'secondary'} 
               size="sm" 
               onClick={() => setFilterType('all')}
             >
               Todos
             </Button>
             <Button 
-              variant={filterType === 'receita' ? 'primary' : 'outline'} 
+              variant={filterType === 'receita' ? 'primary' : 'secondary'} 
               size="sm" 
               onClick={() => setFilterType('receita')}
               className={filterType === 'receita' ? 'bg-wealth-green hover:bg-green-600 border-wealth-green text-white' : 'text-wealth-green border-wealth-green/30 hover:bg-green-50 dark:hover:bg-green-900/20'}
@@ -185,7 +185,7 @@ export default function TransactionsPage() {
               Receitas
             </Button>
             <Button 
-              variant={filterType === 'despesa' ? 'primary' : 'outline'} 
+              variant={filterType === 'despesa' ? 'primary' : 'secondary'} 
               size="sm" 
               onClick={() => setFilterType('despesa')}
               className={filterType === 'despesa' ? 'bg-red-500 hover:bg-red-600 border-red-500 text-white' : 'text-red-500 border-red-500/30 hover:bg-red-50 dark:hover:bg-red-900/20'}
@@ -331,14 +331,14 @@ export default function TransactionsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Button 
-              variant="outline" 
+              variant="secondary" 
               className={formData.type === 'receita' ? 'bg-wealth-green text-white border-wealth-green' : 'border-wealth-green text-wealth-green hover:bg-green-50 dark:hover:bg-green-900/20'}
               onClick={() => setFormData({...formData, type: 'receita', category_id: ''})}
             >
               Receita
             </Button>
             <Button 
-              variant="outline" 
+              variant="secondary" 
               className={formData.type === 'despesa' ? 'bg-red-500 text-white border-red-500' : 'border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}
               onClick={() => setFormData({...formData, type: 'despesa', category_id: ''})}
             >

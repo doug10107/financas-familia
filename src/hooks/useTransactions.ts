@@ -55,10 +55,10 @@ export function useTransactions() {
     // O Supabase retorna array para joins '1 to many', ou object para '1 to 1'. 
     // Como transaction -> category é many to 1, o 'categories' pode vir como array dependendo de como a view foi gerada.
     // O select 'category:categories(*)' retorna um objeto.
-    const mapped = (data || []).map(t => ({
+    const mapped = (data || []).map((t: any) => ({
       ...t,
       category: Array.isArray(t.category) ? t.category[0] : t.category
-    }));
+    })) as Transaction[];
     setTransactions(mapped);
   }, [supabase]);
 
@@ -135,7 +135,7 @@ export function useTransactions() {
             credit_card_id: transactionInput.credit_card_id || null,
             total_installments: isCreditCard ? 1 : null,
             current_installment: isCreditCard ? 1 : null
-          });
+          } as any);
 
         if (error) throw error;
       } else {
@@ -168,7 +168,7 @@ export function useTransactions() {
 
         const { error } = await supabase
           .from('transactions')
-          .insert(transactionsToInsert);
+          .insert(transactionsToInsert as any);
 
         if (error) throw error;
       }
@@ -232,7 +232,7 @@ export function useTransactions() {
     try {
       const { error } = await supabase
         .from('transactions')
-        .update(transactionInput)
+        .update(transactionInput as any)
         .eq('id', id);
 
       if (error) throw error;

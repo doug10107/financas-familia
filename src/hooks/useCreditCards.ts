@@ -59,7 +59,7 @@ export function useCreditCards() {
         .insert({
           family_id: profile.family_id,
           ...cardInput
-        });
+        } as any);
 
       if (error) throw error;
       
@@ -77,7 +77,7 @@ export function useCreditCards() {
     try {
       const { error } = await supabase
         .from('credit_cards')
-        .update(cardInput)
+        .update(cardInput as any)
         .eq('id', id);
 
       if (error) throw error;
@@ -115,7 +115,7 @@ export function useCreditCards() {
     try {
       const { error } = await supabase
         .from('transactions')
-        .update({ status: 'pago' })
+        .update({ status: 'pago' } as any)
         .eq('credit_card_id', cardId)
         .eq('status', 'pendente')
         .like('date', `${month}-%`);

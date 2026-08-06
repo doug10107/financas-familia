@@ -31,7 +31,7 @@ export function useDashboard(monthFilter?: string) {
 
       if (txError) throw txError;
 
-      const transactions = (txs || []).map(t => ({
+      const transactions = (txs || []).map((t: any) => ({
         ...t,
         category: Array.isArray(t.category) ? t.category[0] : t.category,
         credit_card: Array.isArray(t.credit_card) ? t.credit_card[0] : t.credit_card

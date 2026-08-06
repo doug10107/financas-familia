@@ -265,8 +265,7 @@ export default function DashboardPage() {
                   plugins: {
                     legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } }
                   },
-                  cutout: '75%',
-                  borderWidth: 0
+                  cutout: '75%'
                 }} 
               />
             ) : (

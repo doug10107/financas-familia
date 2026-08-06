@@ -1,8 +1,6 @@
 import { redirect } from 'next/navigation';
 import { TopAppBar } from '@/components/layout/TopAppBar';
 import { BottomNav } from '@/components/layout/BottomNav';
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 
 export default async function AppLayout({
   children,

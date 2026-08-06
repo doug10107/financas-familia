@@ -51,7 +51,7 @@ export default function GoalsPage() {
                   <div className="p-3 bg-accent-purple/10 rounded-xl text-accent-purple">
                     <Icon name={goal.icon as any} className="w-6 h-6" />
                   </div>
-                  <Badge variant={progress >= 100 ? 'success' : 'primary'}>
+                  <Badge color={progress >= 100 ? 'green' : 'blue'}>
                     {progress}%
                   </Badge>
                 </div>
@@ -72,7 +72,7 @@ export default function GoalsPage() {
                   </div>
                   
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 text-xs py-2" onClick={() => setIsContributionModalOpen(true)}>
+                    <Button variant="secondary" className="flex-1 text-xs py-2" onClick={() => setIsContributionModalOpen(true)}>
                       <Icon name="add" className="w-3 h-3 mr-1" /> Aporte
                     </Button>
                   </div>
@@ -86,7 +86,8 @@ export default function GoalsPage() {
               title="Nenhuma meta cadastrada" 
               description="Comece a planejar seu futuro criando sua primeira meta financeira." 
               icon="Target"
-              action={{ label: "Criar Meta", onClick: () => setIsModalOpen(true) }}
+              actionLabel="Criar Meta"
+              onAction={() => setIsModalOpen(true)}
             />
           </div>
         )}

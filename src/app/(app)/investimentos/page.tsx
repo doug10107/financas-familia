@@ -69,7 +69,7 @@ export default function InvestmentsPage() {
                 <h2 className={`text-xl font-semibold ${totalYield >= 0 ? 'text-wealth-green' : 'text-red-500'}`}>
                   {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}%
                 </h2>
-                <Badge variant={totalYield >= 0 ? 'success' : 'danger'}>
+                <Badge color={totalYield >= 0 ? 'green' : 'red'}>
                   {formatCurrency(totalCurrent - totalInvested)}
                 </Badge>
               </div>
@@ -115,7 +115,7 @@ export default function InvestmentsPage() {
                     {inv.name}
                   </td>
                   <td className="px-4 py-4">
-                    <Badge variant={inv.type === 'Renda Fixa' ? 'primary' : 'warning'}>{inv.type}</Badge>
+                    <Badge color={inv.type === 'Renda Fixa' ? 'blue' : 'yellow'}>{inv.type}</Badge>
                   </td>
                   <td className="px-4 py-4 text-right text-gray-500 dark:text-gray-400">
                     {formatCurrency(inv.invested)}
