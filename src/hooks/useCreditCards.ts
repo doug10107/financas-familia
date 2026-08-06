@@ -50,7 +50,7 @@ export function useCreditCards() {
         .from('profiles')
         .select('family_id')
         .eq('id', user.id)
-        .single();
+        .single() as any;
         
       if (!profile) throw new Error('Perfil não encontrado');
 
@@ -75,9 +75,9 @@ export function useCreditCards() {
   const updateCreditCard = async (id: string, cardInput: Partial<CreditCard>) => {
     setError(null);
     try {
-      const { error } = await supabase
-        .from('credit_cards')
-        .update(cardInput as any)
+      const { error } = await (supabase
+        .from('credit_cards') as any)
+        .update(cardInput)
         .eq('id', id);
 
       if (error) throw error;
@@ -113,9 +113,9 @@ export function useCreditCards() {
   const payInvoice = async (cardId: string, month: string) => {
     setError(null);
     try {
-      const { error } = await supabase
-        .from('transactions')
-        .update({ status: 'pago' } as any)
+      const { error } = await (supabase
+        .from('transactions') as any)
+        .update({ status: 'pago' })
         .eq('credit_card_id', cardId)
         .eq('status', 'pendente')
         .like('date', `${month}-%`);

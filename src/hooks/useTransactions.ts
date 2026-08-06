@@ -85,7 +85,7 @@ export function useTransactions() {
     amount: number;
     date: string; // This will be the purchase date
     category_id: string;
-    status?: 'pago' | 'pendente';
+    status?: 'pago' | 'pendente' | 'cancelado';
     credit_card_id?: string | null;
     installments?: number;
     card_due_day?: number;
@@ -101,7 +101,7 @@ export function useTransactions() {
         .from('profiles')
         .select('family_id')
         .eq('id', user.id)
-        .single();
+        .single() as any;
         
       if (!profile) throw new Error('Perfil não encontrado');
 
@@ -226,13 +226,13 @@ export function useTransactions() {
     amount?: number;
     date?: string;
     category_id?: string;
-    status?: 'pago' | 'pendente';
+    status?: 'pago' | 'pendente' | 'cancelado';
   }) => {
     setError(null);
     try {
-      const { error } = await supabase
-        .from('transactions')
-        .update(transactionInput as any)
+      const { error } = await (supabase
+        .from('transactions') as any)
+        .update(transactionInput)
         .eq('id', id);
 
       if (error) throw error;
