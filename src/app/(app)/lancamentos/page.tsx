@@ -1,0 +1,457 @@
+'use client';
+
+import React, { useState } from 'react';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { Icon } from '@/components/ui/Icon';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
+import { Modal } from '@/components/ui/Modal';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { useTransactions, Transaction } from '@/hooks/useTransactions';
+import { useCreditCards } from '@/hooks/useCreditCards';
+
+export default function TransactionsPage() {
+  const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
+  const { creditCards, loading: loadingCards } = useCreditCards();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [filterType, setFilterType] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterMonth, setFilterMonth] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`; // e.g. "2026-08"
+  });
+  
+  // Modal Form State
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState('');
+  
+  const [formData, setFormData] = useState({
+    type: 'despesa' as 'receita' | 'despesa',
+    amount: '',
+    description: '',
+    date: new Date().toISOString().split('T')[0],
+    category_id: '',
+    status: 'pago' as 'pago' | 'pendente',
+    payment_method: 'conta' as 'conta' | 'cartao',
+    credit_card_id: '',
+    installments: '1'
+  });
+  
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    const [year, month, day] = dateString.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
+  const filteredTransactions = transactions.filter(t => {
+    if (filterType !== 'all' && t.type !== filterType) return false;
+    if (filterCategory !== 'all' && t.category_id !== filterCategory) return false;
+    if (filterMonth !== 'all') {
+      const tDate = t.date.substring(0, 7); // "YYYY-MM" from "YYYY-MM-DD"
+      if (tDate !== filterMonth) return false;
+    }
+    return true;
+  });
+
+  const handleOpenModal = (transaction?: Transaction) => {
+    setFormError('');
+    if (transaction) {
+      setEditingId(transaction.id);
+      setFormData({
+        type: transaction.type,
+        amount: transaction.amount.toString(),
+        description: transaction.description,
+        date: transaction.date,
+        category_id: transaction.category_id || '',
+        status: transaction.status,
+        payment_method: transaction.credit_card_id ? 'cartao' : 'conta',
+        credit_card_id: transaction.credit_card_id || '',
+        installments: '1' // Editing always edits 1 installment
+      });
+    } else {
+      setEditingId(null);
+      setFormData({
+        type: 'despesa',
+        amount: '',
+        description: '',
+        date: new Date().toISOString().split('T')[0],
+        category_id: '',
+        status: 'pago',
+        payment_method: 'conta',
+        credit_card_id: creditCards.length > 0 ? creditCards[0].id : '',
+        installments: '1'
+      });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este lançamento?')) {
+      await deleteTransaction(id);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.amount || !formData.description || !formData.category_id || !formData.date) {
+      setFormError('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+    
+    if (formData.payment_method === 'cartao' && !formData.credit_card_id) {
+      setFormError('Por favor, selecione um cartão de crédito.');
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setFormError('');
+    
+    let success = false;
+
+    // Achar o cartão selecionado
+    const selectedCard = formData.payment_method === 'cartao' 
+      ? creditCards.find(c => c.id === formData.credit_card_id) 
+      : null;
+
+    const payload = {
+      type: formData.type,
+      amount: parseFloat(formData.amount.replace(',', '.')),
+      description: formData.description,
+      date: formData.date, // Data da compra
+      category_id: formData.category_id,
+      status: formData.status,
+      credit_card_id: selectedCard ? selectedCard.id : null,
+      installments: parseInt(formData.installments) || 1,
+      card_due_day: selectedCard ? selectedCard.due_day : undefined,
+      card_closing_day: selectedCard ? selectedCard.closing_day : undefined
+    };
+
+    if (editingId) {
+      // Quando editar, não suporta alterar as parcelas para não gerar bagunça (editar altera só aquela)
+      success = await updateTransaction(editingId, {
+        type: payload.type,
+        amount: payload.amount,
+        description: payload.description,
+        date: payload.date,
+        category_id: payload.category_id,
+        status: payload.status,
+      });
+    } else {
+      success = await addTransaction(payload);
+    }
+
+    setIsSubmitting(false);
+    if (success) {
+      setIsModalOpen(false);
+    } else {
+      setFormError('Erro ao salvar lançamento. Tente novamente.');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Lançamentos</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gerencie suas receitas e despesas</p>
+        </div>
+        <Button variant="primary" onClick={() => handleOpenModal()}>
+          <Icon name="add" className="w-4 h-4 mr-2" /> 
+          Novo Lançamento
+        </Button>
+      </div>
+
+      <GlassCard className="p-4 md:p-6">
+        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+          <div className="flex gap-2">
+            <Button 
+              variant={filterType === 'all' ? 'primary' : 'outline'} 
+              size="sm" 
+              onClick={() => setFilterType('all')}
+            >
+              Todos
+            </Button>
+            <Button 
+              variant={filterType === 'receita' ? 'primary' : 'outline'} 
+              size="sm" 
+              onClick={() => setFilterType('receita')}
+              className={filterType === 'receita' ? 'bg-wealth-green hover:bg-green-600 border-wealth-green text-white' : 'text-wealth-green border-wealth-green/30 hover:bg-green-50 dark:hover:bg-green-900/20'}
+            >
+              Receitas
+            </Button>
+            <Button 
+              variant={filterType === 'despesa' ? 'primary' : 'outline'} 
+              size="sm" 
+              onClick={() => setFilterType('despesa')}
+              className={filterType === 'despesa' ? 'bg-red-500 hover:bg-red-600 border-red-500 text-white' : 'text-red-500 border-red-500/30 hover:bg-red-50 dark:hover:bg-red-900/20'}
+            >
+              Despesas
+            </Button>
+            
+            <div className="w-40 ml-2">
+              <Select 
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                options={[
+                  {value: 'all', label: 'Todos os Meses'},
+                  // Generate last 3 months, current, and next 12 months dynamically based on data or just a fixed list
+                  ...Array.from({length: 24}, (_, i) => {
+                    const d = new Date();
+                    d.setMonth(d.getMonth() - 6 + i); // From 6 months ago to 17 months ahead
+                    const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    const label = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(d);
+                    return { value: val, label: label.charAt(0).toUpperCase() + label.slice(1) };
+                  })
+                ]} 
+              />
+            </div>
+
+            <div className="w-48 ml-2">
+              <Select 
+                value={filterCategory}
+                onChange={(e) => setFilterCategory(e.target.value)}
+                options={[
+                  {value: 'all', label: 'Todas as Categorias'},
+                  ...categories
+                    .filter(c => filterType === 'all' || c.type === filterType || c.type === 'ambos')
+                    .map(c => ({ value: c.id, label: c.name }))
+                ]} 
+              />
+            </div>
+          </div>
+          <div className="w-full md:w-64">
+            <Input 
+              placeholder="Buscar lançamento..." 
+              prefix="search"
+            />
+          </div>
+        </div>
+
+        {txError && (
+          <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+            {txError}
+          </div>
+        )}
+
+        <div className="overflow-x-auto">
+          {loadingTx ? (
+            <div className="py-12 flex justify-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : filteredTransactions.length > 0 ? (
+            <table className="w-full text-sm text-left">
+              <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800/50 dark:text-gray-400">
+                <tr>
+                  <th scope="col" className="px-4 py-3 rounded-l-lg">Data</th>
+                  <th scope="col" className="px-4 py-3">Descrição</th>
+                  <th scope="col" className="px-4 py-3">Categoria</th>
+                  <th scope="col" className="px-4 py-3">Status</th>
+                  <th scope="col" className="px-4 py-3 text-right">Valor</th>
+                  <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredTransactions.map((transaction) => (
+                  <tr key={transaction.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
+                    <td className="px-4 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
+                      {formatDate(transaction.date)}
+                    </td>
+                    <td className="px-4 py-4 font-medium text-gray-900 dark:text-white">
+                      {transaction.description}
+                      {transaction.credit_card_id && (
+                        <span className="ml-2 inline-flex items-center text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold">
+                          Cartão
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        {transaction.category && (
+                          <div className="w-4 h-4 rounded-full flex items-center justify-center" style={{ backgroundColor: transaction.category.color }}>
+                            <Icon name={transaction.category.icon} size="sm" className="text-white text-[10px]" />
+                          </div>
+                        )}
+                        <span>{transaction.category?.name || 'Sem Categoria'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      {transaction.status === 'pendente' ? (
+                         <Badge color="yellow">Pendente</Badge>
+                      ) : (
+                         <Badge color="green">Pago</Badge>
+                      )}
+                    </td>
+                    <td className={`px-4 py-4 text-right font-semibold whitespace-nowrap ${transaction.type === 'receita' ? 'text-wealth-green dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
+                      {transaction.type === 'despesa' ? '-' : '+'} {formatCurrency(transaction.amount)}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => handleOpenModal(transaction)}
+                          className="p-1.5 text-gray-400 hover:text-[#0058be] dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                          title="Editar"
+                        >
+                          <Icon name="edit" size="sm" />
+                        </button>
+                        <button 
+                          onClick={() => handleDelete(transaction.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                          title="Excluir"
+                        >
+                          <Icon name="delete" size="sm" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="py-12">
+              <EmptyState 
+                title="Nenhum lançamento encontrado" 
+                description="Não há lançamentos que correspondam aos filtros atuais." 
+                icon="search"
+              />
+            </div>
+          )}
+        </div>
+      </GlassCard>
+
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => !isSubmitting && setIsModalOpen(false)} 
+        title={editingId ? "Editar Lançamento" : "Novo Lançamento"}
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <Button 
+              variant="outline" 
+              className={formData.type === 'receita' ? 'bg-wealth-green text-white border-wealth-green' : 'border-wealth-green text-wealth-green hover:bg-green-50 dark:hover:bg-green-900/20'}
+              onClick={() => setFormData({...formData, type: 'receita', category_id: ''})}
+            >
+              Receita
+            </Button>
+            <Button 
+              variant="outline" 
+              className={formData.type === 'despesa' ? 'bg-red-500 text-white border-red-500' : 'border-red-500 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}
+              onClick={() => setFormData({...formData, type: 'despesa', category_id: ''})}
+            >
+              Despesa
+            </Button>
+          </div>
+          
+          {formError && (
+            <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+              {formError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input 
+              label={formData.payment_method === 'cartao' ? "Valor Total da Compra (R$)" : "Valor (R$)"} 
+              type="number" 
+              step="0.01"
+              placeholder="0,00" 
+              value={formData.amount}
+              onChange={(e) => setFormData({...formData, amount: e.target.value})}
+            />
+            <Input 
+              label="Descrição" 
+              placeholder="Ex: Supermercado" 
+              value={formData.description}
+              onChange={(e) => setFormData({...formData, description: e.target.value})}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input 
+              label={formData.payment_method === 'cartao' ? "Data da Compra" : "Data"} 
+              type="date" 
+              value={formData.date}
+              onChange={(e) => setFormData({...formData, date: e.target.value})}
+            />
+            <Select 
+              label="Categoria" 
+              value={formData.category_id}
+              onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+              options={[
+                {value: '', label: 'Selecione...'},
+                ...categories
+                  .filter(c => c.type === formData.type || c.type === 'ambos')
+                  .map(c => ({ value: c.id, label: c.name }))
+              ]} 
+            />
+          </div>
+          
+          {formData.type === 'despesa' && (
+            <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl space-y-4 border border-gray-100 dark:border-gray-800">
+              <Select 
+                label="Meio de Pagamento" 
+                value={formData.payment_method}
+                onChange={(e) => setFormData({...formData, payment_method: e.target.value as any})}
+                options={[
+                  {value: 'conta', label: 'Dinheiro / Pix / Débito'},
+                  {value: 'cartao', label: 'Cartão de Crédito'}
+                ]} 
+              />
+
+              {formData.payment_method === 'cartao' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Select 
+                    label="Qual Cartão?" 
+                    value={formData.credit_card_id}
+                    onChange={(e) => setFormData({...formData, credit_card_id: e.target.value})}
+                    options={
+                      creditCards.length > 0 
+                        ? creditCards.map(c => ({ value: c.id, label: c.name }))
+                        : [{value: '', label: 'Nenhum cartão cadastrado'}]
+                    }
+                  />
+                  {!editingId && (
+                    <Select 
+                      label="Parcelamento" 
+                      value={formData.installments}
+                      onChange={(e) => setFormData({...formData, installments: e.target.value})}
+                      options={Array.from({length: 12}, (_, i) => ({ value: String(i + 1), label: i === 0 ? 'À vista (1x)' : `${i + 1}x` }))}
+                    />
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {formData.payment_method === 'conta' && (
+            <Select 
+              label="Status" 
+              value={formData.status}
+              onChange={(e) => setFormData({...formData, status: e.target.value as any})}
+              options={[
+                {value: 'pago', label: 'Pago/Recebido'},
+                {value: 'pendente', label: 'Pendente'}
+              ]} 
+            />
+          )}
+          
+          {formData.payment_method === 'cartao' && !editingId && (
+            <p className="text-xs text-gray-500 italic mt-2">
+              As faturas serão geradas automaticamente como "Pendentes" nas datas de vencimento do cartão selecionado.
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+            <Button variant="primary" onClick={handleSubmit} loading={isSubmitting}>
+              {editingId ? "Salvar Alterações" : "Salvar Lançamento"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
