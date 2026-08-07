@@ -7,6 +7,7 @@ export type Category = {
   icon: string;
   color: string;
   type: 'receita' | 'despesa' | 'ambos';
+  is_default?: boolean;
 };
 
 export type Transaction = {
@@ -90,6 +91,7 @@ export function useTransactions() {
     installments?: number;
     card_due_day?: number;
     card_closing_day?: number;
+    repeat_until?: string; // Formato "YYYY-MM"
   }) => {
     setError(null);
     try {
@@ -108,7 +110,85 @@ export function useTransactions() {
       const isCreditCard = !!transactionInput.credit_card_id;
       const totalInstallments = transactionInput.installments || 1;
 
-      if (!isCreditCard || totalInstallments === 1) {
+      if (transactionInput.repeat_until) {
+        // Generates recurring transactions month-by-month
+        const baseDate = new Date(transactionInput.date + 'T12:00:00');
+        const [endYear, endMonth] = transactionInput.repeat_until.split('-').map(Number);
+        
+        const datesToInsert: string[] = [];
+        let year = baseDate.getFullYear();
+        let month = baseDate.getMonth(); // 0-11
+        const day = baseDate.getDate();
+        
+        while (year < endYear || (year === endYear && month <= endMonth - 1)) {
+          const d = new Date(year, month, day, 12, 0, 0);
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          datesToInsert.push(`${yyyy}-${mm}-${dd}`);
+          
+          month++;
+          if (month > 11) {
+            month = 0;
+            year++;
+          }
+        }
+
+        if (datesToInsert.length === 0) {
+          datesToInsert.push(transactionInput.date);
+        }
+
+        // Insert first transaction
+        const { data: parentTx, error: parentError } = await (supabase
+          .from('transactions')
+          .insert({
+            family_id: profile.family_id,
+            user_id: user.id,
+            type: transactionInput.type,
+            description: transactionInput.description,
+            amount: transactionInput.amount,
+            date: datesToInsert[0],
+            category_id: transactionInput.category_id,
+            status: transactionInput.status || 'pago',
+            credit_card_id: transactionInput.credit_card_id || null,
+            is_recurring: true,
+            total_installments: isCreditCard ? 1 : null,
+            current_installment: isCreditCard ? 1 : null
+          } as any)
+          .select('id')
+          .single() as any);
+
+        if (parentError) throw parentError;
+        const parentId = parentTx.id;
+
+        if (datesToInsert.length > 1) {
+          const today = new Date();
+          const remainingTxs = datesToInsert.slice(1).map(dateStr => {
+            const isFuture = new Date(dateStr) > today;
+            return {
+              family_id: profile.family_id,
+              user_id: user.id,
+              type: transactionInput.type,
+              description: transactionInput.description,
+              amount: transactionInput.amount,
+              date: dateStr,
+              category_id: transactionInput.category_id,
+              status: isFuture ? 'pendente' : (transactionInput.status || 'pago'),
+              credit_card_id: transactionInput.credit_card_id || null,
+              is_recurring: true,
+              parent_recurring_id: parentId,
+              total_installments: isCreditCard ? 1 : null,
+              current_installment: isCreditCard ? 1 : null
+            };
+          });
+
+          const { error: remainingError } = await supabase
+            .from('transactions')
+            .insert(remainingTxs as any);
+
+          if (remainingError) throw remainingError;
+        }
+      } else if (!isCreditCard || totalInstallments === 1) {
         // Normal transaction or 1x credit card (treated as a single transaction)
         let dueDate = transactionInput.date;
         let status = transactionInput.status;
@@ -265,6 +345,68 @@ export function useTransactions() {
     }
   };
 
+  const addCategory = async (categoryInput: {
+    name: string;
+    icon?: string;
+    color?: string;
+    type: 'receita' | 'despesa' | 'ambos';
+  }) => {
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('family_id')
+        .eq('id', user.id)
+        .single() as any;
+        
+      if (!profile) throw new Error('Perfil não encontrado');
+
+      const { data: newCat, error } = await (supabase
+        .from('categories')
+        .insert({
+          family_id: profile.family_id,
+          name: categoryInput.name,
+          icon: categoryInput.icon || 'category',
+          color: categoryInput.color || '#6c7a71',
+          type: categoryInput.type,
+          is_default: false
+        } as any)
+        .select('*')
+        .single() as any);
+
+      if (error) throw error;
+      
+      await fetchCategories();
+      return newCat;
+    } catch (err: any) {
+      console.error('Error adding category:', err);
+      setError(err.message || 'Erro ao criar categoria');
+      return null;
+    }
+  };
+
+  const deleteCategory = async (id: string) => {
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from('categories')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      await fetchCategories();
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting category:', err);
+      setError(err.message || 'Erro ao excluir categoria');
+      return false;
+    }
+  };
+
   return {
     transactions,
     categories,
@@ -273,6 +415,8 @@ export function useTransactions() {
     refreshData,
     addTransaction,
     updateTransaction,
-    deleteTransaction
+    deleteTransaction,
+    addCategory,
+    deleteCategory
   };
 }

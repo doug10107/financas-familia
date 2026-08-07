@@ -147,18 +147,21 @@ export function useDashboard(monthFilter?: string) {
       // Sort upcoming bills by date ascending (oldest/closest first)
       upcomingBills.sort((a, b) => new Date(a.date + 'T12:00:00').getTime() - new Date(b.date + 'T12:00:00').getTime());
 
+      // Filter months to keep only those with data or current filter month
+      const activeMonths = months.filter(m => m.income > 0 || m.expense > 0 || (m.month === filterMonth && m.year === filterYear));
+
       // Format Chart Data
       const chartData = {
-        labels: months.map(m => m.label),
+        labels: activeMonths.map(m => m.label),
         datasets: [
           {
             label: 'Receitas',
-            data: months.map(m => m.income),
+            data: activeMonths.map(m => m.income),
             backgroundColor: '#10b981',
           },
           {
             label: 'Despesas',
-            data: months.map(m => m.expense),
+            data: activeMonths.map(m => m.expense),
             backgroundColor: '#ef4444',
           }
         ]
@@ -174,16 +177,23 @@ export function useDashboard(monthFilter?: string) {
         ]
       };
 
-      // Top 5 Expenses
+      // Top Expenses with Fixed vs Variable Classification
       const expensesList = transactions
         .filter(t => t.type === 'despesa' && new Date(t.date + 'T12:00:00').getMonth() === filterMonth && new Date(t.date + 'T12:00:00').getFullYear() === filterYear)
-        .map(t => ({
-          name: t.description,
-          amount: Number(t.amount),
-          color: t.category?.color || '#ef4444'
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 5);
+        .map(t => {
+          const catName = t.category?.name || 'Sem Categoria';
+          const fixedCategories = ['Contas Fixas', 'Assinaturas', 'Moradia', 'Educação'];
+          const isFixed = t.is_recurring || fixedCategories.includes(catName);
+
+          return {
+            name: t.description,
+            amount: Number(t.amount),
+            color: t.category?.color || '#ef4444',
+            categoryName: catName,
+            isFixed
+          };
+        })
+        .sort((a, b) => b.amount - a.amount);
 
       const totalMonthlyExp = monthlyExpense || 1; 
       const topExpenses = expensesList.map(e => ({

@@ -13,7 +13,7 @@ import { useTransactions, Transaction } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 
 export default function TransactionsPage() {
-  const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction, addCategory, deleteCategory } = useTransactions();
   const { creditCards, loading: loadingCards } = useCreditCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterType, setFilterType] = useState('all');
@@ -22,11 +22,24 @@ export default function TransactionsPage() {
     const today = new Date();
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`; // e.g. "2026-08"
   });
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Modal Form State
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  
+  // Nova Categoria Modal State
+  const [isNewCatModalOpen, setIsNewCatModalOpen] = useState(false);
+  const [isSubmittingCat, setIsSubmittingCat] = useState(false);
+  const [catFormError, setCatFormError] = useState('');
+  const [catForm, setCatForm] = useState({
+    name: '',
+    type: 'despesa' as 'receita' | 'despesa' | 'ambos',
+    icon: 'category',
+    color: '#6c7a71'
+  });
   
   const [formData, setFormData] = useState({
     type: 'despesa' as 'receita' | 'despesa',
@@ -37,7 +50,9 @@ export default function TransactionsPage() {
     status: 'pago' as 'pago' | 'pendente' | 'cancelado',
     payment_method: 'conta' as 'conta' | 'cartao',
     credit_card_id: '',
-    installments: '1'
+    installments: '1',
+    repeat_monthly: false,
+    repeat_until: `${new Date().getFullYear()}-12`
   });
   
   const formatCurrency = (value: number) => {
@@ -56,13 +71,20 @@ export default function TransactionsPage() {
       const tDate = t.date.substring(0, 7); // "YYYY-MM" from "YYYY-MM-DD"
       if (tDate !== filterMonth) return false;
     }
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.toLowerCase();
+      const descriptionMatch = t.description?.toLowerCase().includes(query);
+      const categoryMatch = t.category?.name?.toLowerCase().includes(query);
+      if (!descriptionMatch && !categoryMatch) return false;
+    }
     return true;
   });
 
-  const handleOpenModal = (transaction?: Transaction) => {
+  const handleOpenModal = (transaction?: Transaction, isDuplicate = false) => {
     setFormError('');
+    setIsDuplicate(isDuplicate);
     if (transaction) {
-      setEditingId(transaction.id);
+      setEditingId(isDuplicate ? null : transaction.id);
       setFormData({
         type: transaction.type,
         amount: transaction.amount.toString(),
@@ -72,7 +94,9 @@ export default function TransactionsPage() {
         status: transaction.status,
         payment_method: transaction.credit_card_id ? 'cartao' : 'conta',
         credit_card_id: transaction.credit_card_id || '',
-        installments: '1' // Editing always edits 1 installment
+        installments: '1', // Editing always edits 1 installment
+        repeat_monthly: false,
+        repeat_until: `${new Date().getFullYear()}-12`
       });
     } else {
       setEditingId(null);
@@ -85,10 +109,37 @@ export default function TransactionsPage() {
         status: 'pago',
         payment_method: 'conta',
         credit_card_id: creditCards.length > 0 ? creditCards[0].id : '',
-        installments: '1'
+        installments: '1',
+        repeat_monthly: false,
+        repeat_until: `${new Date().getFullYear()}-12`
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleCreateCategory = async () => {
+    if (!catForm.name) {
+      setCatFormError('Por favor, preencha o nome da categoria.');
+      return;
+    }
+    
+    setIsSubmittingCat(true);
+    setCatFormError('');
+
+    const newCat = await addCategory({
+      name: catForm.name,
+      type: catForm.type,
+      icon: catForm.icon,
+      color: catForm.color
+    });
+
+    setIsSubmittingCat(false);
+    if (newCat) {
+      setFormData(prev => ({ ...prev, category_id: newCat.id }));
+      setIsNewCatModalOpen(false);
+    } else {
+      setCatFormError('Erro ao criar categoria. Tente novamente.');
+    }
   };
 
   const handleDelete = async (id: string) => {
@@ -128,7 +179,8 @@ export default function TransactionsPage() {
       credit_card_id: selectedCard ? selectedCard.id : null,
       installments: parseInt(formData.installments) || 1,
       card_due_day: selectedCard ? selectedCard.due_day : undefined,
-      card_closing_day: selectedCard ? selectedCard.closing_day : undefined
+      card_closing_day: selectedCard ? selectedCard.closing_day : undefined,
+      repeat_until: formData.repeat_monthly ? formData.repeat_until : undefined
     };
 
     if (editingId) {
@@ -228,6 +280,8 @@ export default function TransactionsPage() {
             <Input 
               placeholder="Buscar lançamento..." 
               prefix="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </div>
@@ -291,6 +345,13 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => handleOpenModal(transaction, true)}
+                          className="p-1.5 text-gray-400 hover:text-green-500 transition-colors rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
+                          title="Duplicar"
+                        >
+                          <Icon name="content_copy" size="sm" />
+                        </button>
                         <button 
                           onClick={() => handleOpenModal(transaction)}
                           className="p-1.5 text-gray-400 hover:text-[#0058be] dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
@@ -376,17 +437,40 @@ export default function TransactionsPage() {
               value={formData.date}
               onChange={(e) => setFormData({...formData, date: e.target.value})}
             />
-            <Select 
-              label="Categoria" 
-              value={formData.category_id}
-              onChange={(e) => setFormData({...formData, category_id: e.target.value})}
-              options={[
-                {value: '', label: 'Selecione...'},
-                ...categories
-                  .filter(c => c.type === formData.type || c.type === 'ambos')
-                  .map(c => ({ value: c.id, label: c.name }))
-              ]} 
-            />
+            <div className="flex flex-col gap-1.5 w-full">
+              <div className="flex justify-between items-center">
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Categoria
+                </label>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    setCatForm({
+                      name: '',
+                      type: formData.type,
+                      icon: 'category',
+                      color: '#6c7a71'
+                    });
+                    setCatFormError('');
+                    setIsNewCatModalOpen(true);
+                  }}
+                  className="text-xs text-[#0058be] dark:text-[#adc6ff] hover:underline flex items-center gap-1 font-semibold"
+                >
+                  <Icon name="add" className="w-3 h-3" />
+                  Nova Categoria
+                </button>
+              </div>
+              <Select 
+                value={formData.category_id}
+                onChange={(e) => setFormData({...formData, category_id: e.target.value})}
+                options={[
+                  {value: '', label: 'Selecione...'},
+                  ...categories
+                    .filter(c => c.type === formData.type || c.type === 'ambos')
+                    .map(c => ({ value: c.id, label: c.name }))
+                ]} 
+              />
+            </div>
           </div>
           
           {formData.type === 'despesa' && (
@@ -437,6 +521,71 @@ export default function TransactionsPage() {
               ]} 
             />
           )}
+
+          {!editingId && formData.payment_method === 'conta' && (
+            <div className="bg-gray-50/50 dark:bg-gray-800/30 p-4 rounded-xl space-y-4 border border-gray-100 dark:border-gray-800">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox"
+                  id="repeat_monthly"
+                  checked={formData.repeat_monthly}
+                  onChange={(e) => setFormData({...formData, repeat_monthly: e.target.checked})}
+                  className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                />
+                <label htmlFor="repeat_monthly" className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
+                  Repetir lançamento mensalmente?
+                </label>
+              </div>
+
+              {formData.repeat_monthly && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Select 
+                      label="Repetir até o mês" 
+                      value={formData.repeat_until}
+                      onChange={(e) => setFormData({...formData, repeat_until: e.target.value})}
+                      options={Array.from({length: 24}, (_, i) => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() + i); // current and future months
+                        const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                        const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(d);
+                        return { value: val, label: label.charAt(0).toUpperCase() + label.slice(1) };
+                      })}
+                    />
+                  </div>
+
+                  {isDuplicate && (
+                    <div className="p-3 bg-yellow-50 text-yellow-800 dark:bg-yellow-950/20 dark:text-yellow-300 rounded-xl text-xs space-y-2 border border-yellow-100 dark:border-yellow-900/30">
+                      <p className="font-semibold flex items-center gap-1">
+                        <Icon name="warning" size="sm" /> Atenção à Duplicação
+                      </p>
+                      <p>
+                        Você está duplicando um lançamento que já existe na data original. Para não ter o mesmo valor duplicado neste primeiro mês, você pode adiantar a data inicial deste grupo repetido para o mês que vem:
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = new Date(formData.date + 'T12:00:00');
+                          d.setMonth(d.getMonth() + 1);
+                          const yyyy = d.getFullYear();
+                          const mm = String(d.getMonth() + 1).padStart(2, '0');
+                          const dd = String(d.getDate()).padStart(2, '0');
+                          setFormData({ ...formData, date: `${yyyy}-${mm}-${dd}` });
+                        }}
+                        className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1"
+                      >
+                        Ajustar data para: {(() => {
+                          const d = new Date(formData.date + 'T12:00:00');
+                          d.setMonth(d.getMonth() + 1);
+                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                        })()}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           
           {formData.payment_method === 'cartao' && !editingId && (
             <p className="text-xs text-gray-500 italic mt-2">
@@ -449,6 +598,117 @@ export default function TransactionsPage() {
             <Button variant="primary" onClick={handleSubmit} loading={isSubmitting}>
               {editingId ? "Salvar Alterações" : "Salvar Lançamento"}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal - Nova Categoria */}
+      <Modal
+        isOpen={isNewCatModalOpen}
+        onClose={() => !isSubmittingCat && setIsNewCatModalOpen(false)}
+        title="Nova Categoria"
+      >
+        <div className="space-y-4">
+          {catFormError && (
+            <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+              {catFormError}
+            </div>
+          )}
+
+          <Input 
+            label="Nome da Categoria" 
+            placeholder="Ex: Presentes, Cuidados Pessoais" 
+            value={catForm.name}
+            onChange={(e) => setCatForm({...catForm, name: e.target.value})}
+          />
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Select 
+              label="Tipo" 
+              value={catForm.type}
+              onChange={(e) => setCatForm({...catForm, type: e.target.value as any})}
+              options={[
+                { value: 'despesa', label: 'Despesa' },
+                { value: 'receita', label: 'Receita' },
+                { value: 'ambos', label: 'Ambos' }
+              ]}
+            />
+            <Select 
+              label="Ícone" 
+              value={catForm.icon}
+              onChange={(e) => setCatForm({...catForm, icon: e.target.value})}
+              options={[
+                { value: 'category', label: 'Padrão' },
+                { value: 'card_giftcard', label: 'Presente / Brinde' },
+                { value: 'restaurant', label: 'Comida' },
+                { value: 'home', label: 'Casa' },
+                { value: 'directions_car', label: 'Carro' },
+                { value: 'health_and_safety', label: 'Saúde' },
+                { value: 'school', label: 'Educação' },
+                { value: 'sports_esports', label: 'Lazer' },
+                { value: 'checkroom', label: 'Roupas' },
+                { value: 'celebration', label: 'Festa' },
+                { value: 'shopping_bag', label: 'Compras' },
+                { value: 'medical_services', label: 'Médico' }
+              ]}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Cor</label>
+            <div className="flex flex-wrap gap-2">
+              {[
+                '#ef4444', '#f97316', '#f59e0b', '#10b981', '#06b6d4', 
+                '#3b82f6', '#6366f1', '#8b5cf6', '#d946ef', '#ec4899', 
+                '#6b7280', '#6c7a71'
+              ].map(color => (
+                <button
+                  key={color}
+                  type="button"
+                  className={`w-8 h-8 rounded-full border-2 transition-all ${catForm.color === color ? 'border-primary scale-110 shadow' : 'border-transparent hover:scale-105'}`}
+                  style={{ backgroundColor: color }}
+                  onClick={() => setCatForm({...catForm, color})}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* List of custom categories */}
+          {categories.filter(c => !c.is_default).length > 0 && (
+            <div className="pt-4 border-t border-gray-100 dark:border-gray-800">
+              <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Minhas Categorias Customizadas</h4>
+              <div className="max-h-32 overflow-y-auto space-y-2 pr-1">
+                {categories
+                  .filter(c => !c.is_default)
+                  .map(c => (
+                    <div key={c.id} className="flex justify-between items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-800/40">
+                      <div className="flex items-center gap-2">
+                        <div className="w-5 h-5 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: c.color }}>
+                          <Icon name={c.icon} size="sm" />
+                        </div>
+                        <span className="text-xs text-gray-900 dark:text-white font-medium">{c.name} ({c.type === 'ambos' ? 'receita/despesa' : c.type})</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (window.confirm(`Excluir a categoria "${c.name}"? Lançamentos associados ficarão sem categoria.`)) {
+                            await deleteCategory(c.id);
+                          }
+                        }}
+                        className="p-1 text-gray-400 hover:text-red-500 rounded hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                        title="Excluir Categoria"
+                      >
+                        <Icon name="delete" size="sm" />
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="ghost" onClick={() => setIsNewCatModalOpen(false)} disabled={isSubmittingCat}>Cancelar</Button>
+            <Button variant="primary" onClick={handleCreateCategory} loading={isSubmittingCat}>Criar Categoria</Button>
           </div>
         </div>
       </Modal>

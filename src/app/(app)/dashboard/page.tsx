@@ -43,6 +43,7 @@ export default function DashboardPage() {
   
   const { data: dashboardData, loading, error } = useDashboard(filterMonth);
   const router = useRouter();
+  const [expenseTab, setExpenseTab] = useState<'all' | 'fixed' | 'variable'>('all');
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -183,7 +184,28 @@ export default function DashboardPage() {
                   const today = new Date();
                   today.setHours(0, 0, 0, 0);
                   const billDate = new Date(bill.date + 'T00:00:00');
-                  const isOverdue = billDate < today;
+                  
+                  // Difference in days
+                  const diffTime = billDate.getTime() - today.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  
+                  let badgeColor: 'red' | 'yellow' | 'purple' | 'gray' | 'blue' = 'gray';
+                  let badgeText = 'Pendente';
+                  const isOverdue = diffDays < 0;
+
+                  if (isOverdue) {
+                    badgeColor = 'red';
+                    badgeText = 'Atrasado';
+                  } else if (diffDays === 0) {
+                    badgeColor = 'yellow';
+                    badgeText = 'Vence Hoje';
+                  } else if (diffDays === 1) {
+                    badgeColor = 'yellow';
+                    badgeText = 'Vence Amanhã';
+                  } else if (bill.isInvoice) {
+                    badgeColor = 'purple';
+                    badgeText = 'Fatura';
+                  }
 
                   return (
                     <li key={bill.id} className="flex justify-between items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-xl transition-colors border border-transparent hover:border-gray-100 dark:hover:border-gray-700">
@@ -198,14 +220,14 @@ export default function DashboardPage() {
                           <p className="font-semibold text-gray-900 dark:text-white text-sm">{bill.description}</p>
                           <p className={`text-[11px] flex items-center mt-0.5 ${isOverdue ? 'text-red-500 font-bold' : 'text-gray-500'}`}>
                             <Icon name="calendar_today" className="text-[12px] mr-1" />
-                            Vence dia {billDate.getDate().toString().padStart(2, '0')}
+                            {isOverdue ? `Vencido dia ${billDate.getDate().toString().padStart(2, '0')}/${(billDate.getMonth() + 1).toString().padStart(2, '0')}` : `Vence dia ${billDate.getDate().toString().padStart(2, '0')}/${(billDate.getMonth() + 1).toString().padStart(2, '0')}`}
                           </p>
                         </div>
                       </div>
                       <div className="text-right flex flex-col items-end">
                         <p className="font-bold text-gray-900 dark:text-white">{formatCurrency(bill.amount)}</p>
-                        <Badge color={isOverdue ? 'red' : (bill.isInvoice ? 'purple' : 'yellow')} className="mt-1 text-[10px] px-1.5 py-0">
-                          {isOverdue ? 'Atrasado' : (bill.isInvoice ? 'Fatura' : 'Pendente')}
+                        <Badge color={badgeColor} className="mt-1 text-[10px] px-1.5 py-0">
+                          {badgeText}
                         </Badge>
                       </div>
                     </li>
@@ -228,28 +250,68 @@ export default function DashboardPage() {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassCard className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-6">Top 5 Despesas</h3>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Top 5 Despesas</h3>
+            <div className="flex bg-gray-100 dark:bg-gray-800 p-0.5 rounded-lg text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setExpenseTab('all')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${expenseTab === 'all' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+              >
+                Todas
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseTab('fixed')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${expenseTab === 'fixed' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+              >
+                Fixas
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpenseTab('variable')}
+                className={`px-2.5 py-1 rounded-md transition-colors ${expenseTab === 'variable' ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+              >
+                Variáveis
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-5">
-            {dashboardData.topExpenses && dashboardData.topExpenses.length > 0 ? (
-              dashboardData.topExpenses.map((expense, idx) => (
-                <div key={idx} className="relative">
-                  <div className="flex justify-between items-end mb-1">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate pr-4">{expense.name}</span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(expense.amount)}</span>
+            {(() => {
+              const filtered = (dashboardData.topExpenses || []).filter((e: any) => {
+                if (expenseTab === 'all') return true;
+                if (expenseTab === 'fixed') return e.isFixed;
+                return !e.isFixed;
+              });
+              
+              const overallMonthlyExpense = dashboardData.monthlyExpense || 1;
+              const displayed = filtered.slice(0, 5).map((e: any) => ({
+                ...e,
+                percentage: Math.round((e.amount / overallMonthlyExpense) * 100)
+              }));
+
+              return displayed.length > 0 ? (
+                displayed.map((expense, idx) => (
+                  <div key={idx} className="relative">
+                    <div className="flex justify-between items-end mb-1">
+                      <span className="text-sm font-medium text-gray-700 dark:text-gray-200 truncate pr-4">{expense.name}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(expense.amount)}</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000 ease-out" 
+                        style={{ width: `${Math.max(1, expense.percentage)}%`, backgroundColor: expense.color }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full rounded-full transition-all duration-1000 ease-out" 
-                      style={{ width: `${Math.max(1, expense.percentage)}%`, backgroundColor: expense.color }}
-                    />
-                  </div>
+                ))
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 text-sm py-12">
+                  Nenhuma despesa para listar.
                 </div>
-              ))
-            ) : (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm py-12">
-                Nenhuma despesa para listar.
-              </div>
-            )}
+              );
+            })()}
           </div>
         </GlassCard>
 
@@ -263,7 +325,18 @@ export default function DashboardPage() {
                   responsive: true,
                   maintainAspectRatio: false,
                   plugins: {
-                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } }
+                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } },
+                    tooltip: {
+                      callbacks: {
+                        label: function(context: any) {
+                          const value = context.raw;
+                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                          const percentage = Math.round((value / total) * 100);
+                          const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+                          return ` ${context.label}: ${formattedValue} (${percentage}%)`;
+                        }
+                      }
+                    }
                   },
                   cutout: '75%'
                 }} 
