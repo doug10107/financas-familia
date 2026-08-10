@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useCreditCards, CreditCard } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
+import { CreditCardEvolutionChart } from '@/components/cartoes/CreditCardEvolutionChart';
 
 export default function CreditCardsPage() {
   const { creditCards, loading, error, addCreditCard, updateCreditCard, deleteCreditCard, payInvoice } = useCreditCards();
@@ -131,6 +132,11 @@ export default function CreditCardsPage() {
         <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
           {error}
         </div>
+      )}
+
+      {/* Gráfico de Evolução de Gastos X/Y */}
+      {!loading && (
+        <CreditCardEvolutionChart creditCards={creditCards} transactions={transactions} />
       )}
 
       {loading ? (
