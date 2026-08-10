@@ -15,6 +15,7 @@ export type Investment = {
   current_balance: number;
   total_invested: number;
   notes: string | null;
+  due_date?: string | null;
   type_id: string | null;
   investment_type?: InvestmentType;
 };
@@ -86,6 +87,7 @@ export function useInvestments() {
     institution?: string;
     initial_amount?: number;
     date?: string;
+    due_date?: string;
     notes?: string;
   }) => {
     setError(null);
@@ -109,6 +111,7 @@ export function useInvestments() {
           type_id: input.type_id,
           name: input.name,
           institution: input.institution || null,
+          due_date: input.due_date || null,
           notes: input.notes || null
         } as any)
         .select('id')
@@ -174,6 +177,60 @@ export function useInvestments() {
     }
   };
 
+  const updateInvestment = async (
+    id: string,
+    input: {
+      name?: string;
+      type_id?: string;
+      institution?: string;
+      due_date?: string | null;
+      notes?: string;
+    }
+  ) => {
+    setError(null);
+    try {
+      const { error } = await (supabase
+        .from('investments') as any)
+        .update({
+          name: input.name,
+          type_id: input.type_id,
+          institution: input.institution || null,
+          due_date: input.due_date || null,
+          notes: input.notes || null
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      await refreshData();
+      return true;
+    } catch (err: any) {
+      console.error('Error updating investment:', err);
+      setError(err.message || 'Erro ao atualizar investimento');
+      return false;
+    }
+  };
+
+  const deleteInvestment = async (id: string) => {
+    setError(null);
+    try {
+      // Delete entries first to ensure clean deletion if no cascading FK
+      await (supabase.from('investment_entries') as any).delete().eq('investment_id', id);
+
+      const { error } = await (supabase
+        .from('investments') as any)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      await refreshData();
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting investment:', err);
+      setError(err.message || 'Erro ao excluir investimento');
+      return false;
+    }
+  };
+
   return {
     investments,
     types,
@@ -181,6 +238,8 @@ export function useInvestments() {
     error,
     refreshData,
     addInvestment,
+    updateInvestment,
+    deleteInvestment,
     addInvestmentEntry
   };
 }

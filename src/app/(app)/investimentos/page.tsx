@@ -27,12 +27,15 @@ export default function InvestmentsPage() {
     loading,
     error: loadError,
     addInvestment,
+    updateInvestment,
+    deleteInvestment,
     addInvestmentEntry
   } = useInvestments();
 
   // Modals state
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [editingInvId, setEditingInvId] = useState<string | null>(null);
   const [selectedInvId, setSelectedInvId] = useState<string | null>(null);
 
   // Form states
@@ -45,6 +48,7 @@ export default function InvestmentsPage() {
     institution: '',
     initial_amount: '',
     date: new Date().toISOString().split('T')[0],
+    due_date: '',
     notes: ''
   });
 
@@ -57,6 +61,12 @@ export default function InvestmentsPage() {
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+  };
+
+  const formatDate = (dateString?: string | null) => {
+    if (!dateString) return null;
+    const [year, month, day] = dateString.split('-');
+    return `${day}/${month}/${year}`;
   };
 
   // Calculations
@@ -86,16 +96,31 @@ export default function InvestmentsPage() {
     ]
   };
 
-  const handleOpenInvModal = () => {
+  const handleOpenInvModal = (invToEdit?: typeof investments[0]) => {
     setFormError('');
-    setInvForm({
-      name: '',
-      type_id: types.length > 0 ? types[0].id : '',
-      institution: '',
-      initial_amount: '',
-      date: new Date().toISOString().split('T')[0],
-      notes: ''
-    });
+    if (invToEdit) {
+      setEditingInvId(invToEdit.id);
+      setInvForm({
+        name: invToEdit.name,
+        type_id: invToEdit.type_id || (types.length > 0 ? types[0].id : ''),
+        institution: invToEdit.institution || '',
+        initial_amount: '',
+        date: new Date().toISOString().split('T')[0],
+        due_date: invToEdit.due_date || '',
+        notes: invToEdit.notes || ''
+      });
+    } else {
+      setEditingInvId(null);
+      setInvForm({
+        name: '',
+        type_id: types.length > 0 ? types[0].id : '',
+        institution: '',
+        initial_amount: '',
+        date: new Date().toISOString().split('T')[0],
+        due_date: '',
+        notes: ''
+      });
+    }
     setIsInvModalOpen(true);
   };
 
@@ -111,7 +136,7 @@ export default function InvestmentsPage() {
     setIsEntryModalOpen(true);
   };
 
-  const handleAddInvestment = async () => {
+  const handleSaveInvestment = async () => {
     if (!invForm.name || !invForm.type_id) {
       setFormError('Por favor, preencha o nome do ativo e selecione o tipo.');
       return;
@@ -120,20 +145,38 @@ export default function InvestmentsPage() {
     setIsSubmitting(true);
     setFormError('');
 
-    const success = await addInvestment({
-      name: invForm.name,
-      type_id: invForm.type_id,
-      institution: invForm.institution,
-      initial_amount: invForm.initial_amount ? parseFloat(invForm.initial_amount.replace(',', '.')) : 0,
-      date: invForm.date,
-      notes: invForm.notes
-    });
+    let success = false;
+    if (editingInvId) {
+      success = await updateInvestment(editingInvId, {
+        name: invForm.name,
+        type_id: invForm.type_id,
+        institution: invForm.institution,
+        due_date: invForm.due_date || null,
+        notes: invForm.notes
+      });
+    } else {
+      success = await addInvestment({
+        name: invForm.name,
+        type_id: invForm.type_id,
+        institution: invForm.institution,
+        initial_amount: invForm.initial_amount ? parseFloat(invForm.initial_amount.replace(',', '.')) : 0,
+        date: invForm.date,
+        due_date: invForm.due_date || undefined,
+        notes: invForm.notes
+      });
+    }
 
     setIsSubmitting(false);
     if (success) {
       setIsInvModalOpen(false);
     } else {
-      setFormError('Erro ao adicionar investimento. Tente novamente.');
+      setFormError('Erro ao salvar investimento. Tente novamente.');
+    }
+  };
+
+  const handleDeleteInvestment = async (id: string) => {
+    if (window.confirm('Tem certeza que deseja excluir este investimento e seu histórico de movimentações?')) {
+      await deleteInvestment(id);
     }
   };
 
@@ -169,7 +212,7 @@ export default function InvestmentsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Investimentos</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gerencie seu portfólio de ativos</p>
         </div>
-        <Button variant="primary" onClick={handleOpenInvModal}>
+        <Button variant="primary" onClick={() => handleOpenInvModal()}>
           <Icon name="add" className="w-4 h-4 mr-2" /> 
           Novo Investimento
         </Button>
@@ -245,10 +288,11 @@ export default function InvestmentsPage() {
                   <th scope="col" className="px-4 py-3 rounded-l-lg">Ativo</th>
                   <th scope="col" className="px-4 py-3">Instituição</th>
                   <th scope="col" className="px-4 py-3">Tipo</th>
+                  <th scope="col" className="px-4 py-3">Vencimento / Liquidez</th>
                   <th scope="col" className="px-4 py-3 text-right">Total Investido</th>
                   <th scope="col" className="px-4 py-3 text-right">Saldo Atual</th>
                   <th scope="col" className="px-4 py-3 text-right">Rendimento</th>
-                  <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Movimentar</th>
+                  <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -272,6 +316,22 @@ export default function InvestmentsPage() {
                           {inv.investment_type?.name || 'Outro'}
                         </span>
                       </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        {inv.due_date ? (() => {
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isLocked = inv.due_date > todayStr;
+                          return (
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isLocked ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
+                              <Icon name={isLocked ? 'lock' : 'check_circle'} size="sm" />
+                              {formatDate(inv.due_date)} {isLocked ? '(Carência)' : '(Disponível)'}
+                            </span>
+                          );
+                        })() : (
+                          <span className="text-gray-400 dark:text-gray-500 text-xs italic">
+                            Liquidez imediata
+                          </span>
+                        )}
+                      </td>
                       <td className="px-4 py-4 text-right text-gray-500 dark:text-gray-400 whitespace-nowrap">
                         {formatCurrency(inv.total_invested)}
                       </td>
@@ -282,13 +342,29 @@ export default function InvestmentsPage() {
                         {isPositive ? '+' : ''}{invYield.toFixed(2)}%
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <button 
-                          onClick={() => handleOpenEntryModal(inv.id)}
-                          className="p-1.5 text-gray-400 hover:text-primary dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                          title="Registrar Movimentação (Aporte, Resgate ou Rendimento)"
-                        >
-                          <Icon name="swap_horiz" size="sm" />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button 
+                            onClick={() => handleOpenInvModal(inv)}
+                            className="p-1.5 text-gray-400 hover:text-primary dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            title="Editar Ativo"
+                          >
+                            <Icon name="edit" size="sm" />
+                          </button>
+                          <button 
+                            onClick={() => handleOpenEntryModal(inv.id)}
+                            className="p-1.5 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                            title="Registrar Movimentação (Aporte, Resgate ou Rendimento)"
+                          >
+                            <Icon name="swap_horiz" size="sm" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteInvestment(inv.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                            title="Excluir Ativo"
+                          >
+                            <Icon name="delete" size="sm" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -307,11 +383,11 @@ export default function InvestmentsPage() {
         )}
       </GlassCard>
 
-      {/* Modal - Novo Investimento */}
+      {/* Modal - Novo/Editar Investimento */}
       <Modal 
         isOpen={isInvModalOpen} 
         onClose={() => !isSubmitting && setIsInvModalOpen(false)} 
-        title="Novo Investimento"
+        title={editingInvId ? "Editar Investimento" : "Novo Investimento"}
       >
         <div className="space-y-4">
           {formError && (
@@ -342,22 +418,31 @@ export default function InvestmentsPage() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input 
-              label="Aporte Inicial (R$)" 
-              type="number" 
-              step="0.01"
-              placeholder="0,00" 
-              value={invForm.initial_amount}
-              onChange={(e) => setInvForm({...invForm, initial_amount: e.target.value})}
-            />
-            <Input 
-              label="Data da Aplicação" 
-              type="date" 
-              value={invForm.date}
-              onChange={(e) => setInvForm({...invForm, date: e.target.value})}
-            />
-          </div>
+          <Input 
+            label="Data de Vencimento / Prazo Mínimo de Resgate (Opcional)" 
+            type="date" 
+            value={invForm.due_date}
+            onChange={(e) => setInvForm({...invForm, due_date: e.target.value})}
+          />
+
+          {!editingInvId && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input 
+                label="Aporte Inicial (R$)" 
+                type="number" 
+                step="0.01"
+                placeholder="0,00" 
+                value={invForm.initial_amount}
+                onChange={(e) => setInvForm({...invForm, initial_amount: e.target.value})}
+              />
+              <Input 
+                label="Data da Aplicação" 
+                type="date" 
+                value={invForm.date}
+                onChange={(e) => setInvForm({...invForm, date: e.target.value})}
+              />
+            </div>
+          )}
 
           <Input 
             label="Observações" 
@@ -368,7 +453,9 @@ export default function InvestmentsPage() {
           
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="ghost" onClick={() => setIsInvModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-            <Button variant="primary" onClick={handleAddInvestment} loading={isSubmitting}>Adicionar Investimento</Button>
+            <Button variant="primary" onClick={handleSaveInvestment} loading={isSubmitting}>
+              {editingInvId ? "Salvar Alterações" : "Adicionar Investimento"}
+            </Button>
           </div>
         </div>
       </Modal>
