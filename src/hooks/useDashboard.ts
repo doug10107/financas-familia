@@ -69,7 +69,7 @@ export function useDashboard(monthFilter?: string) {
       });
 
       // Category aggregation for the doughnut chart
-      const categoryExpenses: Record<string, { total: number, color: string }> = {};
+      const categoryExpenses: Record<string, { total: number; color: string; icon: string; transactions: any[] }> = {};
 
       transactions.forEach(t => {
         const tDate = new Date(t.date + 'T12:00:00');
@@ -108,10 +108,12 @@ export function useDashboard(monthFilter?: string) {
         if (t.type === 'despesa' && tMonth === filterMonth && tYear === filterYear) {
           const catName = t.category?.name || 'Sem Categoria';
           const catColor = t.category?.color || '#6c7a71';
+          const catIcon = t.category?.icon || 'category';
           if (!categoryExpenses[catName]) {
-            categoryExpenses[catName] = { total: 0, color: catColor };
+            categoryExpenses[catName] = { total: 0, color: catColor, icon: catIcon, transactions: [] };
           }
           categoryExpenses[catName].total += amount;
+          categoryExpenses[catName].transactions.push(t);
         }
       });
 
@@ -167,12 +169,25 @@ export function useDashboard(monthFilter?: string) {
         ]
       };
 
+      const totalExpForMonth = monthlyExpense || 1;
+      const categoryList = Object.entries(categoryExpenses)
+        .map(([name, data]: [string, any]) => ({
+          name,
+          total: data.total,
+          color: data.color,
+          icon: data.icon,
+          percentage: Number(((data.total / totalExpForMonth) * 100).toFixed(1)),
+          transactions: data.transactions
+        }))
+        .sort((a, b) => b.total - a.total);
+
       const expensesByCategory = {
-        labels: Object.keys(categoryExpenses),
+        labels: categoryList.map(c => c.name),
+        categoryList,
         datasets: [
           {
-            data: Object.values(categoryExpenses).map(c => c.total),
-            backgroundColor: Object.values(categoryExpenses).map(c => c.color),
+            data: categoryList.map(c => c.total),
+            backgroundColor: categoryList.map(c => c.color),
           }
         ]
       };

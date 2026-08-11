@@ -44,6 +44,7 @@ export default function DashboardPage() {
   const { data: dashboardData, loading, error } = useDashboard(filterMonth);
   const router = useRouter();
   const [expenseTab, setExpenseTab] = useState<'all' | 'fixed' | 'variable'>('all');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -146,6 +147,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Linha 1: Receitas vs Despesas (2 cols) + Próximas Contas (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassCard className="p-6 lg:col-span-2">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Receitas vs Despesas (Últimos 6 meses)</h3>
@@ -248,6 +250,7 @@ export default function DashboardPage() {
         </GlassCard>
       </div>
       
+      {/* Linha 2: Top 5 Despesas (1 col) + Despesas por Categoria (2 cols) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <GlassCard className="p-6">
           <div className="flex justify-between items-center mb-6">
@@ -315,35 +318,138 @@ export default function DashboardPage() {
           </div>
         </GlassCard>
 
-        <GlassCard className="p-6 lg:col-span-2">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Despesas por Categoria (Mês Selecionado)</h3>
-          <div className="h-64 relative">
-            {dashboardData.expensesByCategory.labels.length > 0 ? (
-              <Doughnut 
-                data={dashboardData.expensesByCategory} 
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: { position: 'right', labels: { usePointStyle: true, boxWidth: 8 } },
-                    tooltip: {
-                      callbacks: {
-                        label: function(context: any) {
-                          const value = context.raw;
-                          const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                          const percentage = Math.round((value / total) * 100);
-                          const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-                          return ` ${context.label}: ${formattedValue} (${percentage}%)`;
-                        }
-                      }
-                    }
-                  },
-                  cutout: '75%'
-                }} 
-              />
+        <GlassCard className="p-6 lg:col-span-2 space-y-6">
+          {/* Header & Center Text Donut Chart */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="w-full sm:w-1/2 flex flex-col items-center justify-center">
+              <div className="h-56 w-56 relative flex items-center justify-center">
+                {dashboardData.expensesByCategory.labels.length > 0 ? (
+                  <>
+                    <Doughnut 
+                      data={dashboardData.expensesByCategory} 
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false },
+                          tooltip: {
+                            callbacks: {
+                              label: function(context: any) {
+                                const value = context.raw;
+                                const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+                                return ` ${context.label}: ${formattedValue} (${percentage}%)`;
+                              }
+                            }
+                          }
+                        },
+                        cutout: '78%'
+                      }} 
+                    />
+                    {/* Overlay Text in Center */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-4">
+                      <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-0.5">
+                        TOTAL GASTO
+                      </span>
+                      <span className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white">
+                        {formatCurrency(dashboardData.monthlyExpense)}
+                      </span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-xs italic">
+                    Sem despesas no mês
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Title & Overview Info */}
+            <div className="w-full sm:w-1/2 space-y-2">
+              <span className="px-3 py-1 rounded-full text-xs font-bold bg-teal-50 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 inline-flex items-center gap-1">
+                <Icon name="donut_large" size="sm" /> Despesas
+              </span>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                Despesas por categoria
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Visão detalhada do seu fluxo de caixa mensal
+              </p>
+            </div>
+          </div>
+
+          {/* Category Rows List with Scroll Area */}
+          <div className="space-y-3 pt-2 border-t border-gray-100 dark:border-gray-800 max-h-[360px] overflow-y-auto pr-1">
+            {dashboardData.expensesByCategory.categoryList && dashboardData.expensesByCategory.categoryList.length > 0 ? (
+              dashboardData.expensesByCategory.categoryList.map((cat: any, idx: number) => {
+                const isExpanded = expandedCategory === cat.name;
+                return (
+                  <div key={idx} className="bg-gray-50/70 dark:bg-gray-800/40 rounded-2xl p-4 transition-all">
+                    {/* Header Row */}
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
+                          style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                        >
+                          <Icon name={cat.icon || 'category'} className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-gray-900 dark:text-white text-sm">{cat.name}</p>
+                          <p className="text-[11px] text-gray-400">
+                            {cat.transactions.length} {cat.transactions.length === 1 ? 'lançamento' : 'lançamentos'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <span className="font-extrabold text-gray-900 dark:text-white text-sm">
+                          {formatCurrency(cat.total)}
+                        </span>
+                        <button 
+                          onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}
+                          className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors rounded-lg"
+                        >
+                          <Icon name={isExpanded ? 'expand_less' : 'expand_more'} size="sm" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress Bar & Percentage */}
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 bg-gray-200/80 dark:bg-gray-700/60 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{ width: `${Math.max(2, cat.percentage)}%`, backgroundColor: cat.color }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-600 dark:text-gray-300 w-12 text-right">
+                        {cat.percentage}%
+                      </span>
+                    </div>
+
+                    {/* Expandable Transaction Details */}
+                    {isExpanded && (
+                      <div className="mt-4 pt-3 border-t border-gray-200/50 dark:border-gray-700/50 space-y-2">
+                        {cat.transactions.map((tx: any, tIdx: number) => (
+                          <div key={tIdx} className="flex justify-between items-center text-xs py-1">
+                            <span className="text-gray-700 dark:text-gray-300 font-medium truncate pr-2">
+                              {tx.description}
+                            </span>
+                            <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                              {formatCurrency(Number(tx.amount))}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             ) : (
-              <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-                Nenhuma despesa registrada neste mês.
+              <div className="py-8 text-center text-xs text-gray-400 italic">
+                Nenhuma despesa registrada para o mês selecionado.
               </div>
             )}
           </div>
