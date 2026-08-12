@@ -213,11 +213,17 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
 
   try {
     const pdfjsLib = await import('pdfjs-dist');
-    // Set worker src
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    
+    // Set worker src securely using jsdelivr CDN matching exact installed version
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
 
     const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(arrayBuffer),
+      useSystemFonts: true,
+      isEvalSupported: false
+    });
+    
     const pdfDoc = await loadingTask.promise;
 
     let fullTextLines: string[] = [];
@@ -230,7 +236,7 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       let lineText = '';
 
       textContent.items.forEach((item: any) => {
-        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 4) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
           if (lineText.trim()) fullTextLines.push(lineText.trim());
           lineText = '';
         }
@@ -249,7 +255,10 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       if (dateParts.length >= 2) {
         const day = dateParts[0].padStart(2, '0');
         const month = dateParts[1].padStart(2, '0');
-        const year = dateParts[2] ? (dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2]) : String(currentYear);
+        let year = String(currentYear);
+        if (dateParts[2]) {
+          year = dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2];
+        }
         return `${year}-${month}-${day}`;
       }
       return null;
@@ -260,15 +269,17 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       date: string;
       descParts: string[];
       amount: number | null;
-      rawAmountStr: string;
     } | null = null;
 
     const finalizeItem = () => {
       if (currentItem && currentItem.date && currentItem.amount !== null && currentItem.amount !== 0) {
-        const rawDesc = currentItem.descParts.join(' ').replace(/\s+/g, ' ').trim();
+        let rawDesc = currentItem.descParts.join(' ').replace(/\s+/g, ' ').trim();
+
+        // Strip extraneous text like page numbers "1/6", "2/6"
+        rawDesc = rawDesc.replace(/\b\d+\/\d+\b/g, '').trim();
 
         // Skip metadata/header descriptions
-        if (rawDesc && !/saldo inicial|saldo final|entradas:|saidas:|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(rawDesc)) {
+        if (rawDesc && !/saldo inicial|saldo final|entradas:|saidas:|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta/i.test(rawDesc)) {
           let isExpense = currentItem.amount < 0;
           const descUpper = rawDesc.toUpperCase();
 
@@ -296,8 +307,8 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
     };
 
     // Regex patterns
-    const datePattern = /^(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)/;
-    const amountPattern = /R\$\s*(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})/g;
+    const datePattern = /(\b\d{2}[-\/]\d{2}[-\/]\d{2,4}\b|\b\d{2}[-\/]\d{2}\b)/;
+    const amountPattern = /R\$\s*(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})/gi;
     const operationIdPattern = /\b\d{10,20}\b/g;
 
     fullTextLines.forEach((line) => {
@@ -305,13 +316,13 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       if (!trimmed) return;
 
       // Skip document header lines
-      if (/saldo inicial:?|saldo final:?|entradas:?|saidas:?|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(trimmed)) {
+      if (/saldo inicial:?|saldo final:?|entradas:?|saidas:?|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta/i.test(trimmed)) {
         return;
       }
 
       const dateMatch = trimmed.match(datePattern);
 
-      if (dateMatch) {
+      if (dateMatch && dateMatch.index !== undefined) {
         // If we already have a completed item waiting, finalize it
         if (currentItem && currentItem.amount !== null) {
           finalizeItem();
@@ -319,29 +330,26 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
 
         const dateStr = parseDateStr(dateMatch[1]);
         if (dateStr) {
-          // Start a new transaction item
-          const restOfLine = trimmed.substring(dateMatch[1].length).trim();
+          const datePos = dateMatch.index;
+          const restOfLine = trimmed.substring(datePos + dateMatch[1].length).trim();
+
           currentItem = {
             date: dateStr,
             descParts: [],
-            amount: null,
-            rawAmountStr: ''
+            amount: null
           };
 
           if (restOfLine) {
             // Check if amount is on the same line
             const amountMatches = Array.from(restOfLine.matchAll(amountPattern));
             if (amountMatches.length > 0) {
-              // First R$ match is transaction amount
               const firstAmtStr = amountMatches[0][1];
               const cleanAmt = firstAmtStr.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
               currentItem.amount = parseFloat(cleanAmt);
 
-              // Clean text on line by stripping operation ID and R$ amounts
               let cleanLine = restOfLine.replace(operationIdPattern, '').replace(/R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2}/gi, '').trim();
               if (cleanLine) currentItem.descParts.push(cleanLine);
             } else {
-              // Line has date + partial description
               let cleanLine = restOfLine.replace(operationIdPattern, '').trim();
               if (cleanLine) currentItem.descParts.push(cleanLine);
             }
@@ -359,10 +367,8 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
           let cleanLine = trimmed.replace(operationIdPattern, '').replace(/R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2}/gi, '').trim();
           if (cleanLine) currentItem.descParts.push(cleanLine);
 
-          // Once amount is found, finalize immediately
           finalizeItem();
         } else {
-          // Additional line of description
           let cleanLine = trimmed.replace(operationIdPattern, '').trim();
           if (cleanLine && !/^\d+\/\d+$/.test(cleanLine)) {
             currentItem.descParts.push(cleanLine);
@@ -371,12 +377,12 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       }
     });
 
-    // Finalize any remaining item
     if (currentItem) {
       finalizeItem();
     }
   } catch (err) {
     console.error('Error parsing PDF:', err);
+    throw err;
   }
 
   return items;
