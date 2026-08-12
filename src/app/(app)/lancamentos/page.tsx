@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,7 @@ import { useTransactions, Transaction } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 
 export default function TransactionsPage() {
+  const router = useRouter();
   const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction, addCategory, deleteCategory } = useTransactions();
   const { creditCards, loading: loadingCards } = useCreditCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -212,10 +214,16 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Lançamentos</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gerencie suas receitas e despesas</p>
         </div>
-        <Button variant="primary" onClick={() => handleOpenModal()}>
-          <Icon name="add" className="w-4 h-4 mr-2" /> 
-          Novo Lançamento
-        </Button>
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Button variant="secondary" onClick={() => router.push('/importar')} className="flex-1 sm:flex-none">
+            <Icon name="file_upload" className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400" /> 
+            Importar Extrato / PDF
+          </Button>
+          <Button variant="primary" onClick={() => handleOpenModal()} className="flex-1 sm:flex-none">
+            <Icon name="add" className="w-4 h-4 mr-2" /> 
+            Novo Lançamento
+          </Button>
+        </div>
       </div>
 
       <GlassCard className="p-4 md:p-6">

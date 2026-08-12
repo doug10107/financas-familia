@@ -95,6 +95,12 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             >
               Investimentos
             </Link>
+            <Link 
+              href="/importar" 
+              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/importar') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Importar
+            </Link>
           </nav>
 
           <div className="flex items-center gap-2 relative">
