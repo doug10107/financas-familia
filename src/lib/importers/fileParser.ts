@@ -230,7 +230,7 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       let lineText = '';
 
       textContent.items.forEach((item: any) => {
-        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 6) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 4) {
           if (lineText.trim()) fullTextLines.push(lineText.trim());
           lineText = '';
         }
@@ -243,79 +243,138 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
 
     const currentYear = new Date().getFullYear();
 
-    // Regex 1: Mercado Pago & General Banks (e.g. 02-07-2026 Pagamento com QR Pix CARREFOUR 165970051849 R$ -156,82 R$ 1.848,92)
-    // Date (DD-MM-YYYY or DD/MM/YYYY) + Description + Optional Operation ID + R$ Amount + Optional R$ Balance
-    const mpRegex = /^(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)\s+(.*?)(?:\s+\d{8,20})?\s+R\$\s*(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})(?:\s+R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2})?$/i;
+    // Helper to format date string DD-MM-YYYY or DD/MM/YYYY or DD-MM or DD/MM -> YYYY-MM-DD
+    const parseDateStr = (raw: string) => {
+      const dateParts = raw.split(/[-\/]/);
+      if (dateParts.length >= 2) {
+        const day = dateParts[0].padStart(2, '0');
+        const month = dateParts[1].padStart(2, '0');
+        const year = dateParts[2] ? (dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2]) : String(currentYear);
+        return `${year}-${month}-${day}`;
+      }
+      return null;
+    };
 
-    // Regex 2: Standard PDF lines (e.g. 15/08 Supermercado Extra R$ 150,00 or 15/08 - R$ 89,90 - IFOOD)
-    const standardRegex = /(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)\s+(.*?)\s+(?:R\$\s*)?(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})/i;
+    // State machine variables
+    let currentItem: {
+      date: string;
+      descParts: string[];
+      amount: number | null;
+      rawAmountStr: string;
+    } | null = null;
 
-    fullTextLines.forEach((line, index) => {
-      const trimmedLine = line.trim();
+    const finalizeItem = () => {
+      if (currentItem && currentItem.date && currentItem.amount !== null && currentItem.amount !== 0) {
+        const rawDesc = currentItem.descParts.join(' ').replace(/\s+/g, ' ').trim();
 
-      // Skip headers and metadata lines
-      if (/saldo inicial|saldo final|entradas:|saidas:|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(trimmedLine)) {
+        // Skip metadata/header descriptions
+        if (rawDesc && !/saldo inicial|saldo final|entradas:|saidas:|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(rawDesc)) {
+          let isExpense = currentItem.amount < 0;
+          const descUpper = rawDesc.toUpperCase();
+
+          if (descUpper.includes('PIX ENVIADO') || descUpper.includes('PAGAMENTO') || descUpper.includes('DINHEIRO RESERVADO')) {
+            isExpense = true;
+          } else if (descUpper.includes('PIX RECEBIDO') || descUpper.includes('RENDIMENTOS') || descUpper.includes('REEMBOLSO') || descUpper.includes('DEPOSITO') || descUpper.includes('DINHEIRO RETIRADO')) {
+            isExpense = false;
+          }
+
+          const absAmount = Math.abs(currentItem.amount);
+          const type: 'receita' | 'despesa' = isExpense ? 'despesa' : 'receita';
+
+          items.push({
+            id: `pdf-${items.length + 1}-${Date.now()}`,
+            date: currentItem.date,
+            description: rawDesc,
+            amount: absAmount,
+            type,
+            suggestedCategoryId: suggestCategory(rawDesc, categories, type),
+            selected: true
+          });
+        }
+      }
+      currentItem = null;
+    };
+
+    // Regex patterns
+    const datePattern = /^(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)/;
+    const amountPattern = /R\$\s*(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})/g;
+    const operationIdPattern = /\b\d{10,20}\b/g;
+
+    fullTextLines.forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      // Skip document header lines
+      if (/saldo inicial:?|saldo final:?|entradas:?|saidas:?|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(trimmed)) {
         return;
       }
 
-      let rawDate = '';
-      let rawDesc = '';
-      let rawAmountStr = '';
+      const dateMatch = trimmed.match(datePattern);
 
-      const mpMatch = trimmedLine.match(mpRegex);
-      if (mpMatch) {
-        rawDate = mpMatch[1];
-        rawDesc = mpMatch[2].trim();
-        rawAmountStr = mpMatch[3];
-      } else {
-        const stdMatch = trimmedLine.match(standardRegex);
-        if (stdMatch) {
-          rawDate = stdMatch[1];
-          rawDesc = stdMatch[2].trim();
-          rawAmountStr = stdMatch[3];
+      if (dateMatch) {
+        // If we already have a completed item waiting, finalize it
+        if (currentItem && currentItem.amount !== null) {
+          finalizeItem();
         }
-      }
 
-      if (rawDate && rawDesc && rawAmountStr) {
-        // Clean Date format: DD-MM-YYYY or DD/MM/YYYY -> YYYY-MM-DD
-        const dateParts = rawDate.split(/[-\/]/);
-        if (dateParts.length >= 2) {
-          const day = dateParts[0].padStart(2, '0');
-          const month = dateParts[1].padStart(2, '0');
-          const year = dateParts[2] ? (dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2]) : String(currentYear);
-          const dateStr = `${year}-${month}-${day}`;
+        const dateStr = parseDateStr(dateMatch[1]);
+        if (dateStr) {
+          // Start a new transaction item
+          const restOfLine = trimmed.substring(dateMatch[1].length).trim();
+          currentItem = {
+            date: dateStr,
+            descParts: [],
+            amount: null,
+            rawAmountStr: ''
+          };
 
-          // Clean Amount format: R$ -156,82 -> -156.82
-          const cleanAmountStr = rawAmountStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
-          const numVal = parseFloat(cleanAmountStr);
+          if (restOfLine) {
+            // Check if amount is on the same line
+            const amountMatches = Array.from(restOfLine.matchAll(amountPattern));
+            if (amountMatches.length > 0) {
+              // First R$ match is transaction amount
+              const firstAmtStr = amountMatches[0][1];
+              const cleanAmt = firstAmtStr.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+              currentItem.amount = parseFloat(cleanAmt);
 
-          if (!isNaN(numVal) && numVal !== 0) {
-            // Determine income vs expense
-            let isExpense = numVal < 0;
-            const descUpper = rawDesc.toUpperCase();
-
-            if (descUpper.includes('PIX ENVIADO') || descUpper.includes('PAGAMENTO') || descUpper.includes('DINHEIRO RESERVADO')) {
-              isExpense = true;
-            } else if (descUpper.includes('PIX RECEBIDO') || descUpper.includes('RENDIMENTOS') || descUpper.includes('REEMBOLSO') || descUpper.includes('DEPOSITO') || descUpper.includes('DINHEIRO RETIRADO')) {
-              isExpense = false;
+              // Clean text on line by stripping operation ID and R$ amounts
+              let cleanLine = restOfLine.replace(operationIdPattern, '').replace(/R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2}/gi, '').trim();
+              if (cleanLine) currentItem.descParts.push(cleanLine);
+            } else {
+              // Line has date + partial description
+              let cleanLine = restOfLine.replace(operationIdPattern, '').trim();
+              if (cleanLine) currentItem.descParts.push(cleanLine);
             }
+          }
+        }
+      } else if (currentItem) {
+        // We are inside an active item
+        const amountMatches = Array.from(trimmed.matchAll(amountPattern));
 
-            const absAmount = Math.abs(numVal);
-            const type: 'receita' | 'despesa' = isExpense ? 'despesa' : 'receita';
+        if (amountMatches.length > 0 && currentItem.amount === null) {
+          const firstAmtStr = amountMatches[0][1];
+          const cleanAmt = firstAmtStr.replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
+          currentItem.amount = parseFloat(cleanAmt);
 
-            items.push({
-              id: `pdf-${index + 1}-${Date.now()}`,
-              date: dateStr,
-              description: rawDesc,
-              amount: absAmount,
-              type,
-              suggestedCategoryId: suggestCategory(rawDesc, categories, type),
-              selected: true
-            });
+          let cleanLine = trimmed.replace(operationIdPattern, '').replace(/R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2}/gi, '').trim();
+          if (cleanLine) currentItem.descParts.push(cleanLine);
+
+          // Once amount is found, finalize immediately
+          finalizeItem();
+        } else {
+          // Additional line of description
+          let cleanLine = trimmed.replace(operationIdPattern, '').trim();
+          if (cleanLine && !/^\d+\/\d+$/.test(cleanLine)) {
+            currentItem.descParts.push(cleanLine);
           }
         }
       }
     });
+
+    // Finalize any remaining item
+    if (currentItem) {
+      finalizeItem();
+    }
   } catch (err) {
     console.error('Error parsing PDF:', err);
   }
