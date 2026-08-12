@@ -230,7 +230,7 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       let lineText = '';
 
       textContent.items.forEach((item: any) => {
-        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+        if (lastY !== null && Math.abs(item.transform[5] - lastY) > 6) {
           if (lineText.trim()) fullTextLines.push(lineText.trim());
           lineText = '';
         }
@@ -241,31 +241,65 @@ export async function parsePDFFile(file: File, categories: Category[]): Promise<
       if (lineText.trim()) fullTextLines.push(lineText.trim());
     }
 
-    // Regex patterns for transaction lines in Brazilian bank PDFs
-    // Example: 15/08 Supermercado Extra R$ 150,00 or 15/08/2026 - R$ 89,90 - IFOOD
-    const lineRegex = /(\d{2}\/\d{2}(?:\/\d{2,4})?)\s+(.*?)\s+(?:R\$\s*)?(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})|(\d{2}\/\d{2})\s+(.*?)\s+(-?\d+[.,]\d{2})/i;
     const currentYear = new Date().getFullYear();
 
-    fullTextLines.forEach((line, index) => {
-      const match = line.match(lineRegex);
-      if (match) {
-        const rawDate = match[1] || match[4];
-        const rawDesc = (match[2] || match[5] || '').trim();
-        const rawAmountStr = match[3] || match[6];
+    // Regex 1: Mercado Pago & General Banks (e.g. 02-07-2026 Pagamento com QR Pix CARREFOUR 165970051849 R$ -156,82 R$ 1.848,92)
+    // Date (DD-MM-YYYY or DD/MM/YYYY) + Description + Optional Operation ID + R$ Amount + Optional R$ Balance
+    const mpRegex = /^(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)\s+(.*?)(?:\s+\d{8,20})?\s+R\$\s*(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})(?:\s+R\$\s*-?\s*\d{1,3}(?:\.\d{3})*,\d{2})?$/i;
 
-        if (rawDate && rawDesc && rawAmountStr && !/saldo|pagamento efetuado|subtotal|total/i.test(rawDesc)) {
-          let dateStr = '';
-          const dateParts = rawDate.split('/');
+    // Regex 2: Standard PDF lines (e.g. 15/08 Supermercado Extra R$ 150,00 or 15/08 - R$ 89,90 - IFOOD)
+    const standardRegex = /(\d{2}[-\/]\d{2}(?:[-\/]\d{2,4})?)\s+(.*?)\s+(?:R\$\s*)?(-?\s*\d{1,3}(?:\.\d{3})*,\d{2})/i;
+
+    fullTextLines.forEach((line, index) => {
+      const trimmedLine = line.trim();
+
+      // Skip headers and metadata lines
+      if (/saldo inicial|saldo final|entradas:|saidas:|detalhe dos movimentos|id da opera|data descri|data de gera|periodo:|extrato de conta|pagina \d/i.test(trimmedLine)) {
+        return;
+      }
+
+      let rawDate = '';
+      let rawDesc = '';
+      let rawAmountStr = '';
+
+      const mpMatch = trimmedLine.match(mpRegex);
+      if (mpMatch) {
+        rawDate = mpMatch[1];
+        rawDesc = mpMatch[2].trim();
+        rawAmountStr = mpMatch[3];
+      } else {
+        const stdMatch = trimmedLine.match(standardRegex);
+        if (stdMatch) {
+          rawDate = stdMatch[1];
+          rawDesc = stdMatch[2].trim();
+          rawAmountStr = stdMatch[3];
+        }
+      }
+
+      if (rawDate && rawDesc && rawAmountStr) {
+        // Clean Date format: DD-MM-YYYY or DD/MM/YYYY -> YYYY-MM-DD
+        const dateParts = rawDate.split(/[-\/]/);
+        if (dateParts.length >= 2) {
           const day = dateParts[0].padStart(2, '0');
           const month = dateParts[1].padStart(2, '0');
           const year = dateParts[2] ? (dateParts[2].length === 2 ? `20${dateParts[2]}` : dateParts[2]) : String(currentYear);
-          dateStr = `${year}-${month}-${day}`;
+          const dateStr = `${year}-${month}-${day}`;
 
+          // Clean Amount format: R$ -156,82 -> -156.82
           const cleanAmountStr = rawAmountStr.replace('R$', '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.');
           const numVal = parseFloat(cleanAmountStr);
 
           if (!isNaN(numVal) && numVal !== 0) {
-            const isExpense = numVal < 0 || !/pix recebido|deposito|credito/i.test(rawDesc);
+            // Determine income vs expense
+            let isExpense = numVal < 0;
+            const descUpper = rawDesc.toUpperCase();
+
+            if (descUpper.includes('PIX ENVIADO') || descUpper.includes('PAGAMENTO') || descUpper.includes('DINHEIRO RESERVADO')) {
+              isExpense = true;
+            } else if (descUpper.includes('PIX RECEBIDO') || descUpper.includes('RENDIMENTOS') || descUpper.includes('REEMBOLSO') || descUpper.includes('DEPOSITO') || descUpper.includes('DINHEIRO RETIRADO')) {
+              isExpense = false;
+            }
+
             const absAmount = Math.abs(numVal);
             const type: 'receita' | 'despesa' = isExpense ? 'despesa' : 'receita';
 
