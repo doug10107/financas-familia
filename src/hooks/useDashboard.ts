@@ -55,14 +55,19 @@ export function useDashboard(monthFilter?: string) {
       let monthlyExpense = 0;
       const upcomingBillsRaw: any[] = [];
 
-      // Monthly aggregation for the bar chart (Jan to Jun for example)
-      // We will do last 6 months
+      // Monthly aggregation for financial projection chart (6 months surrounding filter month)
       const months = Array.from({length: 6}, (_, i) => {
-        const d = new Date(currentYear, currentMonth - 5 + i, 1);
+        const d = new Date(filterYear, filterMonth - 2 + i, 1);
+        const mShort = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d);
+        const formattedMonth = mShort.charAt(0).toUpperCase() + mShort.slice(1).replace('.', '');
+        const formattedYear = String(d.getFullYear()).slice(2);
+        const isSelected = d.getMonth() === filterMonth && d.getFullYear() === filterYear;
+
         return {
           month: d.getMonth(),
           year: d.getFullYear(),
-          label: new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d),
+          label: isSelected ? `📍 ${formattedMonth}/${formattedYear}` : `${formattedMonth}/${formattedYear}`,
+          isSelected,
           income: 0,
           expense: 0
         };
@@ -149,22 +154,30 @@ export function useDashboard(monthFilter?: string) {
       // Sort upcoming bills by date ascending (oldest/closest first)
       upcomingBills.sort((a, b) => new Date(a.date + 'T12:00:00').getTime() - new Date(b.date + 'T12:00:00').getTime());
 
-      // Filter months to keep only those with data or current filter month
-      const activeMonths = months.filter(m => m.income > 0 || m.expense > 0 || (m.month === filterMonth && m.year === filterYear));
-
-      // Format Chart Data
+      // Format Projection Chart Data (Entradas, Saídas, Saldo)
       const chartData = {
-        labels: activeMonths.map(m => m.label),
+        labels: months.map(m => m.label),
         datasets: [
           {
-            label: 'Receitas',
-            data: activeMonths.map(m => m.income),
-            backgroundColor: '#10b981',
+            label: 'Entradas',
+            data: months.map(m => m.income),
+            backgroundColor: '#10b981', // Emerald green
+            borderRadius: 6,
+            borderSkipped: false,
           },
           {
-            label: 'Despesas',
-            data: activeMonths.map(m => m.expense),
-            backgroundColor: '#ef4444',
+            label: 'Saídas',
+            data: months.map(m => m.expense),
+            backgroundColor: '#ef4444', // Red
+            borderRadius: 6,
+            borderSkipped: false,
+          },
+          {
+            label: 'Saldo',
+            data: months.map(m => m.income - m.expense),
+            backgroundColor: '#3b82f6', // Blue
+            borderRadius: 6,
+            borderSkipped: false,
           }
         ]
       };

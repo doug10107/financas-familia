@@ -13,6 +13,7 @@ const nextConfig: NextConfig = {
       canvas: './src/lib/empty-module.js',
     },
   },
+  allowedDevOrigins: ['192.168.68.133'],
 } as any;
 
 export default nextConfig;
