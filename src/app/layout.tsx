@@ -42,8 +42,10 @@ export default function RootLayout({
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         />
+        <link rel="apple-touch-icon" href="/icon-192x192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="mobile-web-app-capable" content="yes" />
       </head>
       <body className={`${inter.className} min-h-screen antialiased bg-[var(--background)] text-[var(--on-surface)] selection:bg-emerald-500 selection:text-white`} suppressHydrationWarning>
         <ThemeProvider>

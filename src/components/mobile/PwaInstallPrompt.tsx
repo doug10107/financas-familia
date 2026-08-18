@@ -9,33 +9,32 @@ const PWA_DISMISSED_KEY = 'financas_pwa_dismissed';
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(true); // Start hidden
+  const [isDismissed, setIsDismissed] = useState(true);    // Start hidden
 
   useEffect(() => {
-    // Check if user already dismissed or installed PWA prompt
-    const isDismissed = localStorage.getItem(PWA_DISMISSED_KEY) === 'true';
-    if (isDismissed) return;
-
     // Check if already running in standalone PWA mode
-    const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
-    setIsStandalone(isStandaloneApp);
+    const standaloneCheck = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
+    setIsStandalone(standaloneCheck);
 
-    if (isStandaloneApp) return;
+    // Check if already dismissed
+    try {
+      const dismissed = localStorage.getItem(PWA_DISMISSED_KEY) === 'true';
+      setIsDismissed(dismissed);
+    } catch {
+      setIsDismissed(false);
+    }
+
+    if (standaloneCheck) return;
 
     // Detect iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIosDevice);
 
-    if (isIosDevice) {
-      setShowPrompt(true);
-    }
-
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setShowPrompt(true);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -46,7 +45,7 @@ export function PwaInstallPrompt() {
   }, []);
 
   const handleDismiss = () => {
-    setShowPrompt(false);
+    setIsDismissed(true);
     try {
       localStorage.setItem(PWA_DISMISSED_KEY, 'true');
     } catch (e) {
@@ -64,7 +63,12 @@ export function PwaInstallPrompt() {
     setDeferredPrompt(null);
   };
 
-  if (isStandalone || !showPrompt) return null;
+  // Don't show if: already in standalone, already dismissed, or nothing to show
+  if (isStandalone || isDismissed) return null;
+
+  // Only show for iOS (instructions) or when we have a deferred prompt (Android install button)
+  const hasContent = isIOS || deferredPrompt;
+  if (!hasContent) return null;
 
   return (
     <div className="fixed bottom-20 left-4 right-4 md:left-auto md:right-6 md:bottom-6 z-40 max-w-sm animate-slide-up">
@@ -105,14 +109,7 @@ export function PwaInstallPrompt() {
           >
             Instalar Aplicativo Agora
           </Button>
-        ) : (
-          <div className="bg-white/10 p-2.5 rounded-xl text-[11px] text-gray-200 space-y-1">
-            <p className="font-semibold text-emerald-300 flex items-center gap-1">
-              <Icon name="more_vert" size="sm" /> No Android (Chrome):
-            </p>
-            <p>Toque nos <strong>3 pontos (⋮)</strong> no topo do Chrome e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à Tela inicial"</strong>.</p>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
