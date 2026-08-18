@@ -273,6 +273,155 @@ export interface Database {
           created_at?: string
         }
       }
+      benefit_cards: {
+        Row: {
+          id: string
+          family_id: string
+          user_id: string
+          name: string
+          type: 'va' | 'vr'
+          balance: number
+          recharge_amount: number
+          recharge_day: number
+          color: string
+          icon: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          family_id: string
+          user_id: string
+          name: string
+          type: 'va' | 'vr'
+          balance?: number
+          recharge_amount?: number
+          recharge_day: number
+          color?: string
+          icon?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          family_id?: string
+          user_id?: string
+          name?: string
+          type?: 'va' | 'vr'
+          balance?: number
+          recharge_amount?: number
+          recharge_day?: number
+          color?: string
+          icon?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      benefit_transactions: {
+        Row: {
+          id: string
+          card_id: string
+          user_id: string
+          description: string
+          amount: number
+          date: string
+          type: 'debito' | 'recarga'
+          category_name: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          card_id: string
+          user_id: string
+          description: string
+          amount: number
+          date?: string
+          type: 'debito' | 'recarga'
+          category_name?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          card_id?: string
+          user_id?: string
+          description?: string
+          amount?: number
+          date?: string
+          type?: 'debito' | 'recarga'
+          category_name?: string | null
+          created_at?: string
+        }
+      }
+      shopping_lists: {
+        Row: {
+          id: string
+          family_id: string
+          user_id: string
+          benefit_card_id: string | null
+          title: string
+          description: string | null
+          is_completed: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          family_id: string
+          user_id: string
+          benefit_card_id?: string | null
+          title: string
+          description?: string | null
+          is_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          family_id?: string
+          user_id?: string
+          benefit_card_id?: string | null
+          title?: string
+          description?: string | null
+          is_completed?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      shopping_items: {
+        Row: {
+          id: string
+          list_id: string
+          name: string
+          category: string
+          quantity: number
+          estimated_price: number
+          actual_price: number
+          is_checked: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          list_id: string
+          name: string
+          category?: string
+          quantity?: number
+          estimated_price?: number
+          actual_price?: number
+          is_checked?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          list_id?: string
+          name?: string
+          category?: string
+          quantity?: number
+          estimated_price?: number
+          actual_price?: number
+          is_checked?: boolean
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
