@@ -150,21 +150,15 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
           </nav>
 
           <div className="flex items-center gap-2 relative">
-            {/* Biometric Security Lock Button */}
+            {/* Biometric Security Button */}
             <button 
-              onClick={() => {
-                if (isBioEnabled) {
-                  lockApp();
-                } else {
-                  setIsSecurityModalOpen(true);
-                }
-              }}
+              onClick={() => setIsSecurityModalOpen(true)}
               className={`p-2 rounded-full transition-colors ${
                 isBioEnabled 
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20' 
                   : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
               }`}
-              title={isBioEnabled ? 'Bloquear App com Biometria' : 'Ativar Segurança Biométrica / PIN'}
+              title={isBioEnabled ? 'Configurações de Segurança' : 'Ativar Segurança Biométrica / PIN'}
             >
               <Icon name={isBioEnabled ? 'fingerprint' : 'lock_open'} />
             </button>
@@ -234,72 +228,89 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       {/* Security Setup Modal */}
       <Modal
         isOpen={isSecurityModalOpen}
-        onClose={() => setIsSecurityModalOpen(false)}
-        title="Ativar Proteção Biométrica / PIN"
+        onClose={() => { setIsSecurityModalOpen(false); setSecurityFeedback(''); }}
+        title={isBioEnabled ? 'Segurança do App' : 'Ativar Proteção Biométrica / PIN'}
       >
-        <form onSubmit={handleSaveSecurity} className="space-y-4">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Crie um PIN de 4 dígitos para proteger o aplicativo. Ao confirmar, o sensor de digital/FaceID do seu celular será ativado automaticamente para registro.
-          </p>
+        {isBioEnabled ? (
+          <div className="space-y-4">
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800">
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-2">
+                <Icon name="check_circle" size="sm" /> Segurança Ativada
+              </p>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1">
+                PIN configurado • {hasBiometricCredential ? 'Digital/FaceID registrada ✅' : 'Digital não registrada ⚠️'}
+              </p>
+            </div>
 
-          <Input
-            label="PIN de Segurança (4 dígitos)"
-            type="password"
-            maxLength={4}
-            placeholder="Ex: 1234"
-            value={newPin}
-            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-            showPasswordToggle
-            required
-          />
+            {securityFeedback && (
+              <p className="text-xs font-semibold bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 p-2.5 rounded-xl">
+                {securityFeedback}
+              </p>
+            )}
 
-          {securityFeedback && (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl">
-              {securityFeedback}
-            </p>
-          )}
-
-          {isBioEnabled && !hasBiometricCredential && (
             <button
               type="button"
+              onClick={() => { lockApp(); setIsSecurityModalOpen(false); }}
+              className="w-full text-sm font-semibold py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors flex items-center justify-center gap-2 shadow-lg"
+            >
+              <Icon name="lock" size="sm" /> Bloquear App Agora
+            </button>
+
+            <button
+              type="button"
+              disabled={securityLoading}
               onClick={async () => {
                 setSecurityLoading(true);
+                setSecurityFeedback('');
                 const ok = await registerBiometricCredential();
                 setSecurityLoading(false);
-                setSecurityFeedback(ok ? '✅ Digital registrada!' : '⚠️ Não foi possível registrar a digital.');
+                setSecurityFeedback(ok
+                  ? '✅ Digital registrada com sucesso! O app agora abrirá com sua digital.'
+                  : '⚠️ Não foi possível registrar. Verifique se a biometria está ativada nas configurações do celular.');
               }}
               className="w-full text-xs font-semibold py-2.5 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center justify-center gap-2"
             >
-              🖐️ Registrar Digital / FaceID Agora
+              <Icon name="fingerprint" size="sm" /> {securityLoading ? 'Registrando...' : (hasBiometricCredential ? 'Recadastrar Digital / FaceID' : 'Registrar Digital / FaceID')}
             </button>
-          )}
 
-          {isBioEnabled && (
-            <div className="pt-2">
-              <Button
-                type="button"
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  disableBiometrics();
-                  setIsSecurityModalOpen(false);
-                }}
-                className="w-full text-xs"
-              >
-                Desativar Proteção Biométrica
-              </Button>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-3">
-            <Button type="button" variant="ghost" onClick={() => setIsSecurityModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button type="submit" variant="primary" disabled={newPin.length !== 4 || securityLoading} loading={securityLoading}>
-              {securityLoading ? 'Registrando...' : 'Ativar Segurança'}
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => { disableBiometrics(); setIsSecurityModalOpen(false); setSecurityFeedback(''); }}
+              className="w-full text-xs"
+            >
+              Desativar Proteção
             </Button>
           </div>
-        </form>
+        ) : (
+          <form onSubmit={handleSaveSecurity} className="space-y-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Crie um PIN de 4 dígitos. Ao confirmar, o sensor de digital/FaceID do seu celular será ativado para registro.
+            </p>
+            <Input
+              label="PIN de Segurança (4 dígitos)"
+              type="password"
+              maxLength={4}
+              placeholder="Ex: 1234"
+              value={newPin}
+              onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              showPasswordToggle
+              required
+            />
+            {securityFeedback && (
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl">
+                {securityFeedback}
+              </p>
+            )}
+            <div className="flex justify-end gap-3 pt-3">
+              <Button type="button" variant="ghost" onClick={() => setIsSecurityModalOpen(false)}>Cancelar</Button>
+              <Button type="submit" variant="primary" disabled={newPin.length !== 4 || securityLoading} loading={securityLoading}>
+                {securityLoading ? 'Registrando...' : 'Ativar Segurança'}
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </header>
   );

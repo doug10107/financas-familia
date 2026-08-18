@@ -4,28 +4,25 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 
-const PWA_DISMISSED_KEY = 'financas_pwa_dismissed';
-
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(true); // Start hidden
-  const [isDismissed, setIsDismissed] = useState(true);    // Start hidden
+  const [isStandalone, setIsStandalone] = useState(true); // Start hidden to avoid flash
+  const [isDismissed, setIsDismissed] = useState(false);
 
   useEffect(() => {
     // Check if already running in standalone PWA mode
     const standaloneCheck = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(standaloneCheck);
 
-    // Check if already dismissed
-    try {
-      const dismissed = localStorage.getItem(PWA_DISMISSED_KEY) === 'true';
-      setIsDismissed(dismissed);
-    } catch {
-      setIsDismissed(false);
-    }
-
     if (standaloneCheck) return;
+
+    // Check if dismissed THIS SESSION (not permanently)
+    const dismissed = sessionStorage.getItem('financas_pwa_dismissed_session') === 'true';
+    setIsDismissed(dismissed);
+
+    // Clean up old permanent dismiss key so prompt can show again
+    try { localStorage.removeItem('financas_pwa_dismissed'); } catch {}
 
     // Detect iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
@@ -46,11 +43,10 @@ export function PwaInstallPrompt() {
 
   const handleDismiss = () => {
     setIsDismissed(true);
+    // Only dismiss for THIS session — next time the user opens the browser, it shows again
     try {
-      localStorage.setItem(PWA_DISMISSED_KEY, 'true');
-    } catch (e) {
-      console.error('Erro ao salvar dismissed PWA:', e);
-    }
+      sessionStorage.setItem('financas_pwa_dismissed_session', 'true');
+    } catch {}
   };
 
   const handleInstallClick = async () => {
@@ -58,15 +54,15 @@ export function PwaInstallPrompt() {
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      handleDismiss();
+      setIsDismissed(true);
     }
     setDeferredPrompt(null);
   };
 
-  // Don't show if: already in standalone, already dismissed, or nothing to show
+  // Don't show if: standalone mode, or dismissed this session
   if (isStandalone || isDismissed) return null;
 
-  // Only show for iOS (instructions) or when we have a deferred prompt (Android install button)
+  // Only show when there's useful content (iOS instructions or Android install button)
   const hasContent = isIOS || deferredPrompt;
   if (!hasContent) return null;
 
@@ -87,7 +83,7 @@ export function PwaInstallPrompt() {
           <button
             onClick={handleDismiss}
             className="text-gray-400 hover:text-white p-1"
-            title="Fechar"
+            title="Fechar (reaparece na próxima visita)"
           >
             <Icon name="close" size="sm" />
           </button>
