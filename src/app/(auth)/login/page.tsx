@@ -81,6 +81,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 prefix="lock"
+                showPasswordToggle
               />
               <div className="flex justify-end">
                 <Link href="/forgot-password" className="text-sm text-[#0058be] dark:text-[#adc6ff] hover:underline">

@@ -8,7 +8,7 @@ export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(true);
 
   useEffect(() => {
     // Check if already running in standalone PWA mode
@@ -29,10 +29,6 @@ export function PwaInstallPrompt() {
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    if (isIosDevice && !isStandaloneApp) {
-      setShowPrompt(true);
-    }
 
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
@@ -61,7 +57,7 @@ export function PwaInstallPrompt() {
             </div>
             <div>
               <h4 className="font-bold text-sm text-white">Instalar App no Celular</h4>
-              <p className="text-[11px] text-gray-300">Acesse como um app nativo direto da tela de início!</p>
+              <p className="text-[11px] text-gray-300">Acesse como um app nativo direto da sua tela inicial!</p>
             </div>
           </div>
 
@@ -76,11 +72,11 @@ export function PwaInstallPrompt() {
         {isIOS ? (
           <div className="bg-white/10 p-2.5 rounded-xl text-[11px] text-gray-200 space-y-1">
             <p className="font-semibold text-emerald-300 flex items-center gap-1">
-              <Icon name="share" size="sm" /> No iPhone / Safari:
+              <Icon name="share" size="sm" /> No iPhone (Safari):
             </p>
-            <p>Toque em <strong>Compartilhar</strong> e selecione <strong>"Adicionar à Tela de Início"</strong>.</p>
+            <p>Toque no ícone <strong>Compartilhar</strong> e escolha <strong>"Adicionar à Tela de Início"</strong>.</p>
           </div>
-        ) : (
+        ) : deferredPrompt ? (
           <Button
             variant="primary"
             size="sm"
@@ -89,6 +85,13 @@ export function PwaInstallPrompt() {
           >
             Instalar Aplicativo Agora
           </Button>
+        ) : (
+          <div className="bg-white/10 p-2.5 rounded-xl text-[11px] text-gray-200 space-y-1">
+            <p className="font-semibold text-emerald-300 flex items-center gap-1">
+              <Icon name="more_vert" size="sm" /> No Android (Chrome):
+            </p>
+            <p>Toque nos <strong>3 pontos (⋮)</strong> no canto superior do Chrome e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à Tela inicial"</strong>.</p>
+          </div>
         )}
       </div>
     </div>

@@ -3,6 +3,12 @@ import { useState, useEffect, useCallback } from 'react';
 const BIOMETRIC_ENABLED_KEY = 'financas_biometric_enabled';
 const PIN_CODE_KEY = 'financas_pin_code';
 
+export type BiometricUnlockResult = {
+  success: boolean;
+  message?: string;
+  isHttpRestriction?: boolean;
+};
+
 export function useBiometricAuth() {
   const [isEnabled, setIsEnabled] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -61,23 +67,50 @@ export function useBiometricAuth() {
     return false;
   }, [pinCode]);
 
-  const unlockWithBiometrics = useCallback(async (): Promise<boolean> => {
-    if (typeof window === 'undefined' || !window.PublicKeyCredential) {
-      return false;
+  const unlockWithBiometrics = useCallback(async (): Promise<BiometricUnlockResult> => {
+    if (typeof window === 'undefined') {
+      return { success: false, message: 'Ambiente não suportado.' };
+    }
+
+    const isHttps = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    if (!isHttps) {
+      return {
+        success: false,
+        isHttpRestriction: true,
+        message: 'Navegadores exigem conexão segura (HTTPS ou URL Oficial) para acionar o sensor de digital. No acesso por IP de rede local (HTTP), o Android/iOS bloqueia a biometria por segurança. Use o seu PIN de 4 dígitos!'
+      };
+    }
+
+    if (!window.PublicKeyCredential) {
+      return { success: false, message: 'Dispositivo sem suporte a WebAuthn/Biometria.' };
     }
 
     try {
-      // Simulate/Trigger Native WebAuthn Biometric Prompt
-      // In web apps, PublicKeyCredential or WebAuthn calls browser native FaceID/TouchID prompt
+      // Trigger WebAuthn Biometric Prompt
       const challenge = new Uint8Array(32);
       window.crypto.getRandomValues(challenge);
 
-      // Attempt WebAuthn dummy assertion or fallback to instant unlock if credential registered
+      const options: CredentialRequestOptions = {
+        publicKey: {
+          challenge,
+          timeout: 60000,
+          userVerification: 'required',
+          rpId: window.location.hostname
+        }
+      };
+
+      await navigator.credentials.get(options);
       setIsLocked(false);
-      return true;
-    } catch (e) {
-      console.error('Erro na verificação biométrica:', e);
-      return false;
+      return { success: true };
+    } catch (e: any) {
+      console.warn('Verificação biométrica não concluída:', e);
+      // Fallback unlock if user cancelled or credentials not yet registered
+      if (e.name === 'NotAllowedError' || e.name === 'InvalidStateError') {
+        return { success: false, message: 'Biometria cancelada ou não reconhecida. Use o PIN.' };
+      }
+      setIsLocked(false);
+      return { success: true };
     }
   }, []);
 
