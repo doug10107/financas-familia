@@ -4,13 +4,19 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
 
+const PWA_DISMISSED_KEY = 'financas_pwa_dismissed';
+
 export function PwaInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isIOS, setIsIOS] = useState(false);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showPrompt, setShowPrompt] = useState(true);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   useEffect(() => {
+    // Check if user already dismissed or installed PWA prompt
+    const isDismissed = localStorage.getItem(PWA_DISMISSED_KEY) === 'true';
+    if (isDismissed) return;
+
     // Check if already running in standalone PWA mode
     const isStandaloneApp = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
     setIsStandalone(isStandaloneApp);
@@ -21,6 +27,10 @@ export function PwaInstallPrompt() {
     const userAgent = window.navigator.userAgent.toLowerCase();
     const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(isIosDevice);
+
+    if (isIosDevice) {
+      setShowPrompt(true);
+    }
 
     const handleBeforeInstallPrompt = (e: Event) => {
       e.preventDefault();
@@ -35,12 +45,21 @@ export function PwaInstallPrompt() {
     };
   }, []);
 
+  const handleDismiss = () => {
+    setShowPrompt(false);
+    try {
+      localStorage.setItem(PWA_DISMISSED_KEY, 'true');
+    } catch (e) {
+      console.error('Erro ao salvar dismissed PWA:', e);
+    }
+  };
+
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      setShowPrompt(false);
+      handleDismiss();
     }
     setDeferredPrompt(null);
   };
@@ -62,8 +81,9 @@ export function PwaInstallPrompt() {
           </div>
 
           <button
-            onClick={() => setShowPrompt(false)}
+            onClick={handleDismiss}
             className="text-gray-400 hover:text-white p-1"
+            title="Fechar"
           >
             <Icon name="close" size="sm" />
           </button>
@@ -90,7 +110,7 @@ export function PwaInstallPrompt() {
             <p className="font-semibold text-emerald-300 flex items-center gap-1">
               <Icon name="more_vert" size="sm" /> No Android (Chrome):
             </p>
-            <p>Toque nos <strong>3 pontos (⋮)</strong> no canto superior do Chrome e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à Tela inicial"</strong>.</p>
+            <p>Toque nos <strong>3 pontos (⋮)</strong> no topo do Chrome e selecione <strong>"Instalar aplicativo"</strong> ou <strong>"Adicionar à Tela inicial"</strong>.</p>
           </div>
         )}
       </div>
