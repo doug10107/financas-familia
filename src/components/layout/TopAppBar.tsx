@@ -96,6 +96,18 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
               Investimentos
             </Link>
             <Link 
+              href="/beneficios" 
+              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/beneficios') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              VA & VR
+            </Link>
+            <Link 
+              href="/compras" 
+              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/compras') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
+            >
+              Lista Compras
+            </Link>
+            <Link 
               href="/importar" 
               className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/importar') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
             >

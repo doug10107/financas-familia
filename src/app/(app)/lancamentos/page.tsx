@@ -12,11 +12,13 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useTransactions, Transaction } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
+import { useBenefitCards } from '@/hooks/useBenefitCards';
 
 export default function TransactionsPage() {
   const router = useRouter();
   const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction, addCategory, deleteCategory } = useTransactions();
   const { creditCards, loading: loadingCards } = useCreditCards();
+  const { cards: benefitCards, debitBalance: debitBenefitBalance } = useBenefitCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -50,8 +52,9 @@ export default function TransactionsPage() {
     date: new Date().toISOString().split('T')[0],
     category_id: '',
     status: 'pago' as 'pago' | 'pendente' | 'cancelado',
-    payment_method: 'conta' as 'conta' | 'cartao',
+    payment_method: 'conta' as 'conta' | 'cartao' | 'beneficio',
     credit_card_id: '',
+    benefit_card_id: '',
     installments: '1',
     repeat_monthly: false,
     repeat_until: `${new Date().getFullYear()}-12`
@@ -96,6 +99,7 @@ export default function TransactionsPage() {
         status: transaction.status,
         payment_method: transaction.credit_card_id ? 'cartao' : 'conta',
         credit_card_id: transaction.credit_card_id || '',
+        benefit_card_id: '',
         installments: '1', // Editing always edits 1 installment
         repeat_monthly: false,
         repeat_until: `${new Date().getFullYear()}-12`
@@ -111,6 +115,7 @@ export default function TransactionsPage() {
         status: 'pago',
         payment_method: 'conta',
         credit_card_id: creditCards.length > 0 ? creditCards[0].id : '',
+        benefit_card_id: benefitCards.length > 0 ? benefitCards[0].id : '',
         installments: '1',
         repeat_monthly: false,
         repeat_until: `${new Date().getFullYear()}-12`
@@ -160,6 +165,11 @@ export default function TransactionsPage() {
       setFormError('Por favor, selecione um cartão de crédito.');
       return;
     }
+
+    if (formData.payment_method === 'beneficio' && !formData.benefit_card_id) {
+      setFormError('Por favor, selecione um cartão de benefício (VA / VR).');
+      return;
+    }
     
     setIsSubmitting(true);
     setFormError('');
@@ -171,19 +181,29 @@ export default function TransactionsPage() {
       ? creditCards.find(c => c.id === formData.credit_card_id) 
       : null;
 
+    const parsedAmount = parseFloat(formData.amount.replace(',', '.'));
+
     const payload = {
       type: formData.type,
-      amount: parseFloat(formData.amount.replace(',', '.')),
+      amount: parsedAmount,
       description: formData.description,
       date: formData.date, // Data da compra
       category_id: formData.category_id,
-      status: formData.status,
+      status: formData.payment_method === 'beneficio' ? ('pago' as const) : formData.status,
       credit_card_id: selectedCard ? selectedCard.id : null,
       installments: parseInt(formData.installments) || 1,
       card_due_day: selectedCard ? selectedCard.due_day : undefined,
       card_closing_day: selectedCard ? selectedCard.closing_day : undefined,
       repeat_until: formData.repeat_monthly ? formData.repeat_until : undefined
     };
+
+    if (formData.payment_method === 'beneficio') {
+      const selectedBenefit = benefitCards.find(c => c.id === formData.benefit_card_id);
+      if (selectedBenefit) {
+        const cat = categories.find(c => c.id === formData.category_id);
+        debitBenefitBalance(selectedBenefit.id, parsedAmount, formData.description, cat?.name || 'Alimentação');
+      }
+    }
 
     if (editingId) {
       // Quando editar, não suporta alterar as parcelas para não gerar bagunça (editar altera só aquela)
@@ -489,9 +509,25 @@ export default function TransactionsPage() {
                 onChange={(e) => setFormData({...formData, payment_method: e.target.value as any})}
                 options={[
                   {value: 'conta', label: 'Dinheiro / Pix / Débito'},
-                  {value: 'cartao', label: 'Cartão de Crédito'}
+                  {value: 'cartao', label: 'Cartão de Crédito'},
+                  {value: 'beneficio', label: 'Cartão de Benefício (VA / VR)'}
                 ]} 
               />
+
+              {formData.payment_method === 'beneficio' && (
+                <div className="grid grid-cols-1 gap-4">
+                  <Select 
+                    label="Qual Benefício?" 
+                    value={formData.benefit_card_id}
+                    onChange={(e) => setFormData({...formData, benefit_card_id: e.target.value})}
+                    options={
+                      benefitCards.length > 0 
+                        ? benefitCards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))
+                        : [{value: '', label: 'Nenhum vale cadastrado'}]
+                    }
+                  />
+                </div>
+              )}
 
               {formData.payment_method === 'cartao' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

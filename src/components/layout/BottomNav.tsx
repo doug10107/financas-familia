@@ -5,10 +5,10 @@ import { Icon } from '../ui/Icon';
 
 const tabs = [
   { name: 'Dashboard', href: '/dashboard', icon: 'dashboard' },
+  { name: 'VA & VR', href: '/beneficios', icon: 'restaurant' },
+  { name: 'Compras', href: '/compras', icon: 'shopping_cart' },
   { name: 'Lançamentos', href: '/lancamentos', icon: 'receipt_long' },
   { name: 'Cartões', href: '/cartoes', icon: 'credit_card' },
-  { name: 'Metas', href: '/metas', icon: 'track_changes' },
-  { name: 'Investimentos', href: '/investimentos', icon: 'account_balance_wallet' },
 ];
 
 export function BottomNav() {
