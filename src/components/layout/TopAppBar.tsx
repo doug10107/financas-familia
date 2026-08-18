@@ -2,9 +2,13 @@
 import { useState, useEffect } from 'react';
 import { Icon } from '../ui/Icon';
 import { useTheme } from '../ThemeProvider';
+import { Modal } from '../ui/Modal';
+import { Input } from '../ui/Input';
+import { Button } from '../ui/Button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useBiometricAuth } from '@/hooks/useBiometricAuth';
 
 interface TopAppBarProps {
   userName?: string;
@@ -16,7 +20,11 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const { transactions } = useTransactions();
-  
+  const { isEnabled: isBioEnabled, enableBiometrics, disableBiometrics, lockApp } = useBiometricAuth();
+
+  const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
+  const [newPin, setNewPin] = useState('');
+
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
   };
@@ -40,6 +48,15 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   );
   const hasNotifications = dueTodayBills.length > 0;
 
+  const handleSaveSecurity = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.length === 4) {
+      enableBiometrics(newPin);
+      setIsSecurityModalOpen(false);
+      setNewPin('');
+    }
+  };
+
   return (
     <header 
       className={`sticky top-0 z-40 w-full transition-all duration-300 ${
@@ -51,7 +68,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-white font-bold text-lg shadow-sm">
+            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-lg shadow-sm">
               {userName.charAt(0).toUpperCase()}
             </div>
             <div className="flex flex-col">
@@ -116,6 +133,26 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
           </nav>
 
           <div className="flex items-center gap-2 relative">
+            {/* Biometric Security Lock Button */}
+            <button 
+              onClick={() => {
+                if (isBioEnabled) {
+                  lockApp();
+                } else {
+                  setIsSecurityModalOpen(true);
+                }
+              }}
+              className={`p-2 rounded-full transition-colors ${
+                isBioEnabled 
+                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20' 
+                  : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
+              }`}
+              title={isBioEnabled ? 'Bloquear App com Biometria' : 'Ativar Segurança Biométrica / PIN'}
+            >
+              <Icon name={isBioEnabled ? 'fingerprint' : 'lock_open'} />
+            </button>
+
+            {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
@@ -123,6 +160,8 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             >
               <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} />
             </button>
+
+            {/* Notifications Dropdown */}
             <div className="relative">
               <button 
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -174,6 +213,55 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
           </div>
         </div>
       </div>
+
+      {/* Security Setup Modal */}
+      <Modal
+        isOpen={isSecurityModalOpen}
+        onClose={() => setIsSecurityModalOpen(false)}
+        title="Ativar Proteção Biométrica / PIN"
+      >
+        <form onSubmit={handleSaveSecurity} className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Crie um PIN de 4 dígitos para proteger o aplicativo. Quando ativado, o aplicativo exigirá FaceID, Digital ou este PIN para liberar o acesso.
+          </p>
+
+          <Input
+            label="PIN de Segurança (4 dígitos)"
+            type="password"
+            maxLength={4}
+            placeholder="Ex: 1234"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            required
+          />
+
+          {isBioEnabled && (
+            <div className="pt-2">
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  disableBiometrics();
+                  setIsSecurityModalOpen(false);
+                }}
+                className="w-full text-xs"
+              >
+                Desativar Proteção Biométrica
+              </Button>
+            </div>
+          )}
+
+          <div className="flex justify-end gap-3 pt-3">
+            <Button type="button" variant="ghost" onClick={() => setIsSecurityModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary" disabled={newPin.length !== 4}>
+              Ativar Segurança
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </header>
   );
 }
