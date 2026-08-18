@@ -1,32 +1,56 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { BiometricUnlockResult } from '@/hooks/useBiometricAuth';
 
 interface BiometricLockScreenProps {
   isLocked: boolean;
+  hasBiometricCredential: boolean;
   onUnlockPin: (pin: string) => boolean;
   onUnlockBiometrics: () => Promise<BiometricUnlockResult>;
 }
 
 export function BiometricLockScreen({
   isLocked,
+  hasBiometricCredential,
   onUnlockPin,
   onUnlockBiometrics
 }: BiometricLockScreenProps) {
   const [pinInput, setPinInput] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
-  const [httpInfoMsg, setHttpInfoMsg] = useState('');
+  const [isBioLoading, setIsBioLoading] = useState(false);
+
+  // Auto-trigger biometrics when lock screen appears (if credential registered)
+  useEffect(() => {
+    if (isLocked && hasBiometricCredential) {
+      const timer = setTimeout(() => {
+        triggerBiometrics();
+      }, 500); // Small delay for UI to render
+      return () => clearTimeout(timer);
+    }
+  }, [isLocked, hasBiometricCredential]);
 
   if (!isLocked) return null;
+
+  const triggerBiometrics = async () => {
+    if (isBioLoading) return;
+    setIsBioLoading(true);
+    setErrorMsg('');
+
+    const res = await onUnlockBiometrics();
+    setIsBioLoading(false);
+
+    if (!res.success) {
+      setErrorMsg(res.message || 'Biometria não reconhecida. Use o PIN.');
+    }
+  };
 
   const handleKeyPress = (num: string) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate(15);
     }
     setErrorMsg('');
-    setHttpInfoMsg('');
 
     if (pinInput.length < 4) {
       const nextPin = pinInput + num;
@@ -53,21 +77,6 @@ export function BiometricLockScreen({
     }
     setPinInput(prev => prev.slice(0, -1));
     setErrorMsg('');
-    setHttpInfoMsg('');
-  };
-
-  const handleBiometricClick = async () => {
-    setErrorMsg('');
-    setHttpInfoMsg('');
-
-    const res = await onUnlockBiometrics();
-    if (!res.success) {
-      if (res.isHttpRestriction) {
-        setHttpInfoMsg(res.message || '');
-      } else {
-        setErrorMsg(res.message || 'Biometria não reconhecida. Use o PIN.');
-      }
-    }
   };
 
   return (
@@ -78,7 +87,11 @@ export function BiometricLockScreen({
           <Icon name="lock" size="lg" />
         </div>
         <h2 className="text-xl font-bold tracking-tight">Finanças Menezes</h2>
-        <p className="text-xs text-gray-400">Aplicativo Protegido por Biometria</p>
+        <p className="text-xs text-gray-400">
+          {hasBiometricCredential
+            ? 'Use sua digital ou digite o PIN'
+            : 'Digite seu PIN de 4 dígitos'}
+        </p>
       </div>
 
       {/* Center PIN Indicators & Biometric Trigger */}
@@ -98,26 +111,24 @@ export function BiometricLockScreen({
         </div>
 
         {errorMsg && (
-          <p className="text-xs text-rose-400 font-semibold animate-bounce text-center">{errorMsg}</p>
-        )}
-
-        {httpInfoMsg && (
-          <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-[11px] leading-relaxed text-center shadow-lg">
-            <p className="font-bold flex items-center justify-center gap-1 mb-1 text-amber-400">
-              <Icon name="warning" size="sm" /> Conexão IP Local (HTTP)
-            </p>
-            {httpInfoMsg}
-          </div>
+          <p className="text-xs text-rose-400 font-semibold text-center px-4">{errorMsg}</p>
         )}
 
         {/* Biometrics Button */}
-        <button
-          onClick={handleBiometricClick}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-white/10 hover:bg-white/20 transition-all text-xs font-semibold text-emerald-300 border border-emerald-500/30 shadow-lg backdrop-blur-md"
-        >
-          <Icon name="fingerprint" className="text-emerald-400" />
-          Usar FaceID / Digital
-        </button>
+        {hasBiometricCredential && (
+          <button
+            onClick={triggerBiometrics}
+            disabled={isBioLoading}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all text-xs font-semibold border shadow-lg backdrop-blur-md ${
+              isBioLoading
+                ? 'bg-emerald-500/20 text-emerald-200 border-emerald-500/20 animate-pulse'
+                : 'bg-white/10 hover:bg-white/20 text-emerald-300 border-emerald-500/30'
+            }`}
+          >
+            <Icon name="fingerprint" className="text-emerald-400" />
+            {isBioLoading ? 'Verificando...' : 'Usar Digital / FaceID'}
+          </button>
+        )}
       </div>
 
       {/* Numeric Keypad */}

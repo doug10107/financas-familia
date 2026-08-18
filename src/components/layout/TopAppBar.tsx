@@ -20,10 +20,12 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const { transactions } = useTransactions();
-  const { isEnabled: isBioEnabled, enableBiometrics, disableBiometrics, lockApp } = useBiometricAuth();
+  const { isEnabled: isBioEnabled, hasBiometricCredential, enableBiometrics, disableBiometrics, registerBiometricCredential, lockApp } = useBiometricAuth();
 
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
   const [newPin, setNewPin] = useState('');
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityFeedback, setSecurityFeedback] = useState('');
 
   const toggleTheme = () => {
     setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -48,13 +50,28 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   );
   const hasNotifications = dueTodayBills.length > 0;
 
-  const handleSaveSecurity = (e: React.FormEvent) => {
+  const handleSaveSecurity = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPin.length === 4) {
-      enableBiometrics(newPin);
+    if (newPin.length !== 4) return;
+
+    setSecurityLoading(true);
+    setSecurityFeedback('');
+
+    const result = await enableBiometrics(newPin);
+
+    setSecurityLoading(false);
+
+    if (result.biometricRegistered) {
+      setSecurityFeedback('✅ PIN salvo e digital registrada com sucesso!');
+    } else {
+      setSecurityFeedback('✅ PIN salvo! A biometria não foi registrada (pode não estar disponível neste dispositivo).');
+    }
+
+    setTimeout(() => {
       setIsSecurityModalOpen(false);
       setNewPin('');
-    }
+      setSecurityFeedback('');
+    }, 2000);
   };
 
   return (
@@ -222,7 +239,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       >
         <form onSubmit={handleSaveSecurity} className="space-y-4">
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Crie um PIN de 4 dígitos para proteger o aplicativo. Quando ativado, o aplicativo exigirá FaceID, Digital ou este PIN para liberar o acesso.
+            Crie um PIN de 4 dígitos para proteger o aplicativo. Ao confirmar, o sensor de digital/FaceID do seu celular será ativado automaticamente para registro.
           </p>
 
           <Input
@@ -232,8 +249,30 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             placeholder="Ex: 1234"
             value={newPin}
             onChange={(e) => setNewPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+            showPasswordToggle
             required
           />
+
+          {securityFeedback && (
+            <p className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/30 p-2.5 rounded-xl">
+              {securityFeedback}
+            </p>
+          )}
+
+          {isBioEnabled && !hasBiometricCredential && (
+            <button
+              type="button"
+              onClick={async () => {
+                setSecurityLoading(true);
+                const ok = await registerBiometricCredential();
+                setSecurityLoading(false);
+                setSecurityFeedback(ok ? '✅ Digital registrada!' : '⚠️ Não foi possível registrar a digital.');
+              }}
+              className="w-full text-xs font-semibold py-2.5 px-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors flex items-center justify-center gap-2"
+            >
+              🖐️ Registrar Digital / FaceID Agora
+            </button>
+          )}
 
           {isBioEnabled && (
             <div className="pt-2">
@@ -256,8 +295,8 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             <Button type="button" variant="ghost" onClick={() => setIsSecurityModalOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" variant="primary" disabled={newPin.length !== 4}>
-              Ativar Segurança
+            <Button type="submit" variant="primary" disabled={newPin.length !== 4 || securityLoading} loading={securityLoading}>
+              {securityLoading ? 'Registrando...' : 'Ativar Segurança'}
             </Button>
           </div>
         </form>
