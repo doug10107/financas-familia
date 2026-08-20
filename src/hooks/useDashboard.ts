@@ -2,12 +2,29 @@ import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Transaction } from './useTransactions';
 
+export type ProjectionMonth = {
+  month: number;
+  year: number;
+  key: string;
+  label: string;
+  fullLabel: string;
+  isSelected: boolean;
+  isPast: boolean;
+  isCurrent: boolean;
+  isFuture: boolean;
+  income: number;
+  expense: number;
+  balance: number;
+  accumulatedBalance: number;
+};
+
 export type DashboardData = {
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpense: number;
   upcomingBills: any[];
   chartData: any;
+  projectionMonths: ProjectionMonth[];
   expensesByCategory: any;
   topExpenses: { name: string; amount: number; color: string; percentage: number }[];
 };
@@ -55,7 +72,83 @@ export function useDashboard(monthFilter?: string) {
       let monthlyExpense = 0;
       const upcomingBillsRaw: any[] = [];
 
-      // Monthly aggregation for financial projection chart (6 months surrounding filter month)
+      // Descobrir a data máxima futura entre todas as transações (ou pelo menos até o fim do ano que vem)
+      let maxFutureDate = new Date(currentYear + 1, 11, 1); // Pelo menos até Dezembro do ano que vem
+
+      transactions.forEach(t => {
+        if (t.date) {
+          const tDate = new Date(t.date + 'T12:00:00');
+          if (tDate > maxFutureDate) {
+            maxFutureDate = tDate;
+          }
+        }
+      });
+
+      // Gerar todos os meses da projeção (desde 3 meses no passado até maxFutureDate)
+      const startMonthDate = new Date(currentYear, currentMonth - 3, 1);
+      const totalMonthsToProject = Math.max(
+        18,
+        (maxFutureDate.getFullYear() - startMonthDate.getFullYear()) * 12 + (maxFutureDate.getMonth() - startMonthDate.getMonth()) + 1
+      );
+
+      const allProjectionMonths: ProjectionMonth[] = [];
+      let runningAccumulatedBalance = totalBalance;
+
+      for (let i = 0; i < totalMonthsToProject; i++) {
+        const d = new Date(startMonthDate.getFullYear(), startMonthDate.getMonth() + i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth();
+        const key = `${y}-${String(m + 1).padStart(2, '0')}`;
+
+        const mShort = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d);
+        const label = `${mShort.charAt(0).toUpperCase() + mShort.slice(1).replace('.', '')}/${String(y).slice(2)}`;
+        const fullLabel = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(d);
+
+        const isCurrent = y === currentYear && m === currentMonth;
+        const isPast = (y < currentYear) || (y === currentYear && m < currentMonth);
+        const isFuture = (y > currentYear) || (y === currentYear && m > currentMonth);
+        const isSelected = y === filterYear && m === filterMonth;
+
+        // Calcular receitas e despesas do mês
+        let mIncome = 0;
+        let mExpense = 0;
+
+        transactions.forEach(t => {
+          const tDate = new Date(t.date + 'T12:00:00');
+          if (tDate.getFullYear() === y && tDate.getMonth() === m) {
+            if (t.type === 'receita') {
+              mIncome += Number(t.amount);
+            } else if (t.type === 'despesa') {
+              mExpense += Number(t.amount);
+            }
+          }
+        });
+
+        const mBalance = mIncome - mExpense;
+        
+        // Se for mês futuro, projeta o saldo acumulado
+        if (isFuture) {
+          runningAccumulatedBalance += mBalance;
+        }
+
+        allProjectionMonths.push({
+          month: m,
+          year: y,
+          key,
+          label: isSelected ? `📍 ${label}` : label,
+          fullLabel: fullLabel.charAt(0).toUpperCase() + fullLabel.slice(1),
+          isSelected,
+          isPast,
+          isCurrent,
+          isFuture,
+          income: mIncome,
+          expense: mExpense,
+          balance: mBalance,
+          accumulatedBalance: isFuture ? runningAccumulatedBalance : totalBalance
+        });
+      }
+
+      // 6 months chart padrão para compatibilidade
       const months = Array.from({length: 6}, (_, i) => {
         const d = new Date(filterYear, filterMonth - 2 + i, 1);
         const mShort = new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d);
@@ -63,13 +156,15 @@ export function useDashboard(monthFilter?: string) {
         const formattedYear = String(d.getFullYear()).slice(2);
         const isSelected = d.getMonth() === filterMonth && d.getFullYear() === filterYear;
 
+        const proj = allProjectionMonths.find(p => p.year === d.getFullYear() && p.month === d.getMonth());
+
         return {
           month: d.getMonth(),
           year: d.getFullYear(),
           label: isSelected ? `📍 ${formattedMonth}/${formattedYear}` : `${formattedMonth}/${formattedYear}`,
           isSelected,
-          income: 0,
-          expense: 0
+          income: proj?.income || 0,
+          expense: proj?.expense || 0
         };
       });
 
@@ -81,33 +176,6 @@ export function useDashboard(monthFilter?: string) {
         const tMonth = tDate.getMonth();
         const tYear = tDate.getFullYear();
         const amount = Number(t.amount);
-
-        // Balance (Only count Paid/Received for all-time balance)
-        if (t.status === 'pago') {
-          if (t.type === 'receita') {
-            totalBalance += amount;
-          } else {
-            totalBalance -= amount;
-          }
-        }
-
-        // Selected Month (Income/Expense/Category)
-        if (tMonth === filterMonth && tYear === filterYear) {
-          if (t.type === 'receita') monthlyIncome += amount;
-          else monthlyExpense += amount;
-        }
-
-        // Upcoming Bills (Always from today onwards, independent of month filter)
-        if (t.status === 'pendente' && t.type === 'despesa') {
-          upcomingBillsRaw.push(t);
-        }
-
-        // 6 months chart
-        const monthData = months.find(m => m.month === tMonth && m.year === tYear);
-        if (monthData) {
-          if (t.type === 'receita') monthData.income += amount;
-          else monthData.expense += amount;
-        }
 
         // Category Expenses (For the selected month)
         if (t.type === 'despesa' && tMonth === filterMonth && tYear === filterYear) {
@@ -137,7 +205,7 @@ export function useDashboard(monthFilter?: string) {
               id: `fatura-${key}`,
               description: `Fatura - ${t.credit_card.name}`,
               amount: 0,
-              date: t.date, // Will just use the first transaction's date for sorting
+              date: t.date,
               type: 'despesa',
               status: 'pendente',
               isInvoice: true,
@@ -161,21 +229,21 @@ export function useDashboard(monthFilter?: string) {
           {
             label: 'Entradas',
             data: months.map(m => m.income),
-            backgroundColor: '#10b981', // Emerald green
+            backgroundColor: '#10b981',
             borderRadius: 6,
             borderSkipped: false,
           },
           {
             label: 'Saídas',
             data: months.map(m => m.expense),
-            backgroundColor: '#ef4444', // Red
+            backgroundColor: '#ef4444',
             borderRadius: 6,
             borderSkipped: false,
           },
           {
             label: 'Saldo',
             data: months.map(m => m.income - m.expense),
-            backgroundColor: '#3b82f6', // Blue
+            backgroundColor: '#3b82f6',
             borderRadius: 6,
             borderSkipped: false,
           }
@@ -233,8 +301,9 @@ export function useDashboard(monthFilter?: string) {
         totalBalance,
         monthlyIncome,
         monthlyExpense,
-        upcomingBills: upcomingBills.slice(0, 5), // top 5
+        upcomingBills: upcomingBills.slice(0, 5),
         chartData,
+        projectionMonths: allProjectionMonths,
         expensesByCategory,
         topExpenses
       });

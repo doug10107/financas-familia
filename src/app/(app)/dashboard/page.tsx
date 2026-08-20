@@ -162,7 +162,11 @@ export default function DashboardPage() {
       {/* Row 1: Projeção Financeira (2 cols) + Próximas Contas (1 col) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         <div className="lg:col-span-2 flex flex-col">
-          <FinancialProjectionChart chartData={dashboardData.chartData} />
+          <FinancialProjectionChart 
+            chartData={dashboardData.chartData} 
+            projectionMonths={dashboardData.projectionMonths}
+            currentBalance={dashboardData.totalBalance}
+          />
         </div>
 
         <GlassCard className="p-6 flex flex-col h-full justify-between">
