@@ -313,17 +313,91 @@ export function useTransactions() {
     amount?: number;
     date?: string;
     category_id?: string;
+    credit_card_id?: string | null;
     status?: 'pago' | 'pendente' | 'cancelado';
+    update_future?: boolean;
   }) => {
     setError(null);
     try {
+      const { update_future, ...cleanInput } = transactionInput;
+
+      // 1. Obter os dados da transação antes de atualizar
+      const { data: currentTx, error: fetchErr } = await (supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .single() as any);
+
+      if (fetchErr) throw fetchErr;
+
+      // 2. Atualizar a transação atual
       const { error } = await (supabase
         .from('transactions') as any)
-        .update(transactionInput)
+        .update(cleanInput)
         .eq('id', id);
 
       if (error) throw error;
       
+      // 3. Se solicitado, propagar para as próximas parcelas / meses futuros
+      if (update_future && currentTx) {
+        const fieldsToPropagate: Record<string, any> = {};
+        if (cleanInput.credit_card_id !== undefined) fieldsToPropagate.credit_card_id = cleanInput.credit_card_id;
+        if (cleanInput.category_id !== undefined) fieldsToPropagate.category_id = cleanInput.category_id;
+        if (cleanInput.type !== undefined) fieldsToPropagate.type = cleanInput.type;
+        if (cleanInput.amount !== undefined) fieldsToPropagate.amount = cleanInput.amount;
+
+        // A) Grupo de parcelas (installment_group_id)
+        if (currentTx.installment_group_id) {
+          await (supabase
+            .from('transactions') as any)
+            .update(fieldsToPropagate)
+            .eq('installment_group_id', currentTx.installment_group_id)
+            .gte('current_installment', currentTx.current_installment || 1);
+        }
+        // B) Recorrência mensal
+        else if (currentTx.parent_recurring_id || currentTx.is_recurring) {
+          const rootId = currentTx.parent_recurring_id || currentTx.id;
+          await (supabase
+            .from('transactions') as any)
+            .update(fieldsToPropagate)
+            .or(`id.eq.${rootId},parent_recurring_id.eq.${rootId}`)
+            .gte('date', currentTx.date);
+        }
+        // C) Parcelas identificadas pelo padrão "Descrição (X/Y)"
+        else {
+          const match = currentTx.description.match(/^(.*?)\s*\((\d+)\/(\d+)\)$/);
+          if (match) {
+            const baseDesc = match[1].trim();
+            const currentNum = parseInt(match[2], 10);
+            
+            const { data: siblingTxs } = await (supabase
+              .from('transactions')
+              .select('id, description, date')
+              .ilike('description', `${baseDesc} (%/%)`)
+              .gte('date', currentTx.date) as any);
+
+            if (siblingTxs && siblingTxs.length > 0) {
+              const idsToUpdate = siblingTxs
+                .filter((st: any) => {
+                  const sMatch = st.description.match(/^(.*?)\s*\((\d+)\/(\d+)\)$/);
+                  if (sMatch) {
+                    return parseInt(sMatch[2], 10) >= currentNum;
+                  }
+                  return false;
+                })
+                .map((st: any) => st.id);
+
+              if (idsToUpdate.length > 0) {
+                await (supabase
+                  .from('transactions') as any)
+                  .update(fieldsToPropagate)
+                  .in('id', idsToUpdate);
+              }
+            }
+          }
+        }
+      }
+
       await refreshData();
       return true;
     } catch (err: any) {

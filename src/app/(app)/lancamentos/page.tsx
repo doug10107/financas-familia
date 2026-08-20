@@ -57,7 +57,8 @@ export default function TransactionsPage() {
     benefit_card_id: '',
     installments: '1',
     repeat_monthly: false,
-    repeat_until: `${new Date().getFullYear()}-12`
+    repeat_until: `${new Date().getFullYear()}-12`,
+    update_future: false
   });
   
   const formatCurrency = (value: number) => {
@@ -102,7 +103,8 @@ export default function TransactionsPage() {
         benefit_card_id: '',
         installments: '1', // Editing always edits 1 installment
         repeat_monthly: false,
-        repeat_until: `${new Date().getFullYear()}-12`
+        repeat_until: `${new Date().getFullYear()}-12`,
+        update_future: false
       });
     } else {
       setEditingId(null);
@@ -118,7 +120,8 @@ export default function TransactionsPage() {
         benefit_card_id: benefitCards.length > 0 ? benefitCards[0].id : '',
         installments: '1',
         repeat_monthly: false,
-        repeat_until: `${new Date().getFullYear()}-12`
+        repeat_until: `${new Date().getFullYear()}-12`,
+        update_future: false
       });
     }
     setIsModalOpen(true);
@@ -206,14 +209,15 @@ export default function TransactionsPage() {
     }
 
     if (editingId) {
-      // Quando editar, não suporta alterar as parcelas para não gerar bagunça (editar altera só aquela)
       success = await updateTransaction(editingId, {
         type: payload.type,
         amount: payload.amount,
         description: payload.description,
         date: payload.date,
         category_id: payload.category_id,
+        credit_card_id: payload.credit_card_id,
         status: payload.status,
+        update_future: formData.update_future
       });
     } else {
       success = await addTransaction(payload);
@@ -645,6 +649,31 @@ export default function TransactionsPage() {
             <p className="text-xs text-gray-500 italic mt-2">
               As faturas serão geradas automaticamente como "Pendentes" nas datas de vencimento do cartão selecionado.
             </p>
+          )}
+
+          {editingId && (
+            <div className="p-3.5 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-800/50 rounded-xl flex items-center justify-between gap-3 mt-3">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+                  <Icon name="event_repeat" size="sm" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-900 dark:text-white">
+                    Replicar para os próximos meses / parcelas
+                  </p>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Aplica a alteração de cartão, categoria e valor nas parcelas/meses seguintes
+                  </p>
+                </div>
+              </div>
+              <input 
+                type="checkbox"
+                id="update_future"
+                checked={formData.update_future}
+                onChange={(e) => setFormData({...formData, update_future: e.target.checked})}
+                className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500 cursor-pointer shrink-0"
+              />
+            </div>
           )}
 
           <div className="flex justify-end gap-2 mt-6">
