@@ -57,25 +57,21 @@ export function FinancialProjectionChart({
     const startIdx = baseIdx >= 0 ? baseIdx : 0;
 
     if (range === '6m') {
-      // 2 meses antes do selecionado + 4 meses à frente (6 meses total)
       const from = Math.max(0, startIdx - 2);
       return projectionMonths.slice(from, from + 6);
     }
 
     if (range === '12m') {
-      // Mês selecionado + 11 meses à frente (1 ano)
       const from = Math.max(0, startIdx - 1);
       return projectionMonths.slice(from, from + 12);
     }
 
     if (range === '2027') {
-      // Desde o mês atual até o final de 2027
       const from = Math.max(0, startIdx - 1);
       return projectionMonths.filter((m, idx) => idx >= from && (m.year <= 2027));
     }
 
     // range === 'max'
-    // Apenas meses a partir de 2 meses no passado até o último mês com movimentação
     let lastActiveIdx = projectionMonths.length - 1;
     for (let i = projectionMonths.length - 1; i >= 0; i--) {
       if (projectionMonths[i].income > 0 || projectionMonths[i].expense > 0) {
@@ -106,15 +102,14 @@ export function FinancialProjectionChart({
     const expenses = filteredMonths.map(m => m.expense);
     const balances = filteredMonths.map(m => m.balance);
 
-    // Ajustar espessura das barras dinamicamente dependendo do número de meses
-    const barThickness = filteredMonths.length > 12 ? 8 : (filteredMonths.length > 8 ? 12 : 16);
+    const barThickness = filteredMonths.length > 14 ? 6 : (filteredMonths.length > 8 ? 10 : 16);
 
     const datasets: any[] = [
       {
         label: 'Entradas',
         data: incomes,
-        backgroundColor: '#10b981', // Emerald green
-        borderRadius: 6,
+        backgroundColor: '#10b981',
+        borderRadius: 4,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -123,8 +118,8 @@ export function FinancialProjectionChart({
       {
         label: 'Saídas',
         data: expenses,
-        backgroundColor: '#ef4444', // Red
-        borderRadius: 6,
+        backgroundColor: '#ef4444',
+        borderRadius: 4,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -133,8 +128,8 @@ export function FinancialProjectionChart({
       {
         label: 'Saldo',
         data: balances,
-        backgroundColor: '#3b82f6', // Blue
-        borderRadius: 6,
+        backgroundColor: '#3b82f6',
+        borderRadius: 4,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -177,7 +172,7 @@ export function FinancialProjectionChart({
         display: false,
       },
       tooltip: {
-        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        backgroundColor: 'rgba(15, 23, 42, 0.95)',
         titleColor: '#fff',
         bodyColor: '#cbd5e1',
         padding: 12,
@@ -196,6 +191,8 @@ export function FinancialProjectionChart({
         grid: { display: false },
         ticks: {
           color: '#94a3b8',
+          maxRotation: filteredMonths.length > 10 ? 45 : 0,
+          minRotation: 0,
           font: {
             size: filteredMonths.length > 12 ? 9 : 11,
             weight: '600'
@@ -220,7 +217,7 @@ export function FinancialProjectionChart({
       case '6m': return 'Comparativo de 6 meses ao redor do mês selecionado';
       case '12m': return 'Visão anual de 12 meses consecutivos';
       case '2027': return 'Projeção completa até o final de 2027';
-      case 'max': return `Visão completa de todas as ${filteredMonths.length} parcelas / meses cadastrados`;
+      case 'max': return `Visão completa de todos os ${filteredMonths.length} meses com movimentação`;
     }
   };
 
@@ -228,8 +225,8 @@ export function FinancialProjectionChart({
     <>
       <GlassCard className="p-6 flex flex-col justify-between h-full">
         <div>
-          {/* Header with Title, Range Selector & Custom Legends */}
-          <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6">
+          {/* Header do Card no Dashboard */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
                 <Icon name="insights" size="md" />
@@ -245,9 +242,8 @@ export function FinancialProjectionChart({
               </div>
             </div>
 
-            {/* Range Selector & Expand Button */}
-            <div className="flex items-center gap-3 w-full xl:w-auto justify-between xl:justify-end flex-wrap">
-              {/* Pills Selector */}
+            {/* Seletor de Horizonte & Botão Expandir */}
+            <div className="flex items-center gap-2.5 w-full sm:w-auto justify-between sm:justify-end">
               <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl text-xs font-semibold">
                 <button
                   type="button"
@@ -295,19 +291,18 @@ export function FinancialProjectionChart({
                 </button>
               </div>
 
-              {/* Botão de Expansão Detalhada */}
               <button
                 type="button"
                 onClick={() => setIsDetailModalOpen(true)}
-                className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-950/30 text-gray-600 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
-                title="Abrir Relatório Detalhado de Projeção"
+                className="p-2 rounded-xl bg-gray-100 dark:bg-gray-800 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-gray-600 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors shrink-0"
+                title="Abrir Relatório Detalhado"
               >
                 <Icon name="open_in_full" size="sm" />
               </button>
             </div>
           </div>
 
-          {/* Custom Legends */}
+          {/* Legendas */}
           <div className="flex items-center justify-end gap-4 text-xs font-medium text-gray-600 dark:text-gray-300 mb-2">
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span>
@@ -323,50 +318,59 @@ export function FinancialProjectionChart({
             </div>
           </div>
 
-          {/* Chart Canvas Area */}
+          {/* Gráfico */}
           <div className="relative h-[340px] w-full">
             <Bar data={activeChartData} options={options} />
           </div>
         </div>
       </GlassCard>
 
-      {/* Modal - Visão Expandida e Detalhada de Projeção */}
+      {/* Modal Expandido em Tamanho 2XL / Full */}
       <Modal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
         title="Projeção Financeira Detalhada & Fluxo Futuro"
+        size="2xl"
       >
         <div className="space-y-6">
           {/* Controles de Período no Modal */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gray-50 dark:bg-gray-800/50 p-3.5 rounded-2xl border border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-500 dark:text-gray-400">Horizonte:</span>
-              <div className="flex bg-white dark:bg-gray-900 p-1 rounded-xl text-xs font-semibold border border-gray-200 dark:border-gray-800">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gray-50 dark:bg-gray-800/50 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 w-full md:w-auto">
+              <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Período:</span>
+              <div className="flex bg-white dark:bg-gray-900 p-1 rounded-xl text-xs font-semibold border border-gray-200 dark:border-gray-800 w-full sm:w-auto">
                 <button
                   type="button"
                   onClick={() => setRange('6m')}
-                  className={`px-3 py-1 rounded-lg transition-all ${range === '6m' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                  className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all ${
+                    range === '6m' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
                 >
                   6 Meses
                 </button>
                 <button
                   type="button"
                   onClick={() => setRange('12m')}
-                  className={`px-3 py-1 rounded-lg transition-all ${range === '12m' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                  className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all ${
+                    range === '12m' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
                 >
-                  12 Meses (1 Ano)
+                  12 Meses
                 </button>
                 <button
                   type="button"
                   onClick={() => setRange('2027')}
-                  className={`px-3 py-1 rounded-lg transition-all ${range === '2027' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                  className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all ${
+                    range === '2027' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
                 >
-                  Até Dez/2027
+                  Até 2027
                 </button>
                 <button
                   type="button"
                   onClick={() => setRange('max')}
-                  className={`px-3 py-1 rounded-lg transition-all ${range === 'max' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500'}`}
+                  className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-lg transition-all ${
+                    range === 'max' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-800 dark:hover:text-white'
+                  }`}
                 >
                   Todas as Parcelas
                 </button>
@@ -378,87 +382,99 @@ export function FinancialProjectionChart({
                 type="checkbox"
                 checked={showAccumulatedLine}
                 onChange={(e) => setShowAccumulatedLine(e.target.checked)}
-                className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500"
+                className="w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
               />
-              <span>Mostrar Linha de Saldo Acumulado</span>
+              <span>Linha de Saldo Acumulado</span>
             </label>
           </div>
 
           {/* Cards Resumo do Período */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl">
-              <p className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">Total Receitas</p>
-              <p className="text-base font-bold text-emerald-800 dark:text-emerald-200 mt-0.5">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-4 bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-800/60 rounded-2xl">
+              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Total Receitas</p>
+              <p className="text-base sm:text-lg font-bold text-emerald-800 dark:text-emerald-200 mt-1 truncate">
                 {formatCurrency(periodTotals.totalIncome)}
               </p>
             </div>
-            <div className="p-3.5 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 rounded-xl">
-              <p className="text-[11px] font-semibold text-rose-700 dark:text-rose-300">Total Despesas/Faturas</p>
-              <p className="text-base font-bold text-rose-800 dark:text-rose-200 mt-0.5">
+            <div className="p-4 bg-rose-50/70 dark:bg-rose-950/30 border border-rose-200/80 dark:border-rose-800/60 rounded-2xl">
+              <p className="text-xs font-semibold text-rose-700 dark:text-rose-300">Total Despesas/Faturas</p>
+              <p className="text-base sm:text-lg font-bold text-rose-800 dark:text-rose-200 mt-1 truncate">
                 {formatCurrency(periodTotals.totalExpense)}
               </p>
             </div>
-            <div className="p-3.5 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-xl">
-              <p className="text-[11px] font-semibold text-blue-700 dark:text-blue-300">Balanço Líquido</p>
-              <p className={`text-base font-bold mt-0.5 ${periodTotals.totalBalance >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-600'}`}>
-                {formatCurrency(periodTotals.totalBalance)}
+            <div className="p-4 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/60 rounded-2xl">
+              <p className="text-xs font-semibold text-blue-700 dark:text-blue-300">Balanço do Período</p>
+              <p className={`text-base sm:text-lg font-bold mt-1 truncate ${periodTotals.totalBalance >= 0 ? 'text-blue-700 dark:text-blue-300' : 'text-red-600'}`}>
+                {periodTotals.totalBalance >= 0 ? '+' : ''}{formatCurrency(periodTotals.totalBalance)}
               </p>
             </div>
-            <div className="p-3.5 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-xl">
-              <p className="text-[11px] font-semibold text-purple-700 dark:text-purple-300">Saldo Estimado ao Final</p>
-              <p className="text-base font-bold text-purple-800 dark:text-purple-200 mt-0.5">
+            <div className="p-4 bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200/80 dark:border-purple-800/60 rounded-2xl">
+              <p className="text-xs font-semibold text-purple-700 dark:text-purple-300">Saldo Estimado ao Final</p>
+              <p className="text-base sm:text-lg font-bold text-purple-800 dark:text-purple-200 mt-1 truncate">
                 {formatCurrency(periodTotals.finalAccumulated)}
               </p>
             </div>
           </div>
 
           {/* Gráfico Expandido */}
-          <div className="h-[280px] w-full bg-white dark:bg-gray-900/60 p-3 rounded-2xl border border-gray-100 dark:border-gray-800">
+          <div className="h-[300px] sm:h-[340px] w-full bg-white dark:bg-gray-900/60 p-4 rounded-2xl border border-gray-100 dark:border-gray-800">
             <Bar data={activeChartData} options={options} />
           </div>
 
           {/* Tabela de Detalhamento Mês a Mês */}
-          <div className="space-y-2">
-            <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Detalhamento Mês a Mês ({filteredMonths.length} meses)
-            </h4>
-            <div className="max-h-64 overflow-y-auto rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                Detalhamento Mensal ({filteredMonths.length} meses)
+              </h4>
+              <span className="text-xs text-gray-400">Valores projetados com base nos lançamentos</span>
+            </div>
+            
+            <div className="max-h-72 overflow-y-auto rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm">
               <table className="w-full text-xs text-left">
-                <thead className="bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 sticky top-0 font-bold">
+                <thead className="bg-gray-100 dark:bg-gray-800/80 text-gray-600 dark:text-gray-300 sticky top-0 font-bold backdrop-blur-sm">
                   <tr>
-                    <th className="p-3">Mês / Ano</th>
-                    <th className="p-3 text-right">Entradas</th>
-                    <th className="p-3 text-right">Saídas</th>
-                    <th className="p-3 text-right">Resultado</th>
-                    <th className="p-3 text-right">Saldo Projetado</th>
-                    <th className="p-3 text-center">Status</th>
+                    <th className="p-3.5 pl-4">Mês / Ano</th>
+                    <th className="p-3.5 text-right">Entradas</th>
+                    <th className="p-3.5 text-right">Saídas</th>
+                    <th className="p-3.5 text-right">Resultado</th>
+                    <th className="p-3.5 text-right">Saldo Acumulado</th>
+                    <th className="p-3.5 pr-4 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                   {filteredMonths.map((m) => (
                     <tr 
                       key={m.key} 
-                      className={`hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors ${
+                      className={`hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors ${
                         m.isCurrent ? 'bg-amber-500/10 dark:bg-amber-950/20 font-semibold' : ''
                       }`}
                     >
-                      <td className="p-3 text-gray-900 dark:text-white flex items-center gap-1.5">
-                        {m.isCurrent && <span className="w-2 h-2 rounded-full bg-amber-500"></span>}
-                        {m.fullLabel}
+                      <td className="p-3.5 pl-4 text-gray-900 dark:text-white flex items-center gap-2">
+                        {m.isCurrent ? (
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" title="Mês Atual"></span>
+                        ) : (
+                          <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+                        )}
+                        <span>{m.fullLabel}</span>
                       </td>
-                      <td className="p-3 text-right text-emerald-600 font-semibold">{formatCurrency(m.income)}</td>
-                      <td className="p-3 text-right text-rose-600 font-semibold">{formatCurrency(m.expense)}</td>
-                      <td className={`p-3 text-right font-bold ${m.balance >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <td className="p-3.5 text-right text-emerald-600 dark:text-emerald-400 font-medium">
+                        {formatCurrency(m.income)}
+                      </td>
+                      <td className="p-3.5 text-right text-rose-600 dark:text-rose-400 font-medium">
+                        {formatCurrency(m.expense)}
+                      </td>
+                      <td className={`p-3.5 text-right font-bold ${m.balance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                         {m.balance >= 0 ? '+' : ''}{formatCurrency(m.balance)}
                       </td>
-                      <td className="p-3 text-right font-mono font-bold text-gray-900 dark:text-white">
+                      <td className="p-3.5 text-right font-mono font-bold text-gray-900 dark:text-white">
                         {formatCurrency(m.accumulatedBalance)}
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-3.5 pr-4 text-center">
                         {m.isPast ? (
-                          <Badge color="gray">Passado</Badge>
+                          <Badge color="gray">Histórico</Badge>
                         ) : m.isCurrent ? (
-                          <Badge color="yellow">Atual</Badge>
+                          <Badge color="yellow">Mês Atual</Badge>
                         ) : m.balance >= 0 ? (
                           <Badge color="green">Superávit</Badge>
                         ) : (
