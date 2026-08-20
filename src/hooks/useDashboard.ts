@@ -72,6 +72,37 @@ export function useDashboard(monthFilter?: string) {
       let monthlyExpense = 0;
       const upcomingBillsRaw: any[] = [];
 
+      // Calcular Saldo Geral, Receitas/Despesas do mês selecionado e Contas Próximas
+      transactions.forEach(t => {
+        const tDate = new Date(t.date + 'T12:00:00');
+        const tMonth = tDate.getMonth();
+        const tYear = tDate.getFullYear();
+        const amount = Number(t.amount);
+
+        // Saldo Atual (Considera apenas pagos/recebidos de todo o histórico)
+        if (t.status === 'pago') {
+          if (t.type === 'receita') {
+            totalBalance += amount;
+          } else {
+            totalBalance -= amount;
+          }
+        }
+
+        // Mês Selecionado (Receitas e Despesas do mês)
+        if (tMonth === filterMonth && tYear === filterYear) {
+          if (t.type === 'receita') {
+            monthlyIncome += amount;
+          } else {
+            monthlyExpense += amount;
+          }
+        }
+
+        // Contas Próximas (Despesas pendentes)
+        if (t.status === 'pendente' && t.type === 'despesa') {
+          upcomingBillsRaw.push(t);
+        }
+      });
+
       // Descobrir a data máxima futura entre todas as transações (ou pelo menos até o fim do ano que vem)
       let maxFutureDate = new Date(currentYear + 1, 11, 1); // Pelo menos até Dezembro do ano que vem
 
