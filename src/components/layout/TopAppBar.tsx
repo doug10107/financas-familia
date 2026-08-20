@@ -9,6 +9,8 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useBiometricAuth } from '@/hooks/useBiometricAuth';
+import { useFamily } from '@/hooks/useFamily';
+import { FamilyModal } from '../family/FamilyModal';
 
 interface TopAppBarProps {
   userName?: string;
@@ -17,9 +19,11 @@ interface TopAppBarProps {
 export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const { transactions } = useTransactions();
+  const { family } = useFamily();
   const { isEnabled: isBioEnabled, hasBiometricCredential, enableBiometrics, disableBiometrics, registerBiometricCredential, lockApp } = useBiometricAuth();
 
   const [isSecurityModalOpen, setIsSecurityModalOpen] = useState(false);
@@ -74,6 +78,10 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
     }, 2000);
   };
 
+  const currentMember = family?.members?.find(m => m.is_current_user);
+  const activeDisplayName = currentMember?.display_name || userName;
+  const familyName = family?.family_name || 'Família';
+
   return (
     <header 
       className={`sticky top-0 z-40 w-full transition-all duration-300 ${
@@ -85,15 +93,24 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-lg shadow-sm">
-              {userName.charAt(0).toUpperCase()}
-            </div>
+            <button
+              onClick={() => setIsFamilyModalOpen(true)}
+              className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-lg shadow-sm hover:scale-105 transition-transform"
+              title="Ver detalhes da Família"
+            >
+              {activeDisplayName.charAt(0).toUpperCase()}
+            </button>
             <div className="flex flex-col">
-              <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                {capitalizedDate}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                  {capitalizedDate}
+                </span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/20">
+                  {familyName}
+                </span>
+              </div>
               <span className="text-sm font-semibold">
-                Olá, {userName.split(' ')[0]}
+                Olá, {activeDisplayName.split(' ')[0]}
               </span>
             </div>
           </div>
@@ -150,6 +167,15 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
           </nav>
 
           <div className="flex items-center gap-2 relative">
+            {/* Family Button */}
+            <button 
+              onClick={() => setIsFamilyModalOpen(true)}
+              className="p-2 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 transition-colors relative"
+              title="Minha Família Compartilhada"
+            >
+              <Icon name="groups" />
+            </button>
+
             {/* Biometric Security Button */}
             <button 
               onClick={() => setIsSecurityModalOpen(true)}
@@ -312,6 +338,12 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
           </form>
         )}
       </Modal>
+
+      {/* Family Management Modal */}
+      <FamilyModal
+        isOpen={isFamilyModalOpen}
+        onClose={() => setIsFamilyModalOpen(false)}
+      />
     </header>
   );
 }

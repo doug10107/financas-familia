@@ -344,12 +344,22 @@ export default function TransactionsPage() {
                       {formatDate(transaction.date)}
                     </td>
                     <td className="px-4 py-4 font-medium text-gray-900 dark:text-white">
-                      {transaction.description}
-                      {transaction.credit_card_id && (
-                        <span className="ml-2 inline-flex items-center text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase font-bold">
-                          Cartão
-                        </span>
-                      )}
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{transaction.description}</span>
+                          {transaction.credit_card_id && (
+                            <span className="inline-flex items-center text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase font-bold">
+                              Cartão
+                            </span>
+                          )}
+                        </div>
+                        {transaction.profile?.display_name && (
+                          <span className="text-[11px] text-gray-400 font-normal flex items-center gap-0.5 mt-0.5">
+                            <Icon name="person" size="sm" className="text-[11px] opacity-60" />
+                            por {transaction.profile.display_name.split(' ')[0]}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">

@@ -12,6 +12,7 @@ export type Category = {
 
 export type Transaction = {
   id: string;
+  user_id?: string;
   type: 'receita' | 'despesa';
   description: string;
   amount: number;
@@ -23,6 +24,7 @@ export type Transaction = {
   current_installment?: number | null;
   total_installments?: number | null;
   category?: Category; // Joined data
+  profile?: { id: string; display_name: string; avatar_url?: string | null };
 };
 
 export function useTransactions() {
@@ -43,22 +45,27 @@ export function useTransactions() {
   }, [supabase]);
 
   const fetchTransactions = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select(`
-        *,
-        category:categories(*)
-      `)
-      .order('date', { ascending: false });
+    const [{ data: txData, error: txError }, { data: profilesData }] = await Promise.all([
+      supabase
+        .from('transactions')
+        .select(`
+          *,
+          category:categories(*)
+        `)
+        .order('date', { ascending: false }),
+      supabase
+        .from('profiles')
+        .select('id, display_name, avatar_url')
+    ]);
       
-    if (error) throw error;
+    if (txError) throw txError;
     
-    // O Supabase retorna array para joins '1 to many', ou object para '1 to 1'. 
-    // Como transaction -> category é many to 1, o 'categories' pode vir como array dependendo de como a view foi gerada.
-    // O select 'category:categories(*)' retorna um objeto.
-    const mapped = (data || []).map((t: any) => ({
+    const profilesMap = new Map<string, any>((profilesData || []).map((p: any) => [p.id, p]));
+
+    const mapped = (txData || []).map((t: any) => ({
       ...t,
-      category: Array.isArray(t.category) ? t.category[0] : t.category
+      category: Array.isArray(t.category) ? t.category[0] : t.category,
+      profile: t.user_id ? profilesMap.get(t.user_id) : undefined
     })) as Transaction[];
     setTransactions(mapped);
   }, [supabase]);
