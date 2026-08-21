@@ -1,4 +1,4 @@
-﻿-- Migration 11: Sistema de Códigos de Convite e Gestão de Membros da Família
+-- Migration 11: Sistema de Códigos de Convite e Gestão de Membros da Família
 -- Permite que cônjuges e membros entrem na mesma família compartilhada
 
 -- 1. Adicionar coluna invite_code na tabela families
@@ -137,6 +137,8 @@ RETURNS JSONB AS $$
 DECLARE
     v_target_family RECORD;
     v_old_family_id UUID;
+    v_user_email TEXT;
+    v_display_name TEXT;
 BEGIN
     -- Localiza a família pelo código
     SELECT id, name, invite_code INTO v_target_family
@@ -147,6 +149,11 @@ BEGIN
         RETURN jsonb_build_object('success', false, 'message', 'Código de convite não encontrado ou inválido.');
     END IF;
 
+    SELECT email, COALESCE(raw_user_meta_data->>'full_name', split_part(email, '@', 1))
+    INTO v_user_email, v_display_name
+    FROM auth.users
+    WHERE id = auth.uid();
+
     SELECT family_id INTO v_old_family_id
     FROM public.profiles
     WHERE id = auth.uid();
@@ -155,11 +162,12 @@ BEGIN
         RETURN jsonb_build_object('success', true, 'message', 'Você já faz parte desta família!');
     END IF;
 
-    -- Atualiza o perfil para a nova família
-    UPDATE public.profiles
-    SET family_id = v_target_family.id,
-        role = 'member'
-    WHERE id = auth.uid();
+    -- Upsert no perfil para garantir a vinculação mesmo se o perfil ainda não existia
+    INSERT INTO public.profiles (id, family_id, display_name, role)
+    VALUES (auth.uid(), v_target_family.id, COALESCE(v_display_name, 'Membro da Família'), 'member')
+    ON CONFLICT (id) DO UPDATE
+    SET family_id = EXCLUDED.family_id,
+        role = 'member';
 
     RETURN jsonb_build_object(
         'success', true, 
