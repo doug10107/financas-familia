@@ -15,7 +15,16 @@ export default function ComprasPage() {
   const { lists, createList, updateList, addItem, toggleItem, updateItemPrice, deleteItem, deleteList, completeList } = useShoppingLists();
   const { cards, debitBalance } = useBenefitCards();
 
-  const [activeListId, setActiveListId] = useState<string | null>(lists.length > 0 ? lists[0].id : null);
+  const [activeListId, setActiveListId] = useState<string | null>(null);
+
+  // Synchronize activeListId with lists
+  React.useEffect(() => {
+    if (lists.length > 0) {
+      if (!activeListId || !lists.some(l => l.id === activeListId)) {
+        setActiveListId(lists[0].id);
+      }
+    }
+  }, [lists, activeListId]);
   
   // Modals
   const [isNewListOpen, setIsNewListOpen] = useState(false);
@@ -26,12 +35,12 @@ export default function ComprasPage() {
   // New List Form State
   const [newListTitle, setNewListTitle] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
-  const [newListCardId, setNewListCardId] = useState('va-1');
+  const [newListCardId, setNewListCardId] = useState('');
 
   // Edit List Form State
   const [editListTitle, setEditListTitle] = useState('');
   const [editListDesc, setEditListDesc] = useState('');
-  const [editListCardId, setEditListCardId] = useState('va-1');
+  const [editListCardId, setEditListCardId] = useState('');
 
   // New Item Form State
   const [itemName, setItemName] = useState('');
@@ -40,13 +49,22 @@ export default function ComprasPage() {
   const [itemEstPrice, setItemEstPrice] = useState('');
 
   // Finalize Form State (Single & Split Payment)
-  const [selectedCardForPayment, setSelectedCardForPayment] = useState('va-1');
+  const [selectedCardForPayment, setSelectedCardForPayment] = useState('');
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   
-  const [card1Id, setCard1Id] = useState('va-1');
+  const [card1Id, setCard1Id] = useState('');
   const [card1Amount, setCard1Amount] = useState('');
-  const [card2Id, setCard2Id] = useState('va-2');
+  const [card2Id, setCard2Id] = useState('');
   const [card2Amount, setCard2Amount] = useState('');
+
+  React.useEffect(() => {
+    if (cards.length > 0) {
+      if (!newListCardId) setNewListCardId(cards[0].id);
+      if (!card1Id) setCard1Id(cards[0].id);
+      if (!card2Id) setCard2Id(cards[1]?.id || cards[0].id);
+      if (!selectedCardForPayment) setSelectedCardForPayment(cards[0].id);
+    }
+  }, [cards]);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -62,10 +80,10 @@ export default function ComprasPage() {
   const card1 = cards.find(c => c.id === card1Id);
   const card2 = cards.find(c => c.id === card2Id);
 
-  const handleCreateList = (e: React.FormEvent) => {
+  const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListTitle) return;
-    createList(newListTitle, newListDesc, newListCardId);
+    await createList(newListTitle, newListDesc, newListCardId || undefined);
     setNewListTitle('');
     setNewListDesc('');
     setIsNewListOpen(false);
@@ -75,18 +93,18 @@ export default function ComprasPage() {
     if (!activeList) return;
     setEditListTitle(activeList.title);
     setEditListDesc(activeList.description || '');
-    setEditListCardId(activeList.benefitCardId || 'va-1');
+    setEditListCardId(activeList.benefitCardId || (cards.length > 0 ? cards[0].id : ''));
     setIsEditListOpen(true);
   };
 
-  const handleSaveEditList = (e: React.FormEvent) => {
+  const handleSaveEditList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeList || !editListTitle) return;
 
-    updateList(activeList.id, {
+    await updateList(activeList.id, {
       title: editListTitle,
       description: editListDesc,
-      benefitCardId: editListCardId
+      benefitCardId: editListCardId || undefined
     });
 
     setIsEditListOpen(false);
@@ -114,7 +132,7 @@ export default function ComprasPage() {
 
   const handleOpenFinalizeModal = () => {
     if (!activeList) return;
-    const defaultCardId = activeList.benefitCardId || 'va-1';
+    const defaultCardId = activeList.benefitCardId || (cards.length > 0 ? cards[0].id : '');
     setSelectedCardForPayment(defaultCardId);
     setIsSplitPayment(false);
 
@@ -166,6 +184,11 @@ export default function ComprasPage() {
     completeList(activeList.id);
     setIsFinalizeOpen(false);
   };
+
+  const cardSelectOptions = [
+    { value: '', label: 'Nenhum (ou selecionar depois)' },
+    ...cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))
+  ];
 
   return (
     <div className="space-y-6">
@@ -419,7 +442,7 @@ export default function ComprasPage() {
             label="Cartão de Benefício Preferencial"
             value={newListCardId}
             onChange={(e) => setNewListCardId(e.target.value)}
-            options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
+            options={cardSelectOptions}
           />
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsNewListOpen(false)}>Cancelar</Button>
@@ -446,7 +469,7 @@ export default function ComprasPage() {
             label="Cartão de Benefício Preferencial"
             value={editListCardId}
             onChange={(e) => setEditListCardId(e.target.value)}
-            options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
+            options={cardSelectOptions}
           />
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsEditListOpen(false)}>Cancelar</Button>

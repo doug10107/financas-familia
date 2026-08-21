@@ -204,6 +204,8 @@ export function useShoppingLists() {
     fetchLists();
   }, [fetchLists]);
 
+  const isValidUUID = (id?: string | null) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+
   const createList = async (title: string, description?: string, benefitCardId?: string) => {
     try {
       const authInfo = await getFamilyId();
@@ -217,7 +219,7 @@ export function useShoppingLists() {
           title,
           description: description || '',
           is_completed: false,
-          benefit_card_id: benefitCardId || null
+          benefit_card_id: isValidUUID(benefitCardId) ? benefitCardId : null
         } as any)
         .select()
         .single()) as any;
@@ -385,7 +387,9 @@ export function useShoppingLists() {
       const payload: any = {};
       if (updatedData.title !== undefined) payload.title = updatedData.title;
       if (updatedData.description !== undefined) payload.description = updatedData.description;
-      if (updatedData.benefitCardId !== undefined) payload.benefit_card_id = updatedData.benefitCardId;
+      if (updatedData.benefitCardId !== undefined) {
+        payload.benefit_card_id = isValidUUID(updatedData.benefitCardId) ? updatedData.benefitCardId : null;
+      }
       if (updatedData.isCompleted !== undefined) payload.is_completed = updatedData.isCompleted;
 
       const { error } = await (supabase
