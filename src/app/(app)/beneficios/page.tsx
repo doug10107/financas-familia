@@ -7,16 +7,40 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { useBenefitCards, BenefitCard } from '@/hooks/useBenefitCards';
+import { useBenefitCards, BenefitCard, BenefitTransaction, BenefitTransactionItem } from '@/hooks/useBenefitCards';
+import { useShoppingLists } from '@/hooks/useShoppingLists';
 
 export default function BeneficiosPage() {
-  const { cards, transactions, addCard, updateCard, deleteCard, addRecharge, deleteTransaction, clearAllTransactions, getCardStats } = useBenefitCards();
+  const {
+    cards,
+    transactions,
+    addCard,
+    updateCard,
+    deleteCard,
+    addRecharge,
+    updateTransactionItems,
+    deleteTransaction,
+    clearAllTransactions,
+    getCardStats
+  } = useBenefitCards();
+  
+  const { lists } = useShoppingLists();
   
   const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<BenefitCard | null>(null);
   const [selectedCardForEdit, setSelectedCardForEdit] = useState<BenefitCard | null>(null);
   const [isNewCardModalOpen, setIsNewCardModalOpen] = useState(false);
   
   const [rechargeAmount, setRechargeAmount] = useState('');
+  
+  // Expanded Transactions State
+  const [expandedTxIds, setExpandedTxIds] = useState<Record<string, boolean>>({});
+
+  // Item Details Editor State
+  const [selectedTxForItems, setSelectedTxForItems] = useState<BenefitTransaction | null>(null);
+  const [editItemsList, setEditItemsList] = useState<BenefitTransactionItem[]>([]);
+  const [newItemName, setNewItemName] = useState('');
+  const [newItemQty, setNewItemQty] = useState('1');
+  const [newItemPrice, setNewItemPrice] = useState('');
   
   // Edit Form State
   const [editName, setEditName] = useState('');
@@ -98,6 +122,74 @@ export default function BeneficiosPage() {
     if (window.confirm(`Tem certeza que deseja excluir o cartão "${card.name}"?`)) {
       deleteCard(card.id);
     }
+  };
+
+  const toggleExpandTx = (txId: string) => {
+    setExpandedTxIds(prev => ({
+      ...prev,
+      [txId]: !prev[txId]
+    }));
+  };
+
+  const handleOpenItemEditor = (tx: BenefitTransaction) => {
+    setSelectedTxForItems(tx);
+    if (tx.items && tx.items.length > 0) {
+      setEditItemsList([...tx.items]);
+    } else {
+      // Check if there's a matching shopping list by title
+      const cleanDesc = tx.description.toLowerCase().replace('compra:', '').trim();
+      const matchedList = lists.find(l => cleanDesc.includes(l.title.toLowerCase()) || l.title.toLowerCase().includes(cleanDesc));
+      if (matchedList && matchedList.items.length > 0) {
+        const imported = matchedList.items.map(i => ({
+          name: i.name,
+          quantity: Number(i.quantity) || 1,
+          price: Number(i.actualPrice) > 0 ? Number(i.actualPrice) : Number(i.estimatedPrice)
+        }));
+        setEditItemsList(imported);
+      } else {
+        setEditItemsList([]);
+      }
+    }
+    setNewItemName('');
+    setNewItemQty('1');
+    setNewItemPrice('');
+  };
+
+  const handleImportFromList = (listId: string) => {
+    const list = lists.find(l => l.id === listId);
+    if (!list || list.items.length === 0) return;
+    const imported = list.items.map(i => ({
+      name: i.name,
+      quantity: Number(i.quantity) || 1,
+      price: Number(i.actualPrice) > 0 ? Number(i.actualPrice) : Number(i.estimatedPrice)
+    }));
+    setEditItemsList(prev => [...prev, ...imported]);
+  };
+
+  const handleAddItemToTx = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newItemName.trim()) return;
+    const qty = parseFloat(newItemQty.replace(',', '.')) || 1;
+    const price = parseFloat(newItemPrice.replace(',', '.')) || 0;
+
+    setEditItemsList(prev => [
+      ...prev,
+      { name: newItemName.trim(), quantity: qty, price }
+    ]);
+    setNewItemName('');
+    setNewItemQty('1');
+    setNewItemPrice('');
+  };
+
+  const handleRemoveItemFromTx = (index: number) => {
+    setEditItemsList(prev => prev.filter((_, idx) => idx !== index));
+  };
+
+  const handleSaveTxItems = async () => {
+    if (!selectedTxForItems) return;
+    await updateTransactionItems(selectedTxForItems.id, editItemsList);
+    setExpandedTxIds(prev => ({ ...prev, [selectedTxForItems.id]: true }));
+    setSelectedTxForItems(null);
   };
 
   const totalVABalance = cards.filter(c => c.type === 'va').reduce((acc, c) => acc + c.balance, 0);
@@ -254,49 +346,136 @@ export default function BeneficiosPage() {
           )}
         </div>
 
-        <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+        <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
           {transactions.length > 0 ? (
             transactions.map(tx => {
               const card = cards.find(c => c.id === tx.cardId);
               const isRecharge = tx.type === 'recarga';
+              const hasItems = Array.isArray(tx.items) && tx.items.length > 0;
+              const isExpanded = !!expandedTxIds[tx.id];
 
               return (
                 <div
                   key={tx.id}
-                  className="flex items-center justify-between p-3.5 bg-gray-50/70 dark:bg-gray-800/40 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                  className="rounded-xl border border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-800/40 hover:bg-gray-100/80 dark:hover:bg-gray-800/70 transition-all overflow-hidden"
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm ${
-                        isRecharge ? 'bg-emerald-500' : 'bg-rose-500'
-                      }`}
-                    >
-                      <Icon name={isRecharge ? 'add_circle' : 'shopping_bag'} size="sm" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900 dark:text-white text-sm">{tx.description}</p>
-                      <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        <span className="font-medium text-emerald-600 dark:text-emerald-400">
-                          {card?.name || 'Vale'}
-                        </span>
-                        <span>•</span>
-                        <span>{tx.date.split('-').reverse().join('/')}</span>
+                  {/* Top Transaction Row */}
+                  <div className="flex items-center justify-between p-3.5">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 rounded-xl flex items-center justify-center text-white shrink-0 shadow-sm ${
+                          isRecharge ? 'bg-emerald-500' : 'bg-rose-500'
+                        }`}
+                      >
+                        <Icon name={isRecharge ? 'add_circle' : 'shopping_bag'} size="sm" />
                       </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-bold text-gray-900 dark:text-white text-sm">{tx.description}</p>
+                          
+                          {/* Discreet Details / Items Button */}
+                          {!isRecharge && (
+                            hasItems ? (
+                              <button
+                                onClick={() => toggleExpandTx(tx.id)}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                                  isExpanded
+                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                    : 'bg-gray-200/70 hover:bg-gray-200 text-gray-600 dark:bg-gray-700/60 dark:hover:bg-gray-700 dark:text-gray-300'
+                                }`}
+                                title="Ver itens comprados nesta transação"
+                              >
+                                <Icon name="receipt_long" size="sm" className="text-gray-500 dark:text-gray-400 !text-sm" />
+                                <span>{tx.items!.length} {tx.items!.length === 1 ? 'item' : 'itens'}</span>
+                                <Icon name={isExpanded ? 'expand_less' : 'expand_more'} size="sm" className="!text-sm" />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleOpenItemEditor(tx)}
+                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[11px] font-medium text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                                title="Adicionar lista de itens comprados"
+                              >
+                                <Icon name="add" size="sm" className="!text-sm" />
+                                <span>Detalhes</span>
+                              </button>
+                            )
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                            {card?.name || 'Vale'}
+                          </span>
+                          <span>•</span>
+                          <span>{tx.date.split('-').reverse().join('/')}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className={`font-extrabold text-sm ${isRecharge ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                        {isRecharge ? `+ ${formatCurrency(tx.amount)}` : `- ${formatCurrency(tx.amount)}`}
+                      </span>
+                      <button
+                        onClick={() => deleteTransaction(tx.id)}
+                        className="text-gray-400 hover:text-red-500 p-1 opacity-80 hover:opacity-100 transition-opacity"
+                        title="Excluir Transação"
+                      >
+                        <Icon name="close" size="sm" />
+                      </button>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <span className={`font-extrabold text-sm ${isRecharge ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
-                      {isRecharge ? `+ ${formatCurrency(tx.amount)}` : `- ${formatCurrency(tx.amount)}`}
-                    </span>
-                    <button
-                      onClick={() => deleteTransaction(tx.id)}
-                      className="text-gray-400 hover:text-red-500 p-1 opacity-80 hover:opacity-100 transition-opacity"
-                      title="Excluir Transação"
-                    >
-                      <Icon name="close" size="sm" />
-                    </button>
-                  </div>
+                  {/* Expandable Items Section (Discreet Accordion) */}
+                  {isExpanded && hasItems && (
+                    <div className="px-3.5 pb-3.5 pt-1 border-t border-gray-100 dark:border-gray-800/80 bg-black/[0.02] dark:bg-white/[0.02]">
+                      <div className="bg-white/80 dark:bg-gray-900/60 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700/50 shadow-xs space-y-2">
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-800">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
+                            <Icon name="shopping_basket" size="sm" className="text-emerald-500 !text-base" />
+                            <span>Itens comprados no mercado</span>
+                          </div>
+                          <button
+                            onClick={() => handleOpenItemEditor(tx)}
+                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                          >
+                            <Icon name="edit" size="sm" className="!text-sm" /> Editar itens
+                          </button>
+                        </div>
+
+                        {/* Items List */}
+                        <div className="divide-y divide-gray-100 dark:divide-gray-800/60">
+                          {tx.items!.map((item, idx) => {
+                            const itemTotal = (item.quantity || 1) * (item.price || 0);
+                            return (
+                              <div key={idx} className="py-1.5 flex justify-between items-center text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                  <span className="font-medium text-gray-800 dark:text-gray-200">{item.name}</span>
+                                  <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                                    ({item.quantity}x {formatCurrency(item.price)})
+                                  </span>
+                                </div>
+                                <span className="font-bold text-gray-900 dark:text-white">
+                                  {formatCurrency(itemTotal)}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Total Footer */}
+                        <div className="pt-2 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-xs font-bold text-gray-700 dark:text-gray-300">
+                          <span>Subtotal dos itens</span>
+                          <span className="text-emerald-600 dark:text-emerald-400">
+                            {formatCurrency(
+                              tx.items!.reduce((acc, i) => acc + ((i.quantity || 1) * (i.price || 0)), 0)
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -461,6 +640,143 @@ export default function BeneficiosPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Edit / View Transaction Items Details */}
+      <Modal
+        isOpen={!!selectedTxForItems}
+        onClose={() => setSelectedTxForItems(null)}
+        title={`Itens da Compra: ${selectedTxForItems?.description || ''}`}
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Adicione ou consulte os produtos comprados nesta ida ao mercado.
+          </p>
+
+          {/* Quick Import from Shopping Lists if available */}
+          {lists.length > 0 && (
+            <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Icon name="playlist_add_check" size="sm" className="text-blue-600 dark:text-blue-400" />
+                <div>
+                  <p className="text-xs font-bold text-blue-900 dark:text-blue-200">Importar de uma Lista Salva</p>
+                  <p className="text-[11px] text-blue-600 dark:text-blue-400">Carregar os itens de uma lista pré-existente</p>
+                </div>
+              </div>
+              <select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    handleImportFromList(e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                defaultValue=""
+                className="w-full sm:w-auto text-xs bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800 rounded-lg px-2.5 py-1.5 font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+              >
+                <option value="" disabled>Selecionar lista para puxar...</option>
+                {lists.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.title} ({l.items.length} itens)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Quick Add Product Form inside modal */}
+          <form onSubmit={handleAddItemToTx} className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3 border border-gray-100 dark:border-gray-800">
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300 block">Adicionar Novo Produto</span>
+            
+            <div className="space-y-2.5">
+              <Input
+                label="Nome do Produto"
+                placeholder="Ex: Feijão 1kg, Arroz, Detergente..."
+                value={newItemName}
+                onChange={(e) => setNewItemName(e.target.value)}
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-end">
+                <Input
+                  label="Quantidade"
+                  type="number"
+                  step="1"
+                  min="1"
+                  placeholder="1"
+                  value={newItemQty}
+                  onChange={(e) => setNewItemQty(e.target.value)}
+                />
+                <Input
+                  label="Preço Unitário (R$)"
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={newItemPrice}
+                  onChange={(e) => setNewItemPrice(e.target.value)}
+                />
+                <Button type="submit" variant="secondary" className="w-full h-11 flex items-center justify-center gap-1.5 font-semibold text-xs">
+                  <Icon name="add" size="sm" className="!text-sm" /> Inserir
+                </Button>
+              </div>
+            </div>
+          </form>
+
+          {/* Current Items List in Modal */}
+          <div className="space-y-2">
+            <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+              Produtos Registrados ({editItemsList.length})
+            </span>
+
+            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+              {editItemsList.length > 0 ? (
+                editItemsList.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className="flex items-center justify-between p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-100 dark:border-gray-700 text-xs"
+                  >
+                    <div>
+                      <p className="font-semibold text-gray-900 dark:text-white">{item.name}</p>
+                      <span className="text-[11px] text-gray-400">
+                        {item.quantity}x {formatCurrency(item.price)} = {formatCurrency(item.quantity * item.price)}
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveItemFromTx(idx)}
+                      className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                      title="Remover Item"
+                    >
+                      <Icon name="delete" size="sm" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="py-6 text-center text-xs text-gray-400 italic">
+                  Nenhum item adicionado ainda.
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Footer with Subtotal & Actions */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="text-xs">
+              <span className="text-gray-500 dark:text-gray-400">Total dos Itens: </span>
+              <strong className="text-emerald-600 dark:text-emerald-400 text-sm">
+                {formatCurrency(editItemsList.reduce((acc, i) => acc + (i.quantity * i.price), 0))}
+              </strong>
+            </div>
+
+            <div className="flex gap-2 w-full sm:w-auto justify-end">
+              <Button type="button" variant="ghost" onClick={() => setSelectedTxForItems(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="primary" onClick={handleSaveTxItems}>
+                Salvar Itens
+              </Button>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   );

@@ -163,20 +163,27 @@ export default function ComprasPage() {
     e.preventDefault();
     if (!activeList) return;
 
+    const checkedItems = activeList.items.filter(i => i.isChecked);
+    const itemsToSave = (checkedItems.length > 0 ? checkedItems : activeList.items).map(item => ({
+      name: item.name,
+      quantity: Number(item.quantity) || 1,
+      price: Number(item.actualPrice) > 0 ? Number(item.actualPrice) : Number(item.estimatedPrice)
+    }));
+
     if (totalInCart > 0) {
       if (isSplitPayment) {
         const amt1 = parseFloat(card1Amount.replace(',', '.')) || 0;
         const amt2 = parseFloat(card2Amount.replace(',', '.')) || 0;
 
         if (amt1 > 0 && card1) {
-          debitBalance(card1.id, amt1, `Compra (Parte 1/2): ${activeList.title}`, 'Alimentação');
+          debitBalance(card1.id, amt1, `Compra (Parte 1/2): ${activeList.title}`, 'Alimentação', itemsToSave);
         }
         if (amt2 > 0 && card2) {
-          debitBalance(card2.id, amt2, `Compra (Parte 2/2): ${activeList.title}`, 'Alimentação');
+          debitBalance(card2.id, amt2, `Compra (Parte 2/2): ${activeList.title}`, 'Alimentação', itemsToSave);
         }
       } else {
         if (selectedPaymentCard) {
-          debitBalance(selectedPaymentCard.id, totalInCart, `Compra: ${activeList.title}`, 'Alimentação');
+          debitBalance(selectedPaymentCard.id, totalInCart, `Compra: ${activeList.title}`, 'Alimentação', itemsToSave);
         }
       }
     }

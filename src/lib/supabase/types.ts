@@ -327,6 +327,7 @@ export interface Database {
           date: string
           type: 'debito' | 'recarga'
           category_name: string | null
+          items: Json | null
           created_at: string
         }
         Insert: {
@@ -338,6 +339,7 @@ export interface Database {
           date?: string
           type: 'debito' | 'recarga'
           category_name?: string | null
+          items?: Json | null
           created_at?: string
         }
         Update: {
@@ -349,6 +351,7 @@ export interface Database {
           date?: string
           type?: 'debito' | 'recarga'
           category_name?: string | null
+          items?: Json | null
           created_at?: string
         }
       }

@@ -12,6 +12,12 @@ export type BenefitCard = {
   icon: string;
 };
 
+export type BenefitTransactionItem = {
+  name: string;
+  quantity: number;
+  price: number;
+};
+
 export type BenefitTransaction = {
   id: string;
   cardId: string;
@@ -20,6 +26,7 @@ export type BenefitTransaction = {
   date: string;
   type: 'debito' | 'recarga';
   categoryName?: string;
+  items?: BenefitTransactionItem[];
 };
 
 const CARDS_STORAGE_KEY = 'financas_benefit_cards';
@@ -177,7 +184,8 @@ export function useBenefitCards() {
         amount: Number(t.amount),
         date: t.date,
         type: t.type,
-        categoryName: t.category_name || 'Alimentação'
+        categoryName: t.category_name || 'Alimentação',
+        items: Array.isArray(t.items) ? t.items : []
       }));
 
       setTransactions(mappedTxs);
@@ -309,7 +317,13 @@ export function useBenefitCards() {
     }
   };
 
-  const debitBalance = async (cardId: string, amount: number, description: string, categoryName: string = 'Alimentação') => {
+  const debitBalance = async (
+    cardId: string,
+    amount: number,
+    description: string,
+    categoryName: string = 'Alimentação',
+    items?: BenefitTransactionItem[]
+  ) => {
     const targetCard = cards.find(c => c.id === cardId);
     if (!targetCard) return false;
 
@@ -331,7 +345,8 @@ export function useBenefitCards() {
           amount,
           date: new Date().toISOString().split('T')[0],
           type: 'debito',
-          category_name: categoryName
+          category_name: categoryName,
+          items: items || []
         } as any);
 
       if (error) throw error;
@@ -340,6 +355,23 @@ export function useBenefitCards() {
       return true;
     } catch (err: any) {
       console.error('Erro ao debitar saldo:', err);
+      return false;
+    }
+  };
+
+  const updateTransactionItems = async (txId: string, items: BenefitTransactionItem[]) => {
+    try {
+      const { error } = await (supabase
+        .from('benefit_transactions') as any)
+        .update({ items })
+        .eq('id', txId);
+
+      if (error) throw error;
+
+      setTransactions(prev => prev.map(t => t.id === txId ? { ...t, items } : t));
+      return true;
+    } catch (err: any) {
+      console.error('Erro ao atualizar itens da transação:', err);
       return false;
     }
   };
@@ -416,6 +448,7 @@ export function useBenefitCards() {
     deleteCard,
     addRecharge,
     debitBalance,
+    updateTransactionItems,
     deleteTransaction,
     clearAllTransactions,
     getCardStats
