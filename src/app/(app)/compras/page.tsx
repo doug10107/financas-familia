@@ -10,9 +10,45 @@ import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { useShoppingLists, ShoppingList, ShoppingItem } from '@/hooks/useShoppingLists';
 import { useBenefitCards } from '@/hooks/useBenefitCards';
+import { ImportShoppingListModal } from '@/components/compras/ImportShoppingListModal';
+
+const UNIT_OPTIONS = [
+  { value: 'un', label: 'un (unidade)' },
+  { value: 'kg', label: 'kg (quilo)' },
+  { value: 'g', label: 'g (gramas)' },
+  { value: 'L', label: 'L (litros)' },
+  { value: 'ml', label: 'ml (mililitros)' },
+  { value: 'pct', label: 'pct (pacote)' },
+  { value: 'cx', label: 'cx (caixa)' },
+  { value: 'dz', label: 'dz (dúzia)' }
+];
+
+const CATEGORY_OPTIONS = [
+  { value: 'Alimentação', label: 'Alimentação' },
+  { value: 'Hortifruti', label: 'Hortifruti' },
+  { value: 'Açougue', label: 'Açougue' },
+  { value: 'Padaria', label: 'Padaria' },
+  { value: 'Bebidas', label: 'Bebidas' },
+  { value: 'Limpeza', label: 'Limpeza' },
+  { value: 'Higiene', label: 'Higiene' },
+  { value: 'Outros', label: 'Outros' }
+];
 
 export default function ComprasPage() {
-  const { lists, createList, updateList, addItem, toggleItem, updateItemPrice, deleteItem, deleteList, completeList } = useShoppingLists();
+  const {
+    lists,
+    createList,
+    createListWithItems,
+    updateList,
+    addItem,
+    addMultipleItems,
+    toggleItem,
+    updateItemPrice,
+    deleteItem,
+    deleteList,
+    completeList
+  } = useShoppingLists();
+
   const { cards, debitBalance } = useBenefitCards();
 
   const [activeListId, setActiveListId] = useState<string | null>(null);
@@ -31,6 +67,7 @@ export default function ComprasPage() {
   const [isEditListOpen, setIsEditListOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
+  const [isImportAiOpen, setIsImportAiOpen] = useState(false);
 
   // New List Form State
   const [newListTitle, setNewListTitle] = useState('');
@@ -46,6 +83,7 @@ export default function ComprasPage() {
   const [itemName, setItemName] = useState('');
   const [itemCategory, setItemCategory] = useState('Alimentação');
   const [itemQuantity, setItemQuantity] = useState('1');
+  const [itemUnit, setItemUnit] = useState('un');
   const [itemEstPrice, setItemEstPrice] = useState('');
 
   // Finalize Form State (Single & Split Payment)
@@ -83,7 +121,8 @@ export default function ComprasPage() {
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListTitle) return;
-    await createList(newListTitle, newListDesc, newListCardId || undefined);
+    const newId = await createList(newListTitle, newListDesc, newListCardId || undefined);
+    if (newId) setActiveListId(newId);
     setNewListTitle('');
     setNewListDesc('');
     setIsNewListOpen(false);
@@ -114,18 +153,21 @@ export default function ComprasPage() {
     e.preventDefault();
     if (!activeList || !itemName) return;
 
-    const qty = parseInt(itemQuantity) || 1;
+    const qty = parseFloat(itemQuantity.replace(',', '.')) || 1;
     const est = parseFloat(itemEstPrice.replace(',', '.')) || 0;
 
     addItem(activeList.id, {
       name: itemName,
       category: itemCategory,
       quantity: qty,
+      unit: itemUnit || 'un',
       estimatedPrice: est,
       actualPrice: est
     });
 
     setItemName('');
+    setItemQuantity('1');
+    setItemUnit('un');
     setItemEstPrice('');
     setIsAddItemOpen(false);
   };
@@ -165,7 +207,7 @@ export default function ComprasPage() {
 
     const checkedItems = activeList.items.filter(i => i.isChecked);
     const itemsToSave = (checkedItems.length > 0 ? checkedItems : activeList.items).map(item => ({
-      name: item.name,
+      name: `${item.name}${item.unit && item.unit !== 'un' ? ` (${item.quantity} ${item.unit})` : ''}`,
       quantity: Number(item.quantity) || 1,
       price: Number(item.actualPrice) > 0 ? Number(item.actualPrice) : Number(item.estimatedPrice)
     }));
@@ -206,26 +248,44 @@ export default function ComprasPage() {
             <Icon name="shopping_cart" className="text-blue-500" /> Lista de Compras Inteligente
           </h1>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Monte suas listas, acompanhe os preços no mercado e deduza do seu VA/VR com 1 clique
+            Monte suas listas com IA, acompanhe preços no mercado e deduza do seu VA/VR com 1 clique
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setIsNewListOpen(true)}
-          className="flex items-center gap-1.5"
-        >
-          <Icon name="add" size="sm" /> Criar Nova Lista
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* AI Import Button */}
+          <Button
+            variant="secondary"
+            onClick={() => setIsImportAiOpen(true)}
+            className="flex items-center gap-1.5 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 shadow-sm"
+          >
+            <Icon name="auto_awesome" size="sm" className="text-blue-500" />
+            <span>Importar com IA</span>
+          </Button>
+
+          {/* New List Button */}
+          <Button
+            variant="primary"
+            onClick={() => setIsNewListOpen(true)}
+            className="flex items-center gap-1.5"
+          >
+            <Icon name="add" size="sm" /> Criar Nova Lista
+          </Button>
+        </div>
       </div>
 
       {/* Main Content Layout: Sidebar Lists + Active List Checklist */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: All Shopping Lists */}
         <GlassCard className="p-6 space-y-4 lg:col-span-1">
-          <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2 border-b border-gray-100 dark:border-gray-800 pb-3">
-            <Icon name="format_list_bulleted" size="sm" /> Suas Listas
-          </h3>
+          <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-800 pb-3">
+            <h3 className="font-bold text-base text-gray-900 dark:text-white flex items-center gap-2">
+              <Icon name="format_list_bulleted" size="sm" /> Suas Listas
+            </h3>
+            <span className="text-xs font-semibold text-gray-400">
+              {lists.length} {lists.length === 1 ? 'lista' : 'listas'}
+            </span>
+          </div>
 
           <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
             {lists.length > 0 ? (
@@ -270,8 +330,16 @@ export default function ComprasPage() {
                 );
               })
             ) : (
-              <div className="py-8 text-center text-xs text-gray-400 italic">
-                Nenhuma lista de compras criada.
+              <div className="py-8 text-center text-xs text-gray-400 italic space-y-2">
+                <p>Nenhuma lista de compras criada.</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsImportAiOpen(true)}
+                  className="text-xs text-blue-600"
+                >
+                  <Icon name="auto_awesome" size="sm" /> Importar com Foto ou Texto
+                </Button>
               </div>
             )}
           </div>
@@ -293,7 +361,7 @@ export default function ComprasPage() {
                   )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -313,14 +381,25 @@ export default function ComprasPage() {
                   </Button>
 
                   {!activeList.isCompleted && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setIsAddItemOpen(true)}
-                      className="text-xs font-semibold flex items-center gap-1"
-                    >
-                      <Icon name="add" size="sm" /> Adicionar Item
-                    </Button>
+                    <>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsImportAiOpen(true)}
+                        className="text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                      >
+                        <Icon name="auto_awesome" size="sm" /> IA
+                      </Button>
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsAddItemOpen(true)}
+                        className="text-xs font-semibold flex items-center gap-1"
+                      >
+                        <Icon name="add" size="sm" /> Adicionar Item
+                      </Button>
+                    </>
                   )}
                 </div>
               </div>
@@ -348,57 +427,103 @@ export default function ComprasPage() {
               {/* Interactive Items Checklist */}
               <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
                 {activeList.items.length > 0 ? (
-                  activeList.items.map(item => (
-                    <div
-                      key={item.id}
-                      className={`flex items-center justify-between p-3 rounded-xl transition-colors border ${
-                        item.isChecked
-                          ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 opacity-90'
-                          : 'bg-gray-50/60 dark:bg-gray-800/40 border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        <input
-                          type="checkbox"
-                          checked={item.isChecked}
-                          onChange={() => toggleItem(activeList.id, item.id)}
-                          className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
-                        />
-                        <div>
-                          <p className={`font-semibold text-sm ${item.isChecked ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
-                            {item.name}
-                          </p>
-                          <span className="text-[11px] text-gray-400">
-                            Qtd: {item.quantity} • Est: {formatCurrency(item.estimatedPrice)}
-                          </span>
-                        </div>
-                      </div>
+                  activeList.items.map(item => {
+                    const currentPrice = Number(item.actualPrice) > 0 ? Number(item.actualPrice) : Number(item.estimatedPrice);
+                    const itemSubtotal = item.quantity * currentPrice;
 
-                      {/* Actual Price Input & Delete Button */}
-                      <div className="flex items-center gap-3">
-                        <div className="w-24 text-right">
-                          <Input
-                            type="number"
-                            step="0.10"
-                            placeholder="Valor R$"
-                            value={item.actualPrice}
-                            onChange={(e) => updateItemPrice(activeList.id, item.id, parseFloat(e.target.value) || 0)}
-                            className="text-right text-xs py-1"
+                    return (
+                      <div
+                        key={item.id}
+                        className={`flex items-center justify-between p-3 rounded-xl transition-colors border ${
+                          item.isChecked
+                            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-900/40 opacity-90'
+                            : 'bg-gray-50/60 dark:bg-gray-800/40 border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                          <input
+                            type="checkbox"
+                            checked={item.isChecked}
+                            onChange={() => toggleItem(activeList.id, item.id)}
+                            className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
                           />
+                          <div className="min-w-0">
+                            <p className={`font-semibold text-sm truncate ${item.isChecked ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                              {item.name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
+                              <span className="font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                {item.quantity} {item.unit || 'un'}
+                              </span>
+                              <span>•</span>
+                              <span>{formatCurrency(currentPrice)}/{item.unit || 'un'}</span>
+                              {item.quantity !== 1 && (
+                                <>
+                                  <span>•</span>
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                    Subtotal: {formatCurrency(itemSubtotal)}
+                                  </span>
+                                </>
+                              )}
+                              {item.category && item.category !== 'Alimentação' && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-[10px] text-blue-500 dark:text-blue-400">{item.category}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
 
-                        <button
-                          onClick={() => deleteItem(activeList.id, item.id)}
-                          className="text-gray-400 hover:text-red-500 p-1"
-                        >
-                          <Icon name="close" size="sm" />
-                        </button>
+                        {/* Actual Unit Price Input & Subtotal */}
+                        <div className="flex items-center gap-3 shrink-0">
+                          <div className="text-right">
+                            <div className="w-24">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="R$/un"
+                                value={item.actualPrice || ''}
+                                onChange={(e) => updateItemPrice(activeList.id, item.id, parseFloat(e.target.value) || 0)}
+                                className="text-right text-xs py-1"
+                              />
+                            </div>
+                            <span className="text-[10px] text-gray-400 block mt-0.5 font-medium">
+                              = {formatCurrency(itemSubtotal)}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => deleteItem(activeList.id, item.id)}
+                            className="text-gray-400 hover:text-red-500 p-1"
+                          >
+                            <Icon name="close" size="sm" />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="py-12 text-center text-xs text-gray-400 italic">
-                    Nenhum item adicionado a esta lista. Clique em "Adicionar Item" acima!
+                  <div className="py-12 text-center text-xs text-gray-400 italic space-y-2">
+                    <p>Nenhum item adicionado a esta lista.</p>
+                    <div className="flex justify-center gap-2 pt-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => setIsImportAiOpen(true)}
+                        className="text-xs text-blue-600 flex items-center gap-1"
+                      >
+                        <Icon name="auto_awesome" size="sm" /> Importar com IA
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setIsAddItemOpen(true)}
+                        className="text-xs flex items-center gap-1"
+                      >
+                        <Icon name="add" size="sm" /> Adicionar Manual
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -485,34 +610,54 @@ export default function ComprasPage() {
         </form>
       </Modal>
 
-      {/* Modal: Add Item */}
+      {/* Modal: Add Item (Supports kg, g, un, etc and decimals) */}
       <Modal isOpen={isAddItemOpen} onClose={() => setIsAddItemOpen(false)} title="Adicionar Item à Lista">
         <form onSubmit={handleAddItem} className="space-y-4">
           <Input
             label="Nome do Produto"
-            placeholder="Ex: Arroz 5kg, Azeite, Leite"
+            placeholder="Ex: Alcatra Bife, Banana Prata, Leite"
             value={itemName}
             onChange={(e) => setItemName(e.target.value)}
             required
           />
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Quantidade"
-              type="number"
-              min="1"
-              value={itemQuantity}
-              onChange={(e) => setItemQuantity(e.target.value)}
-              required
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Categoria"
+              value={itemCategory}
+              onChange={(e) => setItemCategory(e.target.value)}
+              options={CATEGORY_OPTIONS}
             />
-            <Input
-              label="Preço Estimado (R$)"
-              type="number"
-              step="0.10"
-              placeholder="0.00"
-              value={itemEstPrice}
-              onChange={(e) => setItemEstPrice(e.target.value)}
-            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Quantidade"
+                type="number"
+                step="0.001"
+                min="0.001"
+                placeholder="1"
+                value={itemQuantity}
+                onChange={(e) => setItemQuantity(e.target.value)}
+                required
+              />
+              <Select
+                label="Unidade"
+                value={itemUnit}
+                onChange={(e) => setItemUnit(e.target.value)}
+                options={UNIT_OPTIONS}
+              />
+            </div>
           </div>
+
+          <Input
+            label="Preço Unitário (R$)"
+            type="number"
+            step="0.01"
+            placeholder="0.00"
+            value={itemEstPrice}
+            onChange={(e) => setItemEstPrice(e.target.value)}
+          />
+
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsAddItemOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">Adicionar Item</Button>
@@ -611,6 +756,23 @@ export default function ComprasPage() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal: AI Import */}
+      <ImportShoppingListModal
+        isOpen={isImportAiOpen}
+        onClose={() => setIsImportAiOpen(false)}
+        cards={cards}
+        lists={lists}
+        activeListId={activeListId}
+        onImportToExistingList={async (listId, items) => {
+          await addMultipleItems(listId, items);
+          setActiveListId(listId);
+        }}
+        onCreateNewListWithItems={async (title, description, benefitCardId, items) => {
+          const newId = await createListWithItems(title, description, benefitCardId, items);
+          if (newId) setActiveListId(newId);
+        }}
+      />
     </div>
   );
 }
