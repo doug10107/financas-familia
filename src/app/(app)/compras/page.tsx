@@ -42,6 +42,8 @@ export default function ComprasPage() {
     updateList,
     addItem,
     addMultipleItems,
+    moveItem,
+    reorderListByAisle,
     toggleItem,
     updateItemPrice,
     deleteItem,
@@ -385,6 +387,16 @@ export default function ComprasPage() {
                       <Button
                         variant="secondary"
                         size="sm"
+                        onClick={() => reorderListByAisle(activeList.id)}
+                        className="text-xs font-semibold flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+                        title="Organizar itens automaticamente pela sequência dos corredores (Hortifruti -> Padaria -> Açougue -> etc)"
+                      >
+                        <Icon name="sort" size="sm" /> Corredores
+                      </Button>
+
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setIsImportAiOpen(true)}
                         className="text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400"
                       >
@@ -427,7 +439,7 @@ export default function ComprasPage() {
               {/* Interactive Items Checklist */}
               <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
                 {activeList.items.length > 0 ? (
-                  activeList.items.map(item => {
+                  activeList.items.map((item, index) => {
                     const currentPrice = Number(item.actualPrice) > 0 ? Number(item.actualPrice) : Number(item.estimatedPrice);
                     const itemSubtotal = item.quantity * currentPrice;
 
@@ -440,7 +452,37 @@ export default function ComprasPage() {
                             : 'bg-gray-50/60 dark:bg-gray-800/40 border-transparent hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                       >
-                        <div className="flex items-center gap-3 flex-1 min-w-0 pr-2">
+                        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 pr-2">
+                          {/* Reorder Buttons (Up / Down) */}
+                          {!activeList.isCompleted && (
+                            <div className="flex flex-col items-center justify-center -my-1 -ml-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveItem(activeList.id, item.id, 'up');
+                                }}
+                                disabled={index === 0}
+                                className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-20 disabled:hover:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                                title="Subir item (corredor anterior)"
+                              >
+                                <Icon name="keyboard_arrow_up" size="sm" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  moveItem(activeList.id, item.id, 'down');
+                                }}
+                                disabled={index === activeList.items.length - 1}
+                                className="p-0.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 disabled:opacity-20 disabled:hover:text-gray-400 disabled:cursor-not-allowed transition-colors"
+                                title="Descer item (próximo corredor)"
+                              >
+                                <Icon name="keyboard_arrow_down" size="sm" />
+                              </button>
+                            </div>
+                          )}
+
                           <input
                             type="checkbox"
                             checked={item.isChecked}

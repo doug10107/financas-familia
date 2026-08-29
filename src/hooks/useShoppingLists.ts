@@ -10,6 +10,7 @@ export type ShoppingItem = {
   estimatedPrice: number;
   actualPrice: number;
   isChecked: boolean;
+  position?: number;
 };
 
 export type ShoppingList = {
@@ -29,13 +30,13 @@ const DEFAULT_LISTS: { title: string; description: string; items: Omit<ShoppingI
     title: 'Supermercado',
     description: 'Compras principais para a casa',
     items: [
-      { name: 'Arroz 5kg', category: 'Alimentação', quantity: 2, unit: 'un', estimatedPrice: 32.00, actualPrice: 29.90, isChecked: true },
-      { name: 'Feijão Carioca 1kg', category: 'Alimentação', quantity: 3, unit: 'un', estimatedPrice: 9.00, actualPrice: 8.50, isChecked: true },
-      { name: 'Banana Prata', category: 'Hortifruti', quantity: 1.5, unit: 'kg', estimatedPrice: 7.90, actualPrice: 7.50, isChecked: false },
-      { name: 'Alcatra Bife', category: 'Açougue', quantity: 1.2, unit: 'kg', estimatedPrice: 45.00, actualPrice: 42.90, isChecked: false },
-      { name: 'Leite Integral 1L', category: 'Alimentação', quantity: 12, unit: 'L', estimatedPrice: 5.50, actualPrice: 5.20, isChecked: false },
-      { name: 'Azeite de Oliva', category: 'Alimentação', quantity: 1, unit: 'un', estimatedPrice: 42.00, actualPrice: 39.90, isChecked: false },
-      { name: 'Detergente Líquido', category: 'Limpeza', quantity: 4, unit: 'un', estimatedPrice: 3.50, actualPrice: 3.20, isChecked: false }
+      { name: 'Arroz 5kg', category: 'Alimentação', quantity: 2, unit: 'un', estimatedPrice: 32.00, actualPrice: 29.90, isChecked: true, position: 0 },
+      { name: 'Feijão Carioca 1kg', category: 'Alimentação', quantity: 3, unit: 'un', estimatedPrice: 9.00, actualPrice: 8.50, isChecked: true, position: 1 },
+      { name: 'Banana Prata', category: 'Hortifruti', quantity: 1.5, unit: 'kg', estimatedPrice: 7.90, actualPrice: 7.50, isChecked: false, position: 2 },
+      { name: 'Alcatra Bife', category: 'Açougue', quantity: 1.2, unit: 'kg', estimatedPrice: 45.00, actualPrice: 42.90, isChecked: false, position: 3 },
+      { name: 'Leite Integral 1L', category: 'Alimentação', quantity: 12, unit: 'L', estimatedPrice: 5.50, actualPrice: 5.20, isChecked: false, position: 4 },
+      { name: 'Azeite de Oliva', category: 'Alimentação', quantity: 1, unit: 'un', estimatedPrice: 42.00, actualPrice: 39.90, isChecked: false, position: 5 },
+      { name: 'Detergente Líquido', category: 'Limpeza', quantity: 4, unit: 'un', estimatedPrice: 3.50, actualPrice: 3.20, isChecked: false, position: 6 }
     ]
   }
 ];
@@ -62,8 +63,13 @@ export function useShoppingLists() {
   const mapDbListsToShoppingLists = useCallback((dbLists: any[]): ShoppingList[] => {
     return dbLists.map((l: any) => {
       const items: ShoppingItem[] = (l.shopping_items || [])
-        .sort((a: any, b: any) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-        .map((i: any) => ({
+        .sort((a: any, b: any) => {
+          const posA = a.position !== undefined && a.position !== null ? Number(a.position) : 0;
+          const posB = b.position !== undefined && b.position !== null ? Number(b.position) : 0;
+          if (posA !== posB) return posA - posB;
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        })
+        .map((i: any, index: number) => ({
           id: i.id,
           name: i.name,
           category: i.category || 'Alimentação',
@@ -71,7 +77,8 @@ export function useShoppingLists() {
           unit: i.unit || 'un',
           estimatedPrice: Number(i.estimated_price) || 0,
           actualPrice: Number(i.actual_price) || 0,
-          isChecked: Boolean(i.is_checked)
+          isChecked: Boolean(i.is_checked),
+          position: i.position !== undefined && i.position !== null ? Number(i.position) : index
         }));
 
       return {
@@ -114,6 +121,7 @@ export function useShoppingLists() {
             estimated_price,
             actual_price,
             is_checked,
+            position,
             created_at
           )
         `)
@@ -267,6 +275,12 @@ export function useShoppingLists() {
 
   const addItem = async (listId: string, item: Omit<ShoppingItem, 'id' | 'isChecked'>) => {
     try {
+      const currentList = lists.find(l => l.id === listId);
+      const maxPos = currentList && currentList.items.length > 0
+        ? Math.max(...currentList.items.map(i => i.position ?? 0))
+        : -1;
+      const nextPos = item.position !== undefined ? item.position : (maxPos + 1);
+
       const { data, error } = (await supabase
         .from('shopping_items')
         .insert({
@@ -277,7 +291,8 @@ export function useShoppingLists() {
           unit: item.unit || 'un',
           estimated_price: item.estimatedPrice,
           actual_price: item.actualPrice,
-          is_checked: false
+          is_checked: false,
+          position: nextPos
         } as any)
         .select()
         .single()) as any;
@@ -294,7 +309,8 @@ export function useShoppingLists() {
           unit: data.unit || 'un',
           estimatedPrice: Number(data.estimated_price),
           actualPrice: Number(data.actual_price),
-          isChecked: Boolean(data.is_checked)
+          isChecked: Boolean(data.is_checked),
+          position: data.position !== undefined && data.position !== null ? Number(data.position) : nextPos
         };
 
         setLists(prev => prev.map(l => {
@@ -317,7 +333,12 @@ export function useShoppingLists() {
     if (!newItems || newItems.length === 0) return true;
 
     try {
-      const itemsToInsert = newItems.map(item => ({
+      const currentList = lists.find(l => l.id === listId);
+      const startPos = currentList && currentList.items.length > 0
+        ? Math.max(...currentList.items.map(i => i.position ?? 0)) + 1
+        : 0;
+
+      const itemsToInsert = newItems.map((item, idx) => ({
         list_id: listId,
         name: item.name,
         category: item.category || 'Alimentação',
@@ -325,7 +346,8 @@ export function useShoppingLists() {
         unit: item.unit || 'un',
         estimated_price: Number(item.estimatedPrice) || 0,
         actual_price: Number(item.actualPrice) || 0,
-        is_checked: false
+        is_checked: false,
+        position: item.position !== undefined ? item.position : (startPos + idx)
       }));
 
       const { data, error } = await supabase
@@ -336,7 +358,7 @@ export function useShoppingLists() {
       if (error) throw error;
 
       if (data && Array.isArray(data)) {
-        const formattedItems: ShoppingItem[] = data.map((d: any) => ({
+        const formattedItems: ShoppingItem[] = data.map((d: any, idx: number) => ({
           id: d.id,
           name: d.name,
           category: d.category,
@@ -344,7 +366,8 @@ export function useShoppingLists() {
           unit: d.unit || 'un',
           estimatedPrice: Number(d.estimated_price),
           actualPrice: Number(d.actual_price),
-          isChecked: Boolean(d.is_checked)
+          isChecked: Boolean(d.is_checked),
+          position: d.position !== undefined && d.position !== null ? Number(d.position) : (startPos + idx)
         }));
 
         setLists(prev => prev.map(l => {
@@ -360,6 +383,99 @@ export function useShoppingLists() {
       console.error('Erro ao adicionar múltiplos itens na lista:', err);
       setError(err.message);
       return false;
+    }
+  };
+
+  const moveItem = async (listId: string, itemId: string, direction: 'up' | 'down') => {
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+
+    const currentIndex = list.items.findIndex(i => i.id === itemId);
+    if (currentIndex === -1) return;
+
+    const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= list.items.length) return;
+
+    const newItems = [...list.items];
+    const [movedItem] = newItems.splice(currentIndex, 1);
+    newItems.splice(targetIndex, 0, movedItem);
+
+    // Re-assign consecutive positions
+    const reindexedItems = newItems.map((item, idx) => ({
+      ...item,
+      position: idx
+    }));
+
+    // Optimistic update
+    setLists(prev => prev.map(l => {
+      if (l.id === listId) {
+        return { ...l, items: reindexedItems };
+      }
+      return l;
+    }));
+
+    try {
+      const item1 = reindexedItems[currentIndex];
+      const item2 = reindexedItems[targetIndex];
+
+      await Promise.all([
+        (supabase.from('shopping_items') as any).update({ position: item1.position }).eq('id', item1.id),
+        (supabase.from('shopping_items') as any).update({ position: item2.position }).eq('id', item2.id)
+      ]);
+    } catch (err: any) {
+      console.error('Erro ao reordenar item:', err);
+      await fetchLists();
+    }
+  };
+
+  const reorderListByAisle = async (listId: string) => {
+    const AISLE_ORDER = [
+      'Hortifruti',
+      'Padaria',
+      'Açougue',
+      'Alimentação',
+      'Bebidas',
+      'Limpeza',
+      'Higiene',
+      'Outros'
+    ];
+
+    const list = lists.find(l => l.id === listId);
+    if (!list) return;
+
+    const sortedItems = [...list.items].sort((a, b) => {
+      const catIndexA = AISLE_ORDER.indexOf(a.category);
+      const catIndexB = AISLE_ORDER.indexOf(b.category);
+      const orderA = catIndexA === -1 ? 999 : catIndexA;
+      const orderB = catIndexB === -1 ? 999 : catIndexB;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name, 'pt-BR');
+    });
+
+    const reindexedItems = sortedItems.map((item, idx) => ({
+      ...item,
+      position: idx
+    }));
+
+    // Optimistic update
+    setLists(prev => prev.map(l => {
+      if (l.id === listId) {
+        return { ...l, items: reindexedItems };
+      }
+      return l;
+    }));
+
+    try {
+      await Promise.all(
+        reindexedItems.map(item =>
+          (supabase.from('shopping_items') as any)
+            .update({ position: item.position })
+            .eq('id', item.id)
+        )
+      );
+    } catch (err: any) {
+      console.error('Erro ao ordenar por corredor:', err);
+      await fetchLists();
     }
   };
 
@@ -439,6 +555,7 @@ export function useShoppingLists() {
       if (fields.estimatedPrice !== undefined) payload.estimated_price = fields.estimatedPrice;
       if (fields.actualPrice !== undefined) payload.actual_price = fields.actualPrice;
       if (fields.isChecked !== undefined) payload.is_checked = fields.isChecked;
+      if (fields.position !== undefined) payload.position = fields.position;
 
       const { error } = await (supabase
         .from('shopping_items') as any)
@@ -533,6 +650,8 @@ export function useShoppingLists() {
     updateList,
     addItem,
     addMultipleItems,
+    moveItem,
+    reorderListByAisle,
     toggleItem,
     updateItemPrice,
     updateItem,
@@ -541,3 +660,4 @@ export function useShoppingLists() {
     completeList
   };
 }
+
