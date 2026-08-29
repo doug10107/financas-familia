@@ -640,6 +640,38 @@ export function useShoppingLists() {
     await updateList(listId, { isCompleted: true });
   };
 
+  const reuseList = async (listId: string): Promise<string | null> => {
+    try {
+      const sourceList = lists.find(l => l.id === listId);
+      if (!sourceList) return null;
+
+      const newTitle = `${sourceList.title} (Cópia)`;
+      const newListId = await createList(newTitle, sourceList.description, sourceList.benefitCardId);
+      if (!newListId) return null;
+
+      if (sourceList.items.length > 0) {
+        const itemsToCopy: Omit<ShoppingItem, 'id' | 'isChecked'>[] = sourceList.items.map((item, idx) => ({
+          name: item.name,
+          category: item.category,
+          quantity: item.quantity,
+          unit: item.unit,
+          estimatedPrice: item.actualPrice > 0 ? item.actualPrice : item.estimatedPrice,
+          actualPrice: item.actualPrice > 0 ? item.actualPrice : item.estimatedPrice,
+          position: idx
+        }));
+
+        await addMultipleItems(newListId, itemsToCopy);
+      }
+
+      await fetchLists();
+      return newListId;
+    } catch (err: any) {
+      console.error('Erro ao reutilizar lista:', err);
+      setError(err.message);
+      return null;
+    }
+  };
+
   return {
     lists,
     loading,
@@ -657,7 +689,8 @@ export function useShoppingLists() {
     updateItem,
     deleteItem,
     deleteList,
-    completeList
+    completeList,
+    reuseList
   };
 }
 
