@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -11,6 +12,7 @@ import { useBenefitCards, BenefitCard, BenefitTransaction, BenefitTransactionIte
 import { useShoppingLists } from '@/hooks/useShoppingLists';
 
 export default function BeneficiosPage() {
+  const router = useRouter();
   const {
     cards,
     transactions,
@@ -24,7 +26,7 @@ export default function BeneficiosPage() {
     getCardStats
   } = useBenefitCards();
   
-  const { lists } = useShoppingLists();
+  const { lists, createListWithItems } = useShoppingLists();
   
   const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<BenefitCard | null>(null);
   const [selectedCardForEdit, setSelectedCardForEdit] = useState<BenefitCard | null>(null);
@@ -190,6 +192,73 @@ export default function BeneficiosPage() {
     await updateTransactionItems(selectedTxForItems.id, editItemsList);
     setExpandedTxIds(prev => ({ ...prev, [selectedTxForItems.id]: true }));
     setSelectedTxForItems(null);
+  };
+
+  const handleReuseTransactionAsList = async (tx: BenefitTransaction) => {
+    let listTitle = tx.description
+      .replace(/^Compra\s*\([^)]*\)\s*:\s*/i, '')
+      .replace(/^Compra\s*:\s*/i, '')
+      .trim();
+    if (!listTitle) listTitle = 'Lista de Compras Reutilizada';
+
+    let itemsToCopy: {
+      name: string;
+      category: string;
+      quantity: number;
+      unit: string;
+      estimatedPrice: number;
+      actualPrice: number;
+      position: number;
+    }[] = [];
+
+    if (tx.items && tx.items.length > 0) {
+      itemsToCopy = tx.items.map((item, idx) => {
+        const match = item.name.match(/^(.*?)(?:\s*\(([\d.,]+)\s*(kg|g|L|ml|pct|cx|dz|un)\))?$/i);
+        if (match && match[2] && match[3]) {
+          return {
+            name: match[1].trim(),
+            category: 'Alimentação',
+            quantity: parseFloat(match[2].replace(',', '.')) || item.quantity || 1,
+            unit: match[3].toLowerCase(),
+            estimatedPrice: item.price || 0,
+            actualPrice: item.price || 0,
+            position: idx
+          };
+        }
+        return {
+          name: item.name.trim(),
+          category: 'Alimentação',
+          quantity: item.quantity || 1,
+          unit: 'un',
+          estimatedPrice: item.price || 0,
+          actualPrice: item.price || 0,
+          position: idx
+        };
+      });
+    } else {
+      const cleanDesc = tx.description.toLowerCase().replace(/^compra\s*:\s*/i, '').trim();
+      const matchedList = lists.find(l => cleanDesc.includes(l.title.toLowerCase()) || l.title.toLowerCase().includes(cleanDesc));
+      if (matchedList && matchedList.items.length > 0) {
+        itemsToCopy = matchedList.items.map((i, idx) => ({
+          name: i.name,
+          category: i.category || 'Alimentação',
+          quantity: Number(i.quantity) || 1,
+          unit: i.unit || 'un',
+          estimatedPrice: Number(i.actualPrice) > 0 ? Number(i.actualPrice) : Number(i.estimatedPrice),
+          actualPrice: Number(i.actualPrice) > 0 ? Number(i.actualPrice) : Number(i.estimatedPrice),
+          position: idx
+        }));
+      }
+    }
+
+    const card = cards.find(c => c.id === tx.cardId);
+    const dateFormatted = tx.date ? tx.date.split('-').reverse().join('/') : '';
+    const desc = `Reutilizada da compra de ${dateFormatted}${card ? ` (${card.name})` : ''}`;
+
+    const newId = await createListWithItems(listTitle, desc, tx.cardId, itemsToCopy);
+    if (newId) {
+      router.push('/compras');
+    }
   };
 
   const totalVABalance = cards.filter(c => c.type === 'va').reduce((acc, c) => acc + c.balance, 0);
@@ -375,30 +444,41 @@ export default function BeneficiosPage() {
                           
                           {/* Discreet Details / Items Button */}
                           {!isRecharge && (
-                            hasItems ? (
+                            <>
+                              {hasItems ? (
+                                <button
+                                  onClick={() => toggleExpandTx(tx.id)}
+                                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
+                                    isExpanded
+                                      ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                      : 'bg-gray-200/70 hover:bg-gray-200 text-gray-600 dark:bg-gray-700/60 dark:hover:bg-gray-700 dark:text-gray-300'
+                                  }`}
+                                  title="Ver itens comprados nesta transação"
+                                >
+                                  <Icon name="receipt_long" size="sm" className="text-gray-500 dark:text-gray-400 !text-sm" />
+                                  <span>{tx.items!.length} {tx.items!.length === 1 ? 'item' : 'itens'}</span>
+                                  <Icon name={isExpanded ? 'expand_less' : 'expand_more'} size="sm" className="!text-sm" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleOpenItemEditor(tx)}
+                                  className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[11px] font-medium text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
+                                  title="Adicionar lista de itens comprados"
+                                >
+                                  <Icon name="add" size="sm" className="!text-sm" />
+                                  <span>Detalhes</span>
+                                </button>
+                              )}
+
                               <button
-                                onClick={() => toggleExpandTx(tx.id)}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-medium transition-colors ${
-                                  isExpanded
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-                                    : 'bg-gray-200/70 hover:bg-gray-200 text-gray-600 dark:bg-gray-700/60 dark:hover:bg-gray-700 dark:text-gray-300'
-                                }`}
-                                title="Ver itens comprados nesta transação"
+                                onClick={() => handleReuseTransactionAsList(tx)}
+                                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-50/90 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200/70 dark:border-emerald-800/50 transition-colors"
+                                title="Criar uma nova lista de compras a partir desta compra efetivada"
                               >
-                                <Icon name="receipt_long" size="sm" className="text-gray-500 dark:text-gray-400 !text-sm" />
-                                <span>{tx.items!.length} {tx.items!.length === 1 ? 'item' : 'itens'}</span>
-                                <Icon name={isExpanded ? 'expand_less' : 'expand_more'} size="sm" className="!text-sm" />
+                                <Icon name="replay" size="sm" className="!text-sm text-emerald-600 dark:text-emerald-400" />
+                                <span>Reutilizar Lista</span>
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => handleOpenItemEditor(tx)}
-                                className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-lg text-[11px] font-medium text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 transition-colors"
-                                title="Adicionar lista de itens comprados"
-                              >
-                                <Icon name="add" size="sm" className="!text-sm" />
-                                <span>Detalhes</span>
-                              </button>
-                            )
+                            </>
                           )}
                         </div>
 
@@ -430,17 +510,26 @@ export default function BeneficiosPage() {
                   {isExpanded && hasItems && (
                     <div className="px-3.5 pb-3.5 pt-1 border-t border-gray-100 dark:border-gray-800/80 bg-black/[0.02] dark:bg-white/[0.02]">
                       <div className="bg-white/80 dark:bg-gray-900/60 rounded-xl p-3 border border-gray-200/60 dark:border-gray-700/50 shadow-xs space-y-2">
-                        <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-800">
+                        <div className="flex justify-between items-center pb-2 border-b border-gray-100 dark:border-gray-800 flex-wrap gap-2">
                           <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-300">
                             <Icon name="shopping_basket" size="sm" className="text-emerald-500 !text-base" />
                             <span>Itens comprados no mercado</span>
                           </div>
-                          <button
-                            onClick={() => handleOpenItemEditor(tx)}
-                            className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium"
-                          >
-                            <Icon name="edit" size="sm" className="!text-sm" /> Editar itens
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleReuseTransactionAsList(tx)}
+                              className="text-[11px] text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 border border-emerald-200 dark:border-emerald-800 px-2.5 py-1 rounded-lg flex items-center gap-1 font-bold transition-colors shadow-xs"
+                              title="Jogar estes itens com valores e quantidades de volta para a Lista de Compras"
+                            >
+                              <Icon name="replay" size="sm" className="!text-sm text-emerald-600 dark:text-emerald-400" /> Reutilizar Lista de Compras
+                            </button>
+                            <button
+                              onClick={() => handleOpenItemEditor(tx)}
+                              className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-medium"
+                            >
+                              <Icon name="edit" size="sm" className="!text-sm" /> Editar itens
+                            </button>
+                          </div>
                         </div>
 
                         {/* Items List */}

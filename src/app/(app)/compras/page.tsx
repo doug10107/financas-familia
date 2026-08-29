@@ -48,8 +48,7 @@ export default function ComprasPage() {
     updateItemPrice,
     deleteItem,
     deleteList,
-    completeList,
-    reuseList
+    completeList
   } = useShoppingLists();
 
   const { cards, debitBalance } = useBenefitCards();
@@ -237,11 +236,6 @@ export default function ComprasPage() {
     setIsFinalizeOpen(false);
   };
 
-  const handleReuseList = async (listId: string) => {
-    const newId = await reuseList(listId);
-    if (newId) setActiveListId(newId);
-  };
-
   const cardSelectOptions = [
     { value: '', label: 'Nenhum (ou selecionar depois)' },
     ...cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))
@@ -330,22 +324,9 @@ export default function ComprasPage() {
 
                     <div className="flex items-center justify-between text-[11px] text-gray-400 pt-2 border-t border-gray-100/50 dark:border-gray-800/50">
                       <span>{list.createdAt.split('-').reverse().join('/')}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                          {card?.name || 'Vale'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleReuseList(list.id);
-                          }}
-                          className="p-1 rounded-lg text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors"
-                          title="Reutilizar esta lista (criar cópia)"
-                        >
-                          <Icon name="replay" size="sm" />
-                        </button>
-                      </div>
+                      <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                        {card?.name || 'Vale'}
+                      </span>
                     </div>
                   </div>
                 );
@@ -383,15 +364,6 @@ export default function ComprasPage() {
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handleReuseList(activeList.id)}
-                    className="text-xs font-semibold flex items-center gap-1 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50"
-                  >
-                    <Icon name="replay" size="sm" /> Reutilizar Lista
-                  </Button>
-
                   <Button
                     variant="ghost"
                     size="sm"
