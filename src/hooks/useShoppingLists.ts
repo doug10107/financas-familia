@@ -129,11 +129,16 @@ export function useShoppingLists() {
 
       if (fetchError) throw fetchError;
 
-      // Check if we need to auto-migrate from localStorage
+      // Check if we need to auto-migrate from localStorage (run once and clear)
       if (!dbLists || dbLists.length === 0) {
         try {
-          const localSaved = localStorage.getItem(STORAGE_KEY);
-          if (localSaved) {
+          const migrationDoneKey = 'financas_shopping_lists_migrated_done';
+          const alreadyMigrated = typeof window !== 'undefined' ? localStorage.getItem(migrationDoneKey) : 'true';
+          const localSaved = typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null;
+
+          if (!alreadyMigrated && localSaved) {
+            localStorage.setItem(migrationDoneKey, 'true');
+            localStorage.removeItem(STORAGE_KEY);
             const parsed = JSON.parse(localSaved);
             if (Array.isArray(parsed) && parsed.length > 0) {
               for (const l of parsed) {
@@ -187,6 +192,7 @@ export function useShoppingLists() {
                     estimated_price,
                     actual_price,
                     is_checked,
+                    position,
                     created_at
                   )
                 `)
@@ -199,6 +205,10 @@ export function useShoppingLists() {
                 return;
               }
             }
+          } else if (typeof window !== 'undefined') {
+            // Ensure old localStorage is cleared so it doesn't resurrect deleted lists
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.setItem(migrationDoneKey, 'true');
           }
         } catch (migrationErr) {
           console.warn('Erro ao auto-migrar listas locais:', migrationErr);
@@ -621,9 +631,23 @@ export function useShoppingLists() {
   };
 
   const deleteList = async (listId: string) => {
+    // Optimistic state update
     setLists(prev => prev.filter(l => l.id !== listId));
 
     try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.setItem('financas_shopping_lists_migrated_done', 'true');
+      }
+    } catch {}
+
+    try {
+      // Delete child items first to prevent foreign key constraint issues
+      await supabase
+        .from('shopping_items')
+        .delete()
+        .eq('list_id', listId);
+
       const { error } = await supabase
         .from('shopping_lists')
         .delete()

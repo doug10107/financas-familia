@@ -377,8 +377,12 @@ export default function ComprasPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteList(activeList.id)}
-                    className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs"
+                    onClick={() => {
+                      if (window.confirm(`Deseja realmente excluir a lista "${activeList.title}"?`)) {
+                        deleteList(activeList.id);
+                      }
+                    }}
+                    className="text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 text-xs font-semibold"
                   >
                     <Icon name="delete" size="sm" /> Excluir
                   </Button>
