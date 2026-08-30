@@ -45,6 +45,7 @@ export default function ComprasPage() {
     moveItem,
     reorderListByAisle,
     toggleItem,
+    toggleAllItems,
     updateItemPrice,
     deleteItem,
     deleteList,
@@ -435,6 +436,30 @@ export default function ComprasPage() {
                   </span>
                 </div>
               </div>
+
+              {/* Master Select All / Batch Action Bar */}
+              {activeList.items.length > 0 && !activeList.isCompleted && (
+                <div className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-gray-800/40 rounded-xl border border-gray-100 dark:border-gray-800 mb-3 text-xs">
+                  <label className="flex items-center gap-2 font-bold text-gray-700 dark:text-gray-200 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={activeList.items.every(i => i.isChecked)}
+                      onChange={(e) => toggleAllItems(activeList.id, e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                    />
+                    <span>
+                      {activeList.items.every(i => i.isChecked)
+                        ? 'Desmarcar todos os itens'
+                        : 'Marcar todos no carrinho'}
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <Badge color={activeList.items.every(i => i.isChecked) ? 'green' : 'blue'} className="text-[11px]">
+                      {activeList.items.filter(i => i.isChecked).length} de {activeList.items.length} itens no carrinho
+                    </Badge>
+                  </div>
+                </div>
+              )}
 
               {/* Interactive Items Checklist */}
               <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">

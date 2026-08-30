@@ -31,31 +31,78 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get('content-type') || '';
     let promptParts: any[] = [];
 
-    const systemPrompt = `Você é um assistente especialista em compras de supermercado, restaurantes e finanças.
-Sua tarefa é analisar o conteúdo fornecido (foto de cupom fiscal, nota fiscal DANFE, foto de lista de papel ou texto) e extrair com máxima fidelidade todos os itens comprados ou consumidos.
+    const systemPrompt = `Você é um assistente especialista em análise de compras de supermercado, cupons fiscais (NFC-e / SAT / DANFE) e finanças familiares.
+Sua tarefa é analisar o conteúdo fornecido (foto de cupom fiscal, nota fiscal, link de QR Code NFC-e/SAT, foto de lista manuscrita ou texto) e extrair com máxima precisão todos os itens comprados, os preços, quantidades e descontos do cupom.
 
-INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
-1. 'name': Nome limpo e claro do produto (ex: 'Buffet a Peso', 'Coca-Cola Zero 350ml', 'Arroz 5kg', 'Banana Prata'). Remova códigos numéricos de barras/referência iniciais se houver.
-2. 'quantity': Quantidade numérica (ex: 1, 2, 0.378, 1.5).
-3. 'unit': Unidade de medida ('un', 'kg', 'g', 'L', 'ml', 'pct', 'cx' ou 'dz'). Se for item por peso (comida a peso, frutas, verduras, carne), use 'kg' ou 'g'. Padrão: 'un'.
-4. 'unitPrice': O PREÇO UNITÁRIO / PREÇO POR KG (ou Vl.Un no cupom). Exemplo: se no cupom constar 'Vl.Un: 86.00' e 'Vl.Tot: 32.50', o 'unitPrice' DEVE SER 86.00.
-5. 'totalPrice': O VALOR TOTAL DO ITEM (ou Vl.Tot no cupom). Exemplo: 32.50. Se houver apenas o valor total e quantidade for 2, calcule unitPrice = totalPrice / quantity.
-6. 'category': 'Alimentação', 'Bebidas', 'Hortifruti', 'Açougue', 'Padaria', 'Limpeza', 'Higiene' ou 'Outros'.
-7. Ignore linhas como CNPJ, cabeçalhos, rodapés, total geral do cupom ou formas de pagamento (cartão de crédito).`;
+REGRAS DE EXTRAÇÃO:
+1. 'name': Nome limpo e legível do produto (ex: 'MARG DORIANA 1KG', 'ARROZ NAMORADO 5KG', 'BANANA CATURRA', 'Buffet a Peso'). Remova prefixos numéricos inúteis ou códigos como '(Código: 213352)'.
+2. 'quantity': Quantidade numérica precisa (ex: 1, 2, 3, 0.378, 1.17, 3.986).
+3. 'unit': Unidade de medida ('un', 'kg', 'g', 'L', 'ml', 'pct', 'cx' ou 'dz').
+4. 'unitPrice': O PREÇO UNITÁRIO / PREÇO POR KG (Vl. Unit / Vl.Un). Ex: se no cupom constar 'Qtde: 3,986 UN: Kg Vl. Unit: 38,901154 Vl. Total: 155,06', o 'unitPrice' DEVE SER 38.90 e 'quantity' 3.986.
+5. 'totalPrice': O VALOR TOTAL DO ITEM (Vl. Total / Vl.Tot).
+6. 'category': Escolha entre: 'Alimentação', 'Hortifruti', 'Açougue', 'Padaria', 'Bebidas', 'Limpeza', 'Higiene' ou 'Outros'.
+
+INSTRUÇÃO FUNDAMENTAL DE DESCONTOS E TOTAIS:
+- 'totalGross': A soma bruta dos itens antes de desconto (ex: 624.39).
+- 'discount': Se o cupom/lista contiver desconto geral ou desconto no final (ex: 'Descontos R$: 7,20', 'Desconto: R$ 7,20', 'Desconto Subtotal', 'Abatimento'), informe o valor positivo do desconto (ex: 7.20). Caso não haja, retorne 0.
+- 'totalNet': O valor líquido total a pagar após desconto (ex: 617.19).
+
+FORMATO DE RESPOSTA OBRIGATÓRIO (JSON):
+Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
+{
+  "items": [
+    {
+      "name": "MARG DORIANA 1KG",
+      "quantity": 1,
+      "unit": "un",
+      "unitPrice": 12.98,
+      "totalPrice": 12.98,
+      "category": "Alimentação"
+    }
+  ],
+  "totalGross": 624.39,
+  "discount": 7.20,
+  "totalNet": 617.19
+}`;
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
       const rawText = formData.get('text') as string | null;
+      const qrUrl = formData.get('qrUrl') as string | null;
 
-      if (file) {
+      if (qrUrl) {
+        let fetchedContent = qrUrl;
+        try {
+          if (qrUrl.startsWith('http://') || qrUrl.startsWith('https://')) {
+            const pageRes = await fetch(qrUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+              }
+            });
+            if (pageRes.ok) {
+              const html = await pageRes.text();
+              fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+            }
+          }
+        } catch (fetchErr) {
+          console.warn('Erro ao consultar URL do QR Code diretamente:', fetchErr);
+        }
+
+        promptParts = [
+          {
+            text: `${systemPrompt}\n\nAnalise os dados desta consulta de cupom fiscal / QR Code NFC-e e extraia todos os itens e totais:\n\n${fetchedContent}`
+          }
+        ];
+      } else if (file) {
         const buffer = await file.arrayBuffer();
         const base64Data = Buffer.from(buffer).toString('base64');
         const mimeType = file.type || 'image/jpeg';
 
         promptParts = [
           {
-            text: `${systemPrompt}\n\nExtraia todos os itens da imagem/documento anexo em formato JSON:`
+            text: `${systemPrompt}\n\nExtraia todos os itens, preços e eventuais descontos da imagem/documento anexo em formato JSON:`
           },
           {
             inline_data: {
@@ -67,24 +114,49 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
       } else if (rawText) {
         promptParts = [
           {
-            text: `${systemPrompt}\n\nExtraia os itens a partir do seguinte texto de lista em formato JSON:\n\n${rawText}`
+            text: `${systemPrompt}\n\nExtraia os itens, valores e eventuais descontos a partir do seguinte texto de cupom/lista em formato JSON:\n\n${rawText}`
           }
         ];
       } else {
-        return NextResponse.json({ error: 'Nenhum arquivo ou texto foi enviado.' }, { status: 400 });
+        return NextResponse.json({ error: 'Nenhum arquivo, texto ou QR Code foi enviado.' }, { status: 400 });
       }
     } else {
       const body = await req.json();
-      if (body.text) {
+      if (body.qrUrl || body.url) {
+        const targetUrl = body.qrUrl || body.url;
+        let fetchedContent = targetUrl;
+        try {
+          if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+            const pageRes = await fetch(targetUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+              }
+            });
+            if (pageRes.ok) {
+              const html = await pageRes.text();
+              fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+            }
+          }
+        } catch (fetchErr) {
+          console.warn('Erro ao consultar URL do QR Code diretamente:', fetchErr);
+        }
+
         promptParts = [
           {
-            text: `${systemPrompt}\n\nExtraia os itens a partir do seguinte texto de lista em formato JSON:\n\n${body.text}`
+            text: `${systemPrompt}\n\nAnalise os dados desta consulta de cupom fiscal / QR Code NFC-e e extraia todos os itens e totais:\n\n${fetchedContent}`
+          }
+        ];
+      } else if (body.text) {
+        promptParts = [
+          {
+            text: `${systemPrompt}\n\nExtraia os itens, valores e eventuais descontos a partir do seguinte texto de cupom/lista em formato JSON:\n\n${body.text}`
           }
         ];
       } else if (body.imageBase64 && body.mimeType) {
         promptParts = [
           {
-            text: `${systemPrompt}\n\nExtraia todos os itens da imagem enviada em formato JSON:`
+            text: `${systemPrompt}\n\nExtraia todos os itens, preços e eventuais descontos da imagem enviada em formato JSON:`
           },
           {
             inline_data: {
@@ -118,7 +190,7 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
     ];
 
     let lastError: any = null;
-    let itemsResult: any[] | null = null;
+    let parsedData: any = null;
 
     for (const model of models) {
       try {
@@ -144,8 +216,8 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
         const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (candidate) {
           try {
-            itemsResult = JSON.parse(candidate);
-            if (Array.isArray(itemsResult) && itemsResult.length > 0) {
+            parsedData = JSON.parse(candidate);
+            if (parsedData && (Array.isArray(parsedData) || (Array.isArray(parsedData.items) && parsedData.items.length > 0))) {
               break;
             }
           } catch (jsonErr) {
@@ -158,10 +230,33 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
       }
     }
 
-    if (!itemsResult || !Array.isArray(itemsResult) || itemsResult.length === 0) {
+    // Extract raw items and discount from parsedData
+    let rawItems: any[] = [];
+    let detectedDiscount = 0;
+    let detectedTotalGross = 0;
+    let detectedTotalNet = 0;
+
+    if (Array.isArray(parsedData)) {
+      rawItems = parsedData;
+    } else if (parsedData && typeof parsedData === 'object') {
+      if (Array.isArray(parsedData.items)) {
+        rawItems = parsedData.items;
+      }
+      if (typeof parsedData.discount === 'number' && !isNaN(parsedData.discount)) {
+        detectedDiscount = Math.abs(parsedData.discount);
+      }
+      if (typeof parsedData.totalGross === 'number' && !isNaN(parsedData.totalGross)) {
+        detectedTotalGross = parsedData.totalGross;
+      }
+      if (typeof parsedData.totalNet === 'number' && !isNaN(parsedData.totalNet)) {
+        detectedTotalNet = parsedData.totalNet;
+      }
+    }
+
+    if (rawItems.length === 0) {
       return NextResponse.json(
         {
-          error: 'Não foi possível extrair os itens da imagem ou texto. Tente novamente com uma foto mais nítida.',
+          error: 'Não foi possível extrair os itens da imagem, texto ou QR Code. Tente novamente.',
           details: lastError
         },
         { status: 422 }
@@ -169,7 +264,7 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
     }
 
     // Sanitize and format results
-    const sanitizedItems = itemsResult.map((item, idx) => {
+    const sanitizedItems = rawItems.map((item, idx) => {
       const name = String(item.name || `Item ${idx + 1}`).trim();
       const rawQty = Number(item.quantity);
       const qty = isNaN(rawQty) || rawQty <= 0 ? 1 : Number(rawQty.toFixed(3));
@@ -201,10 +296,18 @@ INSTRUÇÕES CRUCIAIS DE CÁLCULO E PREÇO:
       };
     });
 
+    const calculatedSum = sanitizedItems.reduce((acc, i) => acc + (i.quantity * i.estimatedPrice), 0);
+    const totalGross = detectedTotalGross > 0 ? detectedTotalGross : Number(calculatedSum.toFixed(2));
+    const discount = Number(detectedDiscount.toFixed(2));
+    const totalNet = detectedTotalNet > 0 ? detectedTotalNet : Number(Math.max(0, totalGross - discount).toFixed(2));
+
     return NextResponse.json({
       success: true,
       count: sanitizedItems.length,
-      items: sanitizedItems
+      items: sanitizedItems,
+      totalGross,
+      discount,
+      totalNet
     });
   } catch (error: any) {
     console.error('Erro na rota /api/ai/scan-list:', error);

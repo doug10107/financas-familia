@@ -510,6 +510,35 @@ export function useShoppingLists() {
     }
   };
 
+  const toggleAllItems = async (listId: string, isChecked: boolean) => {
+    const list = lists.find(l => l.id === listId);
+    if (!list || list.items.length === 0) return;
+
+    // Optimistic update
+    setLists(prev => prev.map(l => {
+      if (l.id === listId) {
+        return {
+          ...l,
+          items: l.items.map(i => ({ ...i, isChecked }))
+        };
+      }
+      return l;
+    }));
+
+    try {
+      const itemIds = list.items.map(i => i.id);
+      const { error } = await (supabase
+        .from('shopping_items') as any)
+        .update({ is_checked: isChecked })
+        .in('id', itemIds);
+
+      if (error) throw error;
+    } catch (err: any) {
+      console.error('Erro ao alternar todos os itens:', err);
+      await fetchLists();
+    }
+  };
+
   const updateItemPrice = async (listId: string, itemId: string, actualPrice: number) => {
     // Optimistic update
     setLists(prev => prev.map(l => {
@@ -685,6 +714,7 @@ export function useShoppingLists() {
     moveItem,
     reorderListByAisle,
     toggleItem,
+    toggleAllItems,
     updateItemPrice,
     updateItem,
     deleteItem,
