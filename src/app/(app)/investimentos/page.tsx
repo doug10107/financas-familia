@@ -103,7 +103,9 @@ export default function InvestmentsPage() {
 
     setIsSearchingQuote(true);
     try {
-      const res = await fetch(`/api/stocks/quote?ticker=${encodeURIComponent(clean)}`);
+      const res = await fetch(`/api/stocks/quote?ticker=${encodeURIComponent(clean)}&_t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.price) {
@@ -129,7 +131,7 @@ export default function InvestmentsPage() {
             return {
               ...prev,
               ticker: data.symbol || clean,
-              name: prev.name && prev.name !== clean ? prev.name : (data.name || clean),
+              name: data.name || clean,
               type_id: autoTypeId,
               unit_price: String(price),
               quantity: prev.quantity || '1',
