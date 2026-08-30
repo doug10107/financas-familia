@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -16,7 +16,8 @@ import {
   Legend
 } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { useInvestments } from '@/hooks/useInvestments';
+import { useInvestments, Investment } from '@/hooks/useInvestments';
+import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestmentsModal';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -26,38 +27,96 @@ export default function InvestmentsPage() {
     types,
     loading,
     error: loadError,
+    isSyncingQuotes,
+    syncLiveQuotes,
     addInvestment,
     updateInvestment,
     deleteInvestment,
-    addInvestmentEntry
+    addInvestmentEntry,
+    batchImportInvestments
   } = useInvestments();
 
   // Modals state
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [editingInvId, setEditingInvId] = useState<string | null>(null);
-  const [selectedInvId, setSelectedInvId] = useState<string | null>(null);
+  const [selectedInv, setSelectedInv] = useState<Investment | null>(null);
 
   // Form states
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+  const [isSearchingQuote, setIsSearchingQuote] = useState(false);
 
+  // Investment Form (with Auto Calculator: Qtd * Price = Total)
+  const [calcMode, setCalcMode] = useState<'shares' | 'total'>('shares');
   const [invForm, setInvForm] = useState({
     name: '',
+    ticker: '',
     type_id: '',
     institution: '',
-    initial_amount: '',
+    quantity: '',
+    unit_price: '',
+    fees: '',
+    total_amount: '',
     date: new Date().toISOString().split('T')[0],
     due_date: '',
     notes: ''
   });
 
+  // Entry / Aporte Form (with Auto Calculator)
+  const [entryCalcMode, setEntryCalcMode] = useState<'shares' | 'total'>('shares');
   const [entryForm, setEntryForm] = useState({
     type: 'aporte' as 'aporte' | 'resgate' | 'rendimento',
+    quantity: '',
+    unit_price: '',
+    fees: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
     notes: ''
   });
+
+  // Search quotes when typing ticker
+  const handleFetchTickerQuote = async (tickerSymbol: string) => {
+    const clean = tickerSymbol.trim().toUpperCase();
+    if (!clean) return;
+
+    setIsSearchingQuote(true);
+    try {
+      const res = await fetch(`/api/stocks/quote?ticker=${encodeURIComponent(clean)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.price) {
+          setInvForm(prev => {
+            const qty = parseFloat(prev.quantity.replace(',', '.')) || 1;
+            const price = data.price;
+            const fees = parseFloat(prev.fees.replace(',', '.')) || 0;
+            const total = (qty * price) + fees;
+
+            return {
+              ...prev,
+              ticker: clean,
+              name: prev.name || data.name || clean,
+              unit_price: String(price),
+              quantity: prev.quantity || '1',
+              total_amount: String(total.toFixed(2))
+            };
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar cotação:', e);
+    } finally {
+      setIsSearchingQuote(false);
+    }
+  };
+
+  // Sync quotes automatically on load
+  useEffect(() => {
+    if (investments.length > 0) {
+      syncLiveQuotes(investments);
+    }
+  }, [investments.length]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -69,19 +128,18 @@ export default function InvestmentsPage() {
     return `${day}/${month}/${year}`;
   };
 
-  // Overall Portfolio Calculations
+  // Calculations
   const totalInvested = investments.reduce((acc, curr) => acc + Number(curr.total_invested), 0);
   const totalCurrent = investments.reduce((acc, curr) => acc + Number(curr.current_balance), 0);
   const totalProfit = totalCurrent - totalInvested;
   const totalYield = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
-  // Due date / Liquidity calculations
   const todayStr = new Date().toISOString().split('T')[0];
   const lockedInvestments = investments.filter(i => i.due_date && i.due_date > todayStr);
   const totalLocked = lockedInvestments.reduce((acc, curr) => acc + Number(curr.current_balance), 0);
   const totalLiquid = totalCurrent - totalLocked;
 
-  // Breakdown by Investment Type (for Doughnut chart & list)
+  // Breakdown by Type
   const typeAgg: { [key: string]: { name: string; icon: string; color: string; total: number; count: number } } = {};
   investments.forEach(inv => {
     const typeName = inv.investment_type?.name || 'Outros';
@@ -112,7 +170,7 @@ export default function InvestmentsPage() {
     ]
   };
 
-  // Breakdown by Financial Institution (Banks/Brokers)
+  // Breakdown by Institution
   const instAgg: { [key: string]: { name: string; total: number; count: number } } = {};
   investments.forEach(inv => {
     const instName = inv.institution?.trim() || 'Sem Instituição';
@@ -131,15 +189,19 @@ export default function InvestmentsPage() {
   })).sort((a, b) => b.total - a.total);
 
   // Modal Open Handlers
-  const handleOpenInvModal = (invToEdit?: typeof investments[0]) => {
+  const handleOpenInvModal = (invToEdit?: Investment) => {
     setFormError('');
     if (invToEdit) {
       setEditingInvId(invToEdit.id);
       setInvForm({
         name: invToEdit.name,
+        ticker: invToEdit.ticker || '',
         type_id: invToEdit.type_id || (types.length > 0 ? types[0].id : ''),
         institution: invToEdit.institution || '',
-        initial_amount: '',
+        quantity: invToEdit.quantity ? String(invToEdit.quantity) : '',
+        unit_price: invToEdit.average_price ? String(invToEdit.average_price) : '',
+        fees: '',
+        total_amount: String(invToEdit.total_invested || ''),
         date: new Date().toISOString().split('T')[0],
         due_date: invToEdit.due_date || '',
         notes: invToEdit.notes || ''
@@ -148,9 +210,13 @@ export default function InvestmentsPage() {
       setEditingInvId(null);
       setInvForm({
         name: '',
+        ticker: '',
         type_id: types.length > 0 ? types[0].id : '',
         institution: '',
-        initial_amount: '',
+        quantity: '1',
+        unit_price: '',
+        fees: '',
+        total_amount: '',
         date: new Date().toISOString().split('T')[0],
         due_date: '',
         notes: ''
@@ -159,16 +225,86 @@ export default function InvestmentsPage() {
     setIsInvModalOpen(true);
   };
 
-  const handleOpenEntryModal = (investmentId: string) => {
+  const handleOpenEntryModal = (inv: Investment) => {
     setFormError('');
-    setSelectedInvId(investmentId);
+    setSelectedInv(inv);
     setEntryForm({
       type: 'aporte',
-      amount: '',
+      quantity: '1',
+      unit_price: inv.current_price || inv.average_price ? String(inv.current_price || inv.average_price) : '',
+      fees: '',
+      amount: inv.current_price || inv.average_price ? String(inv.current_price || inv.average_price) : '',
       date: new Date().toISOString().split('T')[0],
       notes: ''
     });
     setIsEntryModalOpen(true);
+  };
+
+  // Quantity / Unit Price change handlers for New Investment
+  const handleInvQtyChange = (qtyStr: string) => {
+    const qty = parseFloat(qtyStr.replace(',', '.')) || 0;
+    const price = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
+    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
+    const total = (qty * price) + fees;
+
+    setInvForm(prev => ({
+      ...prev,
+      quantity: qtyStr,
+      total_amount: total > 0 ? String(total.toFixed(2)) : prev.total_amount
+    }));
+  };
+
+  const handleInvPriceChange = (priceStr: string) => {
+    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 1;
+    const price = parseFloat(priceStr.replace(',', '.')) || 0;
+    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
+    const total = (qty * price) + fees;
+
+    setInvForm(prev => ({
+      ...prev,
+      unit_price: priceStr,
+      total_amount: total > 0 ? String(total.toFixed(2)) : prev.total_amount
+    }));
+  };
+
+  const handleInvFeesChange = (feesStr: string) => {
+    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 0;
+    const price = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
+    const fees = parseFloat(feesStr.replace(',', '.')) || 0;
+    const total = (qty * price) + fees;
+
+    setInvForm(prev => ({
+      ...prev,
+      fees: feesStr,
+      total_amount: total > 0 ? String(total.toFixed(2)) : prev.total_amount
+    }));
+  };
+
+  // Quantity / Unit Price change handlers for Entry Modal
+  const handleEntryQtyChange = (qtyStr: string) => {
+    const qty = parseFloat(qtyStr.replace(',', '.')) || 0;
+    const price = parseFloat(entryForm.unit_price.replace(',', '.')) || 0;
+    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
+    const total = (qty * price) + fees;
+
+    setEntryForm(prev => ({
+      ...prev,
+      quantity: qtyStr,
+      amount: total > 0 ? String(total.toFixed(2)) : prev.amount
+    }));
+  };
+
+  const handleEntryPriceChange = (priceStr: string) => {
+    const qty = parseFloat(entryForm.quantity.replace(',', '.')) || 1;
+    const price = parseFloat(priceStr.replace(',', '.')) || 0;
+    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
+    const total = (qty * price) + fees;
+
+    setEntryForm(prev => ({
+      ...prev,
+      unit_price: priceStr,
+      amount: total > 0 ? String(total.toFixed(2)) : prev.amount
+    }));
   };
 
   // Form Submission Handlers
@@ -181,10 +317,16 @@ export default function InvestmentsPage() {
     setIsSubmitting(true);
     setFormError('');
 
+    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 0;
+    const unitPrice = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
+    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
+    const rawTotal = parseFloat(invForm.total_amount.replace(',', '.')) || (qty * unitPrice + fees);
+
     let success = false;
     if (editingInvId) {
       success = await updateInvestment(editingInvId, {
         name: invForm.name,
+        ticker: invForm.ticker,
         type_id: invForm.type_id,
         institution: invForm.institution,
         due_date: invForm.due_date || null,
@@ -193,9 +335,13 @@ export default function InvestmentsPage() {
     } else {
       success = await addInvestment({
         name: invForm.name,
+        ticker: invForm.ticker,
         type_id: invForm.type_id,
         institution: invForm.institution,
-        initial_amount: invForm.initial_amount ? parseFloat(invForm.initial_amount.replace(',', '.')) : 0,
+        quantity: qty > 0 ? qty : undefined,
+        unit_price: unitPrice > 0 ? unitPrice : undefined,
+        fees: fees > 0 ? fees : undefined,
+        initial_amount: rawTotal > 0 ? rawTotal : undefined,
         date: invForm.date,
         due_date: invForm.due_date || undefined,
         notes: invForm.notes
@@ -210,14 +356,21 @@ export default function InvestmentsPage() {
     }
   };
 
-  const handleDeleteInvestment = async (id: string) => {
-    if (window.confirm('Tem certeza que deseja excluir este investimento e seu histórico de movimentações?')) {
+  const handleDeleteInvestment = async (id: string, name: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o ativo "${name}" e todo o histórico?`)) {
       await deleteInvestment(id);
     }
   };
 
   const handleAddEntry = async () => {
-    if (!selectedInvId || !entryForm.amount) {
+    if (!selectedInv) return;
+
+    const qty = parseFloat(entryForm.quantity.replace(',', '.')) || 0;
+    const unitPrice = parseFloat(entryForm.unit_price.replace(',', '.')) || 0;
+    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
+    const finalAmount = parseFloat(entryForm.amount.replace(',', '.')) || (qty * unitPrice + fees);
+
+    if (finalAmount <= 0) {
       setFormError('Por favor, preencha o valor da movimentação.');
       return;
     }
@@ -226,9 +379,12 @@ export default function InvestmentsPage() {
     setFormError('');
 
     const success = await addInvestmentEntry({
-      investment_id: selectedInvId,
+      investment_id: selectedInv.id,
       type: entryForm.type,
-      amount: parseFloat(entryForm.amount.replace(',', '.')),
+      amount: finalAmount,
+      quantity: qty > 0 ? qty : undefined,
+      unit_price: unitPrice > 0 ? unitPrice : undefined,
+      fees: fees > 0 ? fees : undefined,
       date: entryForm.date,
       notes: entryForm.notes
     });
@@ -246,15 +402,50 @@ export default function InvestmentsPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard de Investimentos</h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            Visão consolidada do seu patrimônio, rentabilidade e alocação de ativos
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            <Icon name="trending_up" className="text-emerald-500" /> Carteira de Investimentos
+          </h1>
+          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
+            Controle de ações, FIIs, renda fixa com cotações em tempo real da B3 e integração com Investidor10
           </p>
         </div>
-        <Button variant="primary" onClick={() => handleOpenInvModal()}>
-          <Icon name="add" className="w-4 h-4 mr-2" /> 
-          Novo Investimento
-        </Button>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Live Quote Sync Button */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => syncLiveQuotes()}
+            disabled={isSyncingQuotes || investments.length === 0}
+            className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40"
+            title="Atualizar cotações atuais de mercado na B3"
+          >
+            <Icon name="refresh" size="sm" className={isSyncingQuotes ? 'animate-spin' : ''} />
+            <span>{isSyncingQuotes ? 'Atualizando...' : 'Cotações B3'}</span>
+          </Button>
+
+          {/* Investidor10 / CSV Import Button */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100"
+          >
+            <Icon name="file_download" size="sm" className="text-purple-500" />
+            <span>Importar Investidor10</span>
+          </Button>
+
+          {/* New Investment Button */}
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => handleOpenInvModal()}
+            className="flex items-center gap-1.5"
+          >
+            <Icon name="add" size="sm" /> 
+            <span>Novo Ativo / Compra</span>
+          </Button>
+        </div>
       </div>
 
       {loadError && (
@@ -268,7 +459,7 @@ export default function InvestmentsPage() {
         {/* Total Patrimony */}
         <GlassCard className="p-5 flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Total</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Atual (Mercado)</span>
             <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <Icon name="account_balance_wallet" className="w-5 h-5" />
             </div>
@@ -286,7 +477,7 @@ export default function InvestmentsPage() {
         {/* Total Invested */}
         <GlassCard className="p-5 flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Investido (Aportes)</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Investido (Custo)</span>
             <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
               <Icon name="savings" className="w-5 h-5" />
             </div>
@@ -294,7 +485,7 @@ export default function InvestmentsPage() {
           <div>
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalInvested)}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {investments.length} {investments.length === 1 ? 'ativo cadastrado' : 'ativos cadastrados'}
+              {investments.length} {investments.length === 1 ? 'ativo na carteira' : 'ativos na carteira'}
             </p>
           </div>
         </GlassCard>
@@ -302,7 +493,7 @@ export default function InvestmentsPage() {
         {/* Total Profit */}
         <GlassCard className="p-5 flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lucro / Rendimento</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lucro / Rentabilidade</span>
             <div className={`p-2 rounded-xl ${totalProfit >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-500'}`}>
               <Icon name={totalProfit >= 0 ? 'trending_up' : 'trending_down'} className="w-5 h-5" />
             </div>
@@ -328,13 +519,13 @@ export default function InvestmentsPage() {
           <div className="space-y-1">
             <div className="flex justify-between items-center text-xs">
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Icon name="check_circle" className="text-emerald-500 w-3.5 h-3.5" /> Liquidez Imediata:
+                <Icon name="check_circle" className="text-emerald-500 w-3.5 h-3.5" /> Imediata:
               </span>
               <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totalLiquid)}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Icon name="lock" className="text-amber-500 w-3.5 h-3.5" /> Em Carência:
+                <Icon name="lock" className="text-amber-500 w-3.5 h-3.5" /> Com Prazo/Carência:
               </span>
               <span className="font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalLocked)}</span>
             </div>
@@ -358,7 +549,6 @@ export default function InvestmentsPage() {
 
           {investments.length > 0 && totalCurrent > 0 ? (
             <div className="flex flex-col md:flex-row items-center gap-8">
-              {/* Doughnut Chart with Center Total */}
               <div className="w-full md:w-1/2 flex items-center justify-center">
                 <div className="h-56 w-56 relative flex items-center justify-center">
                   <Doughnut 
@@ -393,7 +583,6 @@ export default function InvestmentsPage() {
                 </div>
               </div>
 
-              {/* Category Breakdown Progress Bars */}
               <div className="w-full md:w-1/2 space-y-3.5">
                 {typeList.map((type, idx) => (
                   <div key={idx} className="space-y-1.5">
@@ -426,7 +615,7 @@ export default function InvestmentsPage() {
           )}
         </GlassCard>
 
-        {/* Allocation by Financial Institution (Brokers/Banks) */}
+        {/* Allocation by Financial Institution */}
         <GlassCard className="p-6 space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex justify-between items-center mb-2">
@@ -477,7 +666,10 @@ export default function InvestmentsPage() {
       {/* Detailed Assets Table */}
       <GlassCard className="p-4 md:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h3 className="text-lg font-bold text-gray-900 dark:text-white">Meus Ativos</h3>
+          <div>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Meus Ativos & Ações</h3>
+            <p className="text-xs text-gray-400">Preço Médio, cotação atual e valor total investido</p>
+          </div>
           <span className="text-xs text-gray-500 dark:text-gray-400">
             Total em Carteira: <strong className="text-gray-900 dark:text-white">{formatCurrency(totalCurrent)}</strong>
           </span>
@@ -492,13 +684,14 @@ export default function InvestmentsPage() {
             <table className="w-full text-sm text-left">
               <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800/50 dark:text-gray-400">
                 <tr>
-                  <th scope="col" className="px-4 py-3 rounded-l-lg">Ativo</th>
-                  <th scope="col" className="px-4 py-3">Instituição</th>
-                  <th scope="col" className="px-4 py-3">Tipo</th>
-                  <th scope="col" className="px-4 py-3">Vencimento / Liquidez</th>
+                  <th scope="col" className="px-4 py-3 rounded-l-lg">Ativo / Ticker</th>
+                  <th scope="col" className="px-4 py-3">Tipo & Corretora</th>
+                  <th scope="col" className="px-4 py-3 text-center">Posição (Qtd)</th>
+                  <th scope="col" className="px-4 py-3 text-right">Preço Médio</th>
+                  <th scope="col" className="px-4 py-3 text-right">Cotação Atual</th>
                   <th scope="col" className="px-4 py-3 text-right">Total Investido</th>
                   <th scope="col" className="px-4 py-3 text-right">Saldo Atual</th>
-                  <th scope="col" className="px-4 py-3 text-right">Rendimento</th>
+                  <th scope="col" className="px-4 py-3 text-right">Rentabilidade</th>
                   <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
                 </tr>
               </thead>
@@ -506,67 +699,92 @@ export default function InvestmentsPage() {
                 {investments.map((inv) => {
                   const invYield = inv.total_invested > 0 ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 : 0;
                   const isPositive = inv.current_balance >= inv.total_invested;
+                  const profitAmt = inv.current_balance - inv.total_invested;
+                  const hasQty = inv.quantity && inv.quantity > 0;
                   
                   return (
                     <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                      <td className="px-4 py-4 font-bold text-gray-900 dark:text-white">
-                        {inv.name}
-                      </td>
-                      <td className="px-4 py-4 text-gray-500 dark:text-gray-400">
-                        {inv.institution || '-'}
-                      </td>
                       <td className="px-4 py-4">
-                        <span 
-                          className="px-2.5 py-1 rounded-full text-xs font-semibold text-white shadow-sm inline-flex items-center gap-1"
-                          style={{ backgroundColor: inv.investment_type?.color || '#0058be' }}
-                        >
-                          <Icon name={inv.investment_type?.icon || 'account_balance_wallet'} className="w-3.5 h-3.5" />
-                          {inv.investment_type?.name || 'Outro'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        {inv.due_date ? (() => {
-                          const isLocked = inv.due_date > todayStr;
-                          return (
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${isLocked ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300'}`}>
-                              <Icon name={isLocked ? 'lock' : 'check_circle'} size="sm" />
-                              {formatDate(inv.due_date)} {isLocked ? '(Carência)' : '(Disponível)'}
+                        <div className="flex items-center gap-2">
+                          {inv.ticker ? (
+                            <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-mono font-bold text-xs">
+                              {inv.ticker}
                             </span>
-                          );
-                        })() : (
-                          <span className="text-gray-400 dark:text-gray-500 text-xs italic">
-                            Liquidez imediata
+                          ) : null}
+                          <div>
+                            <p className="font-bold text-gray-900 dark:text-white text-sm">{inv.name}</p>
+                            {inv.due_date && (
+                              <span className="text-[10px] text-gray-400">Venc: {formatDate(inv.due_date)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4">
+                        <div className="space-y-1">
+                          <span 
+                            className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-xs inline-flex items-center gap-1"
+                            style={{ backgroundColor: inv.investment_type?.color || '#0058be' }}
+                          >
+                            <Icon name={inv.investment_type?.icon || 'account_balance_wallet'} className="w-3 h-3" />
+                            {inv.investment_type?.name || 'Outro'}
                           </span>
+                          <p className="text-[11px] text-gray-400">{inv.institution || '-'}</p>
+                        </div>
+                      </td>
+
+                      <td className="px-4 py-4 text-center">
+                        {hasQty ? (
+                          <span className="font-bold text-gray-900 dark:text-white text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg">
+                            {inv.quantity} {inv.quantity === 1 ? 'cota/ação' : 'cotas/ações'}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 text-right text-gray-500 dark:text-gray-400 whitespace-nowrap">
+
+                      <td className="px-4 py-4 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap text-xs">
+                        {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price) : '-'}
+                      </td>
+
+                      <td className="px-4 py-4 text-right font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap text-xs">
+                        {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price) : '-'}
+                      </td>
+
+                      <td className="px-4 py-4 text-right text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">
                         {formatCurrency(inv.total_invested)}
                       </td>
+
                       <td className="px-4 py-4 text-right font-extrabold text-gray-900 dark:text-white whitespace-nowrap">
                         {formatCurrency(inv.current_balance)}
                       </td>
-                      <td className={`px-4 py-4 text-right font-extrabold whitespace-nowrap ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>
-                        {isPositive ? '+' : ''}{invYield.toFixed(2)}%
+
+                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                        <div className={`font-bold text-xs ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                          <span>{isPositive ? '+' : ''}{formatCurrency(profitAmt)}</span>
+                          <span className="text-[10px] block opacity-80">({isPositive ? '+' : ''}{invYield.toFixed(2)}%)</span>
+                        </div>
                       </td>
+
                       <td className="px-4 py-4 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1">
                           <button 
+                            onClick={() => handleOpenEntryModal(inv)}
+                            className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors rounded-lg flex items-center gap-0.5 text-xs font-bold"
+                            title="Comprar mais / Nova movimentação"
+                          >
+                            <Icon name="add_circle" size="sm" /> Aporte
+                          </button>
+                          <button 
                             onClick={() => handleOpenInvModal(inv)}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                            className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors rounded-lg"
                             title="Editar Ativo"
                           >
                             <Icon name="edit" size="sm" />
                           </button>
                           <button 
-                            onClick={() => handleOpenEntryModal(inv.id)}
-                            className="p-1.5 text-gray-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
-                            title="Registrar Movimentação (Aporte, Resgate ou Rendimento)"
-                          >
-                            <Icon name="swap_horiz" size="sm" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteInvestment(inv.id)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20"
+                            onClick={() => handleDeleteInvestment(inv.id, inv.name)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg"
                             title="Excluir Ativo"
                           >
                             <Icon name="delete" size="sm" />
@@ -582,19 +800,19 @@ export default function InvestmentsPage() {
         ) : (
           <div className="py-12">
             <EmptyState 
-              title="Nenhum investimento encontrado" 
-              description="Cadastre seus ativos para começar a monitorar a rentabilidade da sua carteira." 
+              title="Nenhum investimento cadastrado" 
+              description="Cadastre seus ativos ou importe sua carteira do Investidor10 para acompanhar suas ações e rendimentos." 
               icon="account_balance"
             />
           </div>
         )}
       </GlassCard>
 
-      {/* Modal - Novo/Editar Investimento */}
+      {/* Modal - Novo / Editar Investimento (com Calculadora Qtd * Preço) */}
       <Modal 
         isOpen={isInvModalOpen} 
         onClose={() => !isSubmitting && setIsInvModalOpen(false)} 
-        title={editingInvId ? "Editar Investimento" : "Novo Investimento"}
+        title={editingInvId ? "Editar Investimento" : "Nova Compra / Cadastro de Ativo"}
       >
         <div className="space-y-4">
           {formError && (
@@ -603,11 +821,40 @@ export default function InvestmentsPage() {
             </div>
           )}
 
+          {/* Ticker Search & Auto Complete */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+              Ticker / Código do Ativo (B3) (Opcional)
+            </label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input 
+                  placeholder="Ex: PETR4, MXRF11, VALE3, IVVB11, BTC" 
+                  value={invForm.ticker}
+                  onChange={(e) => setInvForm({...invForm, ticker: e.target.value.toUpperCase()})}
+                  className="font-mono font-bold"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={() => handleFetchTickerQuote(invForm.ticker)}
+                disabled={isSearchingQuote || !invForm.ticker.trim()}
+                className="shrink-0 text-xs flex items-center gap-1"
+              >
+                <Icon name="search" size="sm" className={isSearchingQuote ? 'animate-spin' : ''} />
+                <span>{isSearchingQuote ? 'Buscando...' : 'Buscar Cotação'}</span>
+              </Button>
+            </div>
+          </div>
+
           <Input 
             label="Nome do Ativo" 
-            placeholder="Ex: Tesouro IPCA+ 2035, CDB Banco X" 
+            placeholder="Ex: Petrobras PN, Maxi Renda FII, CDB Inter 110% CDI" 
             value={invForm.name}
             onChange={(e) => setInvForm({...invForm, name: e.target.value})}
+            required
           />
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -618,42 +865,113 @@ export default function InvestmentsPage() {
               options={types.map(t => ({ value: t.id, label: t.name }))}
             />
             <Input 
-              label="Instituição Financeira" 
-              placeholder="Ex: XP, Inter, NuInvest" 
+              label="Instituição / Corretora" 
+              placeholder="Ex: XP, NuInvest, Inter, Clear" 
               value={invForm.institution}
               onChange={(e) => setInvForm({...invForm, institution: e.target.value})}
             />
           </div>
 
-          <Input 
-            label="Data de Vencimento / Prazo Mínimo de Resgate (Opcional)" 
-            type="date" 
-            value={invForm.due_date}
-            onChange={(e) => setInvForm({...invForm, due_date: e.target.value})}
-          />
-
+          {/* Automatic Calculator: Qtd * Preço Unitário */}
           {!editingInvId && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input 
-                label="Aporte Inicial (R$)" 
-                type="number" 
-                step="0.01"
-                placeholder="0,00" 
-                value={invForm.initial_amount}
-                onChange={(e) => setInvForm({...invForm, initial_amount: e.target.value})}
-              />
-              <Input 
-                label="Data da Aplicação" 
-                type="date" 
-                value={invForm.date}
-                onChange={(e) => setInvForm({...invForm, date: e.target.value})}
-              />
+            <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3 border border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Icon name="calculate" size="sm" className="text-emerald-500" /> Calculadora de Compra
+                </span>
+                <div className="flex gap-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setCalcMode('shares')}
+                    className={`px-2 py-1 rounded font-bold transition-colors ${
+                      calcMode === 'shares' ? 'bg-blue-600 text-white' : 'text-gray-500'
+                    }`}
+                  >
+                    Por Cotas/Ações
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCalcMode('total')}
+                    className={`px-2 py-1 rounded font-bold transition-colors ${
+                      calcMode === 'total' ? 'bg-blue-600 text-white' : 'text-gray-500'
+                    }`}
+                  >
+                    Valor Direto
+                  </button>
+                </div>
+              </div>
+
+              {calcMode === 'shares' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <Input 
+                      label="Quantidade" 
+                      type="number" 
+                      step="0.0001"
+                      min="0.0001"
+                      placeholder="Ex: 3" 
+                      value={invForm.quantity}
+                      onChange={(e) => handleInvQtyChange(e.target.value)}
+                    />
+                    <Input 
+                      label="Preço Unitário (R$)" 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Ex: 10,00" 
+                      value={invForm.unit_price}
+                      onChange={(e) => handleInvPriceChange(e.target.value)}
+                    />
+                    <Input 
+                      label="Taxas/Emolumentos (R$)" 
+                      type="number" 
+                      step="0.01"
+                      placeholder="0,00" 
+                      value={invForm.fees}
+                      onChange={(e) => handleInvFeesChange(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Calculated total display banner */}
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">
+                      Total da Operação ({invForm.quantity || 0} cotas x {formatCurrency(parseFloat(invForm.unit_price) || 0)}):
+                    </span>
+                    <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(parseFloat(invForm.total_amount) || 0)}
+                    </strong>
+                  </div>
+                </div>
+              ) : (
+                <Input 
+                  label="Valor Total da Aplicação (R$)" 
+                  type="number" 
+                  step="0.01"
+                  placeholder="0,00" 
+                  value={invForm.total_amount}
+                  onChange={(e) => setInvForm({...invForm, total_amount: e.target.value})}
+                />
+              )}
             </div>
           )}
 
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Input 
+              label="Data da Operação" 
+              type="date" 
+              value={invForm.date}
+              onChange={(e) => setInvForm({...invForm, date: e.target.value})}
+            />
+            <Input 
+              label="Data de Vencimento / Carência (Opcional)" 
+              type="date" 
+              value={invForm.due_date}
+              onChange={(e) => setInvForm({...invForm, due_date: e.target.value})}
+            />
+          </div>
+
           <Input 
             label="Observações" 
-            placeholder="Alguma nota importante sobre este ativo" 
+            placeholder="Ex: Compra fracionário, aporte mensal, objetivo..." 
             value={invForm.notes}
             onChange={(e) => setInvForm({...invForm, notes: e.target.value})}
           />
@@ -661,17 +979,17 @@ export default function InvestmentsPage() {
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="ghost" onClick={() => setIsInvModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
             <Button variant="primary" onClick={handleSaveInvestment} loading={isSubmitting}>
-              {editingInvId ? "Salvar Alterações" : "Adicionar Investimento"}
+              {editingInvId ? "Salvar Alterações" : "Adicionar à Carteira"}
             </Button>
           </div>
         </div>
       </Modal>
 
-      {/* Modal - Registrar Movimentação */}
+      {/* Modal - Registrar Aporte / Movimentação (com Calculadora) */}
       <Modal 
         isOpen={isEntryModalOpen} 
         onClose={() => !isSubmitting && setIsEntryModalOpen(false)} 
-        title="Registrar Movimentação"
+        title={`Nova Movimentação: ${selectedInv?.name || ''}`}
       >
         <div className="space-y-4">
           {formError && (
@@ -691,7 +1009,74 @@ export default function InvestmentsPage() {
             ]}
           />
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {entryForm.type === 'aporte' ? (
+            <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3 border border-gray-100 dark:border-gray-700">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                  Calculadora de Compra
+                </span>
+                <div className="flex gap-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setEntryCalcMode('shares')}
+                    className={`px-2 py-1 rounded font-bold transition-colors ${
+                      entryCalcMode === 'shares' ? 'bg-blue-600 text-white' : 'text-gray-500'
+                    }`}
+                  >
+                    Por Cotas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEntryCalcMode('total')}
+                    className={`px-2 py-1 rounded font-bold transition-colors ${
+                      entryCalcMode === 'total' ? 'bg-blue-600 text-white' : 'text-gray-500'
+                    }`}
+                  >
+                    Valor Direto
+                  </button>
+                </div>
+              </div>
+
+              {entryCalcMode === 'shares' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <Input 
+                      label="Quantidade de Cotas/Ações" 
+                      type="number" 
+                      step="0.0001"
+                      placeholder="Ex: 3" 
+                      value={entryForm.quantity}
+                      onChange={(e) => handleEntryQtyChange(e.target.value)}
+                    />
+                    <Input 
+                      label="Preço Unitário (R$)" 
+                      type="number" 
+                      step="0.01"
+                      placeholder="Ex: 10,00" 
+                      value={entryForm.unit_price}
+                      onChange={(e) => handleEntryPriceChange(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
+                    <span className="font-semibold text-emerald-800 dark:text-emerald-300">Total do Aporte:</span>
+                    <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(parseFloat(entryForm.amount) || 0)}
+                    </strong>
+                  </div>
+                </div>
+              ) : (
+                <Input 
+                  label="Valor Total (R$)" 
+                  type="number" 
+                  step="0.01"
+                  placeholder="0,00" 
+                  value={entryForm.amount}
+                  onChange={(e) => setEntryForm({...entryForm, amount: e.target.value})}
+                />
+              )}
+            </div>
+          ) : (
             <Input 
               label="Valor (R$)" 
               type="number" 
@@ -700,20 +1085,22 @@ export default function InvestmentsPage() {
               value={entryForm.amount}
               onChange={(e) => setEntryForm({...entryForm, amount: e.target.value})}
             />
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input 
               label="Data da Operação" 
               type="date" 
               value={entryForm.date}
               onChange={(e) => setEntryForm({...entryForm, date: e.target.value})}
             />
+            <Input 
+              label="Observações" 
+              placeholder="Ex: Reinvestimento de dividendos" 
+              value={entryForm.notes}
+              onChange={(e) => setEntryForm({...entryForm, notes: e.target.value})}
+            />
           </div>
-
-          <Input 
-            label="Observações" 
-            placeholder="Ex: Dividendos recebidos, Aporte mensal" 
-            value={entryForm.notes}
-            onChange={(e) => setEntryForm({...entryForm, notes: e.target.value})}
-          />
           
           <div className="flex justify-end gap-2 mt-6">
             <Button variant="ghost" onClick={() => setIsEntryModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
@@ -721,6 +1108,16 @@ export default function InvestmentsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal - Importador Investidor10 / CSV / IA */}
+      <ImportInvestmentsModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        types={types}
+        onImportAssets={async (assets) => {
+          return await batchImportInvestments(assets);
+        }}
+      />
     </div>
   );
 }
