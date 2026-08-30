@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const CRYPTO_MAP: Record<string, { code: string; name: string }> = {
   'BTC': { code: 'BTC-BRL', name: 'Bitcoin' },
   'BITCOIN': { code: 'BTC-BRL', name: 'Bitcoin' },
