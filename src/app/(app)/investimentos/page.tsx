@@ -21,6 +21,20 @@ import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestm
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
+// Robust Brazilian currency and fractional number parser
+function parseNumberInput(val: string | number): number {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  let str = String(val).replace(/[R$\s]/g, '').trim();
+  if (str.includes('.') && str.includes(',')) {
+    // Brazilian format with dot as thousand and comma as decimal (ex: 397.484,01)
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+  return parseFloat(str) || 0;
+}
+
 export default function InvestmentsPage() {
   const {
     investments,
@@ -88,15 +102,26 @@ export default function InvestmentsPage() {
         const data = await res.json();
         if (data.price) {
           setInvForm(prev => {
-            const qty = parseFloat(prev.quantity.replace(',', '.')) || 1;
+            const qty = parseNumberInput(prev.quantity) || 1;
             const price = data.price;
-            const fees = parseFloat(prev.fees.replace(',', '.')) || 0;
+            const fees = parseNumberInput(prev.fees) || 0;
             const total = (qty * price) + fees;
+
+            // Auto-select type for crypto / fii
+            let autoTypeId = prev.type_id;
+            if (['BTC', 'ETH', 'SOL', 'USDT'].includes(clean)) {
+              const cryptoType = types.find(t => t.name.toLowerCase().includes('cripto'));
+              if (cryptoType) autoTypeId = cryptoType.id;
+            } else if (clean.endsWith('11')) {
+              const fiiType = types.find(t => t.name.toLowerCase().includes('fii'));
+              if (fiiType) autoTypeId = fiiType.id;
+            }
 
             return {
               ...prev,
               ticker: clean,
               name: prev.name || data.name || clean,
+              type_id: autoTypeId,
               unit_price: String(price),
               quantity: prev.quantity || '1',
               total_amount: String(total.toFixed(2))
@@ -126,6 +151,15 @@ export default function InvestmentsPage() {
     if (!dateString) return null;
     const [year, month, day] = dateString.split('-');
     return `${day}/${month}/${year}`;
+  };
+
+  const formatQuantity = (qty?: number | null) => {
+    if (!qty || qty === 0) return '-';
+    if (qty < 1) {
+      // High precision for crypto like 0.00025974
+      return qty.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+    }
+    return qty.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
   };
 
   // Calculations
@@ -242,9 +276,9 @@ export default function InvestmentsPage() {
 
   // Quantity / Unit Price change handlers for New Investment
   const handleInvQtyChange = (qtyStr: string) => {
-    const qty = parseFloat(qtyStr.replace(',', '.')) || 0;
-    const price = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
-    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
+    const qty = parseNumberInput(qtyStr);
+    const price = parseNumberInput(invForm.unit_price);
+    const fees = parseNumberInput(invForm.fees);
     const total = (qty * price) + fees;
 
     setInvForm(prev => ({
@@ -255,9 +289,9 @@ export default function InvestmentsPage() {
   };
 
   const handleInvPriceChange = (priceStr: string) => {
-    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 1;
-    const price = parseFloat(priceStr.replace(',', '.')) || 0;
-    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
+    const qty = parseNumberInput(invForm.quantity) || 1;
+    const price = parseNumberInput(priceStr);
+    const fees = parseNumberInput(invForm.fees);
     const total = (qty * price) + fees;
 
     setInvForm(prev => ({
@@ -268,9 +302,9 @@ export default function InvestmentsPage() {
   };
 
   const handleInvFeesChange = (feesStr: string) => {
-    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 0;
-    const price = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
-    const fees = parseFloat(feesStr.replace(',', '.')) || 0;
+    const qty = parseNumberInput(invForm.quantity);
+    const price = parseNumberInput(invForm.unit_price);
+    const fees = parseNumberInput(feesStr);
     const total = (qty * price) + fees;
 
     setInvForm(prev => ({
@@ -282,9 +316,9 @@ export default function InvestmentsPage() {
 
   // Quantity / Unit Price change handlers for Entry Modal
   const handleEntryQtyChange = (qtyStr: string) => {
-    const qty = parseFloat(qtyStr.replace(',', '.')) || 0;
-    const price = parseFloat(entryForm.unit_price.replace(',', '.')) || 0;
-    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
+    const qty = parseNumberInput(qtyStr);
+    const price = parseNumberInput(entryForm.unit_price);
+    const fees = parseNumberInput(entryForm.fees);
     const total = (qty * price) + fees;
 
     setEntryForm(prev => ({
@@ -295,9 +329,9 @@ export default function InvestmentsPage() {
   };
 
   const handleEntryPriceChange = (priceStr: string) => {
-    const qty = parseFloat(entryForm.quantity.replace(',', '.')) || 1;
-    const price = parseFloat(priceStr.replace(',', '.')) || 0;
-    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
+    const qty = parseNumberInput(entryForm.quantity) || 1;
+    const price = parseNumberInput(priceStr);
+    const fees = parseNumberInput(entryForm.fees);
     const total = (qty * price) + fees;
 
     setEntryForm(prev => ({
@@ -317,10 +351,10 @@ export default function InvestmentsPage() {
     setIsSubmitting(true);
     setFormError('');
 
-    const qty = parseFloat(invForm.quantity.replace(',', '.')) || 0;
-    const unitPrice = parseFloat(invForm.unit_price.replace(',', '.')) || 0;
-    const fees = parseFloat(invForm.fees.replace(',', '.')) || 0;
-    const rawTotal = parseFloat(invForm.total_amount.replace(',', '.')) || (qty * unitPrice + fees);
+    const qty = parseNumberInput(invForm.quantity);
+    const unitPrice = parseNumberInput(invForm.unit_price);
+    const fees = parseNumberInput(invForm.fees);
+    const rawTotal = parseNumberInput(invForm.total_amount) || (qty * unitPrice + fees);
 
     let success = false;
     if (editingInvId) {
@@ -365,10 +399,10 @@ export default function InvestmentsPage() {
   const handleAddEntry = async () => {
     if (!selectedInv) return;
 
-    const qty = parseFloat(entryForm.quantity.replace(',', '.')) || 0;
-    const unitPrice = parseFloat(entryForm.unit_price.replace(',', '.')) || 0;
-    const fees = parseFloat(entryForm.fees.replace(',', '.')) || 0;
-    const finalAmount = parseFloat(entryForm.amount.replace(',', '.')) || (qty * unitPrice + fees);
+    const qty = parseNumberInput(entryForm.quantity);
+    const unitPrice = parseNumberInput(entryForm.unit_price);
+    const fees = parseNumberInput(entryForm.fees);
+    const finalAmount = parseNumberInput(entryForm.amount) || (qty * unitPrice + fees);
 
     if (finalAmount <= 0) {
       setFormError('Por favor, preencha o valor da movimentação.');
@@ -406,7 +440,7 @@ export default function InvestmentsPage() {
             <Icon name="trending_up" className="text-emerald-500" /> Carteira de Investimentos
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-            Controle de ações, FIIs, renda fixa com cotações em tempo real da B3 e integração com Investidor10
+            Controle de ações, FIIs, criptomoedas e renda fixa com cotações em tempo real da B3 e integração com Investidor10
           </p>
         </div>
 
@@ -667,8 +701,8 @@ export default function InvestmentsPage() {
       <GlassCard className="p-4 md:p-6 space-y-4">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Meus Ativos & Ações</h3>
-            <p className="text-xs text-gray-400">Preço Médio, cotação atual e valor total investido</p>
+            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Meus Ativos, Ações & Criptomoedas</h3>
+            <p className="text-xs text-gray-400">Posição, Preço Médio, Cotação Atual e Rentabilidade da Carteira</p>
           </div>
           <span className="text-xs text-gray-500 dark:text-gray-400">
             Total em Carteira: <strong className="text-gray-900 dark:text-white">{formatCurrency(totalCurrent)}</strong>
@@ -736,7 +770,7 @@ export default function InvestmentsPage() {
                       <td className="px-4 py-4 text-center">
                         {hasQty ? (
                           <span className="font-bold text-gray-900 dark:text-white text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg">
-                            {inv.quantity} {inv.quantity === 1 ? 'cota/ação' : 'cotas/ações'}
+                            {formatQuantity(inv.quantity)}
                           </span>
                         ) : (
                           <span className="text-gray-400 text-xs">-</span>
@@ -824,12 +858,12 @@ export default function InvestmentsPage() {
           {/* Ticker Search & Auto Complete */}
           <div className="space-y-1">
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-              Ticker / Código do Ativo (B3) (Opcional)
+              Ticker / Código do Ativo (B3 ou Cripto) (Opcional)
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
-                  placeholder="Ex: PETR4, MXRF11, VALE3, IVVB11, BTC" 
+                  placeholder="Ex: BTC, PETR4, MXRF11, VALE3, ETH" 
                   value={invForm.ticker}
                   onChange={(e) => setInvForm({...invForm, ticker: e.target.value.toUpperCase()})}
                   className="font-mono font-bold"
@@ -851,7 +885,7 @@ export default function InvestmentsPage() {
 
           <Input 
             label="Nome do Ativo" 
-            placeholder="Ex: Petrobras PN, Maxi Renda FII, CDB Inter 110% CDI" 
+            placeholder="Ex: Bitcoin, Petrobras PN, Maxi Renda FII, CDB Inter" 
             value={invForm.name}
             onChange={(e) => setInvForm({...invForm, name: e.target.value})}
             required
@@ -866,7 +900,7 @@ export default function InvestmentsPage() {
             />
             <Input 
               label="Instituição / Corretora" 
-              placeholder="Ex: XP, NuInvest, Inter, Clear" 
+              placeholder="Ex: Binance, Mercado Bitcoin, XP, NuInvest" 
               value={invForm.institution}
               onChange={(e) => setInvForm({...invForm, institution: e.target.value})}
             />
@@ -887,7 +921,7 @@ export default function InvestmentsPage() {
                       calcMode === 'shares' ? 'bg-blue-600 text-white' : 'text-gray-500'
                     }`}
                   >
-                    Por Cotas/Ações
+                    Por Cotas/Frações
                   </button>
                   <button
                     type="button"
@@ -905,26 +939,22 @@ export default function InvestmentsPage() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <Input 
-                      label="Quantidade" 
-                      type="number" 
-                      step="0.0001"
-                      min="0.0001"
-                      placeholder="Ex: 3" 
+                      label="Quantidade / Fração" 
+                      type="text" 
+                      placeholder="Ex: 0,00025974 ou 10" 
                       value={invForm.quantity}
                       onChange={(e) => handleInvQtyChange(e.target.value)}
                     />
                     <Input 
-                      label="Preço Unitário (R$)" 
-                      type="number" 
-                      step="0.01"
-                      placeholder="Ex: 10,00" 
+                      label="Preço Unitário / Cotação (R$)" 
+                      type="text" 
+                      placeholder="Ex: 397.484,01" 
                       value={invForm.unit_price}
                       onChange={(e) => handleInvPriceChange(e.target.value)}
                     />
                     <Input 
-                      label="Taxas/Emolumentos (R$)" 
-                      type="number" 
-                      step="0.01"
+                      label="Taxas (R$)" 
+                      type="text" 
                       placeholder="0,00" 
                       value={invForm.fees}
                       onChange={(e) => handleInvFeesChange(e.target.value)}
@@ -934,18 +964,17 @@ export default function InvestmentsPage() {
                   {/* Calculated total display banner */}
                   <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
                     <span className="font-semibold text-emerald-800 dark:text-emerald-300">
-                      Total da Operação ({invForm.quantity || 0} cotas x {formatCurrency(parseFloat(invForm.unit_price) || 0)}):
+                      Total da Operação ({invForm.quantity || 0} x {formatCurrency(parseNumberInput(invForm.unit_price))}):
                     </span>
                     <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(parseFloat(invForm.total_amount) || 0)}
+                      {formatCurrency(parseNumberInput(invForm.total_amount))}
                     </strong>
                   </div>
                 </div>
               ) : (
                 <Input 
                   label="Valor Total da Aplicação (R$)" 
-                  type="number" 
-                  step="0.01"
+                  type="text" 
                   placeholder="0,00" 
                   value={invForm.total_amount}
                   onChange={(e) => setInvForm({...invForm, total_amount: e.target.value})}
@@ -1023,7 +1052,7 @@ export default function InvestmentsPage() {
                       entryCalcMode === 'shares' ? 'bg-blue-600 text-white' : 'text-gray-500'
                     }`}
                   >
-                    Por Cotas
+                    Por Cotas/Frações
                   </button>
                   <button
                     type="button"
@@ -1041,18 +1070,16 @@ export default function InvestmentsPage() {
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input 
-                      label="Quantidade de Cotas/Ações" 
-                      type="number" 
-                      step="0.0001"
-                      placeholder="Ex: 3" 
+                      label="Quantidade / Fração" 
+                      type="text" 
+                      placeholder="Ex: 0,00025974 ou 3" 
                       value={entryForm.quantity}
                       onChange={(e) => handleEntryQtyChange(e.target.value)}
                     />
                     <Input 
                       label="Preço Unitário (R$)" 
-                      type="number" 
-                      step="0.01"
-                      placeholder="Ex: 10,00" 
+                      type="text" 
+                      placeholder="Ex: 397.484,01" 
                       value={entryForm.unit_price}
                       onChange={(e) => handleEntryPriceChange(e.target.value)}
                     />
@@ -1061,15 +1088,14 @@ export default function InvestmentsPage() {
                   <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
                     <span className="font-semibold text-emerald-800 dark:text-emerald-300">Total do Aporte:</span>
                     <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(parseFloat(entryForm.amount) || 0)}
+                      {formatCurrency(parseNumberInput(entryForm.amount))}
                     </strong>
                   </div>
                 </div>
               ) : (
                 <Input 
                   label="Valor Total (R$)" 
-                  type="number" 
-                  step="0.01"
+                  type="text" 
                   placeholder="0,00" 
                   value={entryForm.amount}
                   onChange={(e) => setEntryForm({...entryForm, amount: e.target.value})}
@@ -1079,8 +1105,7 @@ export default function InvestmentsPage() {
           ) : (
             <Input 
               label="Valor (R$)" 
-              type="number" 
-              step="0.01"
+              type="text" 
               placeholder="0,00" 
               value={entryForm.amount}
               onChange={(e) => setEntryForm({...entryForm, amount: e.target.value})}
@@ -1096,7 +1121,7 @@ export default function InvestmentsPage() {
             />
             <Input 
               label="Observações" 
-              placeholder="Ex: Reinvestimento de dividendos" 
+              placeholder="Ex: Reinvestimento de dividendos, aporte fracionário" 
               value={entryForm.notes}
               onChange={(e) => setEntryForm({...entryForm, notes: e.target.value})}
             />

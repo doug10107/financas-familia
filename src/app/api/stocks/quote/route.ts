@@ -4,14 +4,21 @@ function formatYahooTicker(raw: string): string {
   const clean = raw.trim().toUpperCase();
   if (!clean) return '';
   if (clean.includes('.')) return clean;
+  if (clean.includes('-')) return clean;
+
+  // Crypto in BRL (Reais)
+  if (['BTC', 'BITCOIN'].includes(clean)) return 'BTC-BRL';
+  if (['ETH', 'ETHEREUM'].includes(clean)) return 'ETH-BRL';
+  if (['SOL', 'SOLANA'].includes(clean)) return 'SOL-BRL';
+  if (['USDT', 'TETHER'].includes(clean)) return 'USDT-BRL';
+  if (['ADA', 'CARDANO'].includes(clean)) return 'ADA-BRL';
+  if (['XRP', 'RIPPLE'].includes(clean)) return 'XRP-BRL';
+
   // If it's a Brazilian stock/FII/ETF (e.g. PETR4, MXRF11, BOVA11, VALE3, SMAL11)
   if (/^[A-Z]{4}\d{1,2}[A-Z]?$/.test(clean)) {
     return `${clean}.SA`;
   }
-  // Crypto or other
-  if (['BTC', 'ETH', 'SOL', 'USDT'].includes(clean)) {
-    return `${clean}-USD`;
-  }
+
   return clean;
 }
 
@@ -40,6 +47,8 @@ export async function GET(req: NextRequest) {
         let cleanSymbol = q.symbol;
         if (cleanSymbol.endsWith('.SA')) {
           cleanSymbol = cleanSymbol.replace('.SA', '');
+        } else if (cleanSymbol.endsWith('-BRL')) {
+          cleanSymbol = cleanSymbol.replace('-BRL', '');
         }
         return {
           symbol: cleanSymbol,
@@ -81,7 +90,9 @@ export async function GET(req: NextRequest) {
       const change = currentPrice - prevClose;
       const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
 
-      const cleanSymbol = meta.symbol.endsWith('.SA') ? meta.symbol.replace('.SA', '') : meta.symbol;
+      let cleanSymbol = meta.symbol;
+      if (cleanSymbol.endsWith('.SA')) cleanSymbol = cleanSymbol.replace('.SA', '');
+      if (cleanSymbol.endsWith('-BRL')) cleanSymbol = cleanSymbol.replace('-BRL', '');
 
       return NextResponse.json({
         symbol: cleanSymbol,
@@ -136,7 +147,10 @@ export async function POST(req: NextRequest) {
               const prevClose = Number(meta.chartPreviousClose || meta.previousClose) || currentPrice;
               const change = currentPrice - prevClose;
               const changePercent = prevClose > 0 ? (change / prevClose) * 100 : 0;
-              const clean = meta.symbol.endsWith('.SA') ? meta.symbol.replace('.SA', '') : meta.symbol;
+              
+              let clean = meta.symbol;
+              if (clean.endsWith('.SA')) clean = clean.replace('.SA', '');
+              if (clean.endsWith('-BRL')) clean = clean.replace('-BRL', '');
 
               quotes[rawTicker.toUpperCase()] = {
                 symbol: clean,

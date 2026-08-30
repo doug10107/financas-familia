@@ -10,6 +10,18 @@ import { Icon } from '@/components/ui/Icon';
 import { Badge } from '@/components/ui/Badge';
 import { InvestmentType } from '@/hooks/useInvestments';
 
+function parseNumberInput(val: string | number | null | undefined): number {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  let str = String(val).replace(/[R$\s]/g, '').trim();
+  if (str.includes('.') && str.includes(',')) {
+    str = str.replace(/\./g, '').replace(',', '.');
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+  return parseFloat(str) || 0;
+}
+
 interface ExtractedAsset {
   tempId: string;
   ticker: string;
@@ -66,6 +78,14 @@ export function ImportInvestmentsModal({
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
 
+  const formatQuantity = (qty: number) => {
+    if (!qty) return '0';
+    if (qty < 1) {
+      return qty.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 8 });
+    }
+    return qty.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
+  };
+
   // CSV Parser for Investidor10 / B3 / StatusInvest
   const parseCSV = (csvFile: File) => {
     Papa.parse(csvFile, {
@@ -82,7 +102,6 @@ export function ImportInvestmentsModal({
           const parsed: ExtractedAsset[] = [];
 
           rows.forEach((row, idx) => {
-            // Check possible column names from Investidor10, B3, StatusInvest
             const ticker = (
               row['Ticker'] ||
               row['Código'] ||
@@ -103,7 +122,7 @@ export function ImportInvestmentsModal({
             ).toString().trim();
 
             const rawQty = row['Quantidade'] || row['Qtd'] || row['Qtd.'] || row['Quant.'] || 1;
-            const quantity = typeof rawQty === 'number' ? rawQty : parseFloat(String(rawQty).replace(',', '.')) || 1;
+            const quantity = parseNumberInput(rawQty) || 1;
 
             const rawPrice =
               row['Preço Médio'] ||
@@ -113,7 +132,7 @@ export function ImportInvestmentsModal({
               row['Preço de Compra'] ||
               row['Valor Unitário'] ||
               0;
-            const averagePrice = typeof rawPrice === 'number' ? rawPrice : parseFloat(String(rawPrice).replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+            const averagePrice = parseNumberInput(rawPrice);
 
             const rawTotal =
               row['Total Investido'] ||
@@ -121,8 +140,8 @@ export function ImportInvestmentsModal({
               row['Total'] ||
               row['Valor da Operação'] ||
               row['Saldo'] ||
-              quantity * averagePrice;
-            const totalInvested = typeof rawTotal === 'number' ? rawTotal : parseFloat(String(rawTotal).replace(/[R$\s.]/g, '').replace(',', '.')) || (quantity * averagePrice);
+              (quantity * averagePrice);
+            const totalInvested = parseNumberInput(rawTotal) || (quantity * averagePrice);
 
             const rawInst = row['Instituição'] || row['Instituicao'] || row['Corretora'] || row['Banco'] || '';
             const institution = String(rawInst).trim();
@@ -130,7 +149,8 @@ export function ImportInvestmentsModal({
             const rawType = row['Tipo'] || row['Categoria'] || row['Classe'] || '';
             let type = String(rawType).trim();
             if (!type) {
-              if (ticker.endsWith('11')) type = 'FIIs';
+              if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
+              else if (ticker.endsWith('11')) type = 'FIIs';
               else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
               else type = 'Renda Fixa';
             }
@@ -141,8 +161,8 @@ export function ImportInvestmentsModal({
                 ticker,
                 name,
                 type,
-                quantity: Number(quantity.toFixed(4)),
-                averagePrice: Number(averagePrice.toFixed(2)),
+                quantity: quantity,
+                averagePrice: averagePrice,
                 totalInvested: Number(totalInvested.toFixed(2)),
                 institution,
                 selected: true
@@ -184,7 +204,6 @@ export function ImportInvestmentsModal({
       if (file.name.endsWith('.csv') || file.type.includes('csv') || file.type.includes('text')) {
         parseCSV(file);
       } else {
-        // Use AI scan for PDF / Excel / Images
         const formData = new FormData();
         formData.append('file', file);
         try {
@@ -240,11 +259,17 @@ export function ImportInvestmentsModal({
     setExtractedAssets(prev =>
       prev.map(a => {
         if (a.tempId === tempId) {
-          const updated = { ...a, [field]: value };
-          if (field === 'quantity' || field === 'averagePrice') {
-            const q = field === 'quantity' ? Number(value) || 0 : a.quantity;
-            const p = field === 'averagePrice' ? Number(value) || 0 : a.averagePrice;
-            updated.totalInvested = Number((q * p).toFixed(2));
+          let updated = { ...a };
+          if (field === 'quantity') {
+            const q = parseNumberInput(value);
+            updated.quantity = q;
+            updated.totalInvested = Number((q * a.averagePrice).toFixed(2));
+          } else if (field === 'averagePrice') {
+            const p = parseNumberInput(value);
+            updated.averagePrice = p;
+            updated.totalInvested = Number((a.quantity * p).toFixed(2));
+          } else {
+            updated = { ...a, [field]: value };
           }
           return updated;
         }
@@ -387,7 +412,7 @@ export function ImportInvestmentsModal({
                     rows={6}
                     value={rawText}
                     onChange={(e) => setRawText(e.target.value)}
-                    placeholder="Exemplo:&#10;PETR4 Petrobras PN 100 cotas Preço Médio R$ 35,80 Total: R$ 3.580,00&#10;MXRF11 Maxi Renda 250 cotas Preço Médio R$ 10,20 Total: R$ 2.550,00&#10;CDB Banco Inter 110% CDI R$ 5.000,00"
+                    placeholder="Exemplo:&#10;BTC Bitcoin 0,00025974 cotas Preço Médio R$ 397.484,01&#10;PETR4 Petrobras PN 100 cotas Preço Médio R$ 35,80&#10;MXRF11 Maxi Renda 250 cotas Preço Médio R$ 10,20"
                     className="w-full text-xs font-mono p-3 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                 </div>
@@ -474,10 +499,10 @@ export function ImportInvestmentsModal({
                       {/* Ticker */}
                       <div className="sm:col-span-2">
                         <Input
-                          placeholder="Ticker (PETR4)"
+                          placeholder="Ticker (BTC)"
                           value={asset.ticker}
                           onChange={(e) => handleAssetFieldChange(asset.tempId, 'ticker', e.target.value.toUpperCase())}
-                          className="text-xs py-1 font-bold text-blue-600 dark:text-blue-400"
+                          className="text-xs py-1 font-bold text-blue-600 dark:text-blue-400 font-mono"
                         />
                       </div>
 
@@ -494,23 +519,21 @@ export function ImportInvestmentsModal({
                       {/* Quantity */}
                       <div className="sm:col-span-2">
                         <Input
-                          type="number"
-                          step="0.0001"
-                          placeholder="Qtd"
-                          value={asset.quantity}
-                          onChange={(e) => handleAssetFieldChange(asset.tempId, 'quantity', parseFloat(e.target.value) || 0)}
-                          className="text-xs py-1 text-center"
+                          type="text"
+                          placeholder="Qtd (0.00025974)"
+                          value={String(asset.quantity)}
+                          onChange={(e) => handleAssetFieldChange(asset.tempId, 'quantity', e.target.value)}
+                          className="text-xs py-1 text-center font-mono"
                         />
                       </div>
 
                       {/* Average Price */}
                       <div className="sm:col-span-2">
                         <Input
-                          type="number"
-                          step="0.01"
+                          type="text"
                           placeholder="Preço Médio"
-                          value={asset.averagePrice}
-                          onChange={(e) => handleAssetFieldChange(asset.tempId, 'averagePrice', parseFloat(e.target.value) || 0)}
+                          value={String(asset.averagePrice)}
+                          onChange={(e) => handleAssetFieldChange(asset.tempId, 'averagePrice', e.target.value)}
                           className="text-xs py-1 text-right"
                         />
                       </div>
