@@ -90,10 +90,16 @@ export default function InvestmentsPage() {
     notes: ''
   });
 
-  // Search quotes when typing ticker
-  const handleFetchTickerQuote = async (tickerSymbol: string) => {
-    const clean = tickerSymbol.trim().toUpperCase();
+  // Search quotes when typing ticker or asset name
+  const handleFetchTickerQuote = async (rawTickerSymbol?: string) => {
+    let clean = (rawTickerSymbol || invForm.ticker || invForm.name).trim().toUpperCase();
     if (!clean) return;
+
+    // Normalizations
+    if (clean === 'BITCOIN' || clean.includes('BITCOIN')) clean = 'BTC';
+    if (clean === 'ETHEREUM' || clean.includes('ETHEREUM')) clean = 'ETH';
+    if (clean === 'SOLANA' || clean.includes('SOLANA')) clean = 'SOL';
+    if (clean === 'TETHER' || clean.includes('TETHER')) clean = 'USDT';
 
     setIsSearchingQuote(true);
     try {
@@ -107,20 +113,23 @@ export default function InvestmentsPage() {
             const fees = parseNumberInput(prev.fees) || 0;
             const total = (qty * price) + fees;
 
-            // Auto-select type for crypto / fii
+            // Auto-select type for crypto / fii / ações
             let autoTypeId = prev.type_id;
-            if (['BTC', 'ETH', 'SOL', 'USDT'].includes(clean)) {
+            if (data.isCrypto || ['BTC', 'ETH', 'SOL', 'USDT', 'ADA', 'XRP', 'DOGE'].includes(clean)) {
               const cryptoType = types.find(t => t.name.toLowerCase().includes('cripto'));
               if (cryptoType) autoTypeId = cryptoType.id;
             } else if (clean.endsWith('11')) {
               const fiiType = types.find(t => t.name.toLowerCase().includes('fii'));
               if (fiiType) autoTypeId = fiiType.id;
+            } else if (/^[A-Z]{4}\d[A-Z]?$/.test(clean)) {
+              const acoesType = types.find(t => t.name.toLowerCase().includes('ações') || t.name.toLowerCase().includes('acoes'));
+              if (acoesType) autoTypeId = acoesType.id;
             }
 
             return {
               ...prev,
-              ticker: clean,
-              name: prev.name || data.name || clean,
+              ticker: data.symbol || clean,
+              name: prev.name && prev.name !== clean ? prev.name : (data.name || clean),
               type_id: autoTypeId,
               unit_price: String(price),
               quantity: prev.quantity || '1',
@@ -863,9 +872,15 @@ export default function InvestmentsPage() {
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
-                  placeholder="Ex: BTC, PETR4, MXRF11, VALE3, ETH" 
+                  placeholder="Ex: BTC, BITCOIN, PETR4, MXRF11, VALE3, ETH" 
                   value={invForm.ticker}
                   onChange={(e) => setInvForm({...invForm, ticker: e.target.value.toUpperCase()})}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleFetchTickerQuote(invForm.ticker);
+                    }
+                  }}
                   className="font-mono font-bold"
                 />
               </div>
@@ -880,6 +895,31 @@ export default function InvestmentsPage() {
                 <Icon name="search" size="sm" className={isSearchingQuote ? 'animate-spin' : ''} />
                 <span>{isSearchingQuote ? 'Buscando...' : 'Buscar Cotação'}</span>
               </Button>
+            </div>
+
+            {/* Quick Chips */}
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {[
+                { symbol: 'BTC', label: '₿ Bitcoin' },
+                { symbol: 'ETH', label: 'Ethereum' },
+                { symbol: 'PETR4', label: 'Petrobras' },
+                { symbol: 'VALE3', label: 'Vale' },
+                { symbol: 'MXRF11', label: 'Maxi Renda' },
+                { symbol: 'HGLG11', label: 'CSHG Log' },
+                { symbol: 'IVVB11', label: 'S&P 500' }
+              ].map(chip => (
+                <button
+                  key={chip.symbol}
+                  type="button"
+                  onClick={() => {
+                    setInvForm(prev => ({ ...prev, ticker: chip.symbol }));
+                    handleFetchTickerQuote(chip.symbol);
+                  }}
+                  className="px-2 py-0.5 text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 hover:bg-blue-100 dark:hover:bg-blue-900/40 text-gray-700 dark:text-gray-300 hover:text-blue-700 dark:hover:text-blue-300 rounded-md transition-colors"
+                >
+                  {chip.label}
+                </button>
+              ))}
             </div>
           </div>
 
