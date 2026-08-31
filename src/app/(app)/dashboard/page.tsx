@@ -94,8 +94,8 @@ export default function DashboardPage() {
               onChange={(e) => setFilterMonth(e.target.value)}
               options={[
                 ...Array.from({length: 13}, (_, i) => {
-                  const d = new Date();
-                  d.setMonth(d.getMonth() - 6 + i);
+                  const today = new Date();
+                  const d = new Date(today.getFullYear(), today.getMonth() - 6 + i, 1);
                   const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                   const label = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(d);
                   return { value: val, label: label.charAt(0).toUpperCase() + label.slice(1) };

@@ -128,7 +128,9 @@ export function useTransactions() {
         const day = baseDate.getDate();
         
         while (year < endYear || (year === endYear && month <= endMonth - 1)) {
-          const d = new Date(year, month, day, 12, 0, 0);
+          const maxDays = new Date(year, month + 1, 0).getDate();
+          const safeDay = Math.min(day, maxDays);
+          const d = new Date(year, month, safeDay, 12, 0, 0);
           const yyyy = d.getFullYear();
           const mm = String(d.getMonth() + 1).padStart(2, '0');
           const dd = String(d.getDate()).padStart(2, '0');
@@ -304,7 +306,9 @@ export function useTransactions() {
       }
     }
 
-    return new Date(invoiceYear, finalDueMonth, dueDay, 12, 0, 0);
+    const maxDays = new Date(invoiceYear, finalDueMonth + 1, 0).getDate();
+    const safeDueDay = Math.min(dueDay, maxDays);
+    return new Date(invoiceYear, finalDueMonth, safeDueDay, 12, 0, 0);
   };
 
   const updateTransaction = async (id: string, transactionInput: {

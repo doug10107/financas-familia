@@ -285,8 +285,8 @@ export default function TransactionsPage() {
                   {value: 'all', label: 'Todos os Meses'},
                   // Generate last 3 months, current, and next 12 months dynamically based on data or just a fixed list
                   ...Array.from({length: 24}, (_, i) => {
-                    const d = new Date();
-                    d.setMonth(d.getMonth() - 6 + i); // From 6 months ago to 17 months ahead
+                    const today = new Date();
+                    const d = new Date(today.getFullYear(), today.getMonth() - 6 + i, 1);
                     const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                     const label = new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(d);
                     return { value: val, label: label.charAt(0).toUpperCase() + label.slice(1) };
@@ -603,8 +603,8 @@ export default function TransactionsPage() {
                       value={formData.repeat_until}
                       onChange={(e) => setFormData({...formData, repeat_until: e.target.value})}
                       options={Array.from({length: 24}, (_, i) => {
-                        const d = new Date();
-                        d.setMonth(d.getMonth() + i); // current and future months
+                        const today = new Date();
+                        const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
                         const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                         const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(d);
                         return { value: val, label: label.charAt(0).toUpperCase() + label.slice(1) };
@@ -623,8 +623,12 @@ export default function TransactionsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          const d = new Date(formData.date + 'T12:00:00');
-                          d.setMonth(d.getMonth() + 1);
+                          const base = new Date(formData.date + 'T12:00:00');
+                          const targetYear = base.getMonth() === 11 ? base.getFullYear() + 1 : base.getFullYear();
+                          const targetMonth = base.getMonth() === 11 ? 0 : base.getMonth() + 1;
+                          const maxDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+                          const safeDay = Math.min(base.getDate(), maxDays);
+                          const d = new Date(targetYear, targetMonth, safeDay, 12, 0, 0);
                           const yyyy = d.getFullYear();
                           const mm = String(d.getMonth() + 1).padStart(2, '0');
                           const dd = String(d.getDate()).padStart(2, '0');
@@ -633,9 +637,12 @@ export default function TransactionsPage() {
                         className="text-xs text-primary font-bold hover:underline inline-flex items-center gap-1"
                       >
                         Ajustar data para: {(() => {
-                          const d = new Date(formData.date + 'T12:00:00');
-                          d.setMonth(d.getMonth() + 1);
-                          return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+                          const base = new Date(formData.date + 'T12:00:00');
+                          const targetYear = base.getMonth() === 11 ? base.getFullYear() + 1 : base.getFullYear();
+                          const targetMonth = base.getMonth() === 11 ? 0 : base.getMonth() + 1;
+                          const maxDays = new Date(targetYear, targetMonth + 1, 0).getDate();
+                          const safeDay = Math.min(base.getDate(), maxDays);
+                          return `${String(safeDay).padStart(2, '0')}/${String(targetMonth + 1).padStart(2, '0')}/${targetYear}`;
                         })()}
                       </button>
                     </div>
