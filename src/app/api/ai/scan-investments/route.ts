@@ -19,7 +19,7 @@ Sua tarefa é analisar o arquivo (foto, PDF ou print de carteira) ou texto colad
 Para cada ativo encontrado, identifique:
 1. 'ticker': Código do ativo se houver (ex: 'PETR4', 'VALE3', 'MXRF11', 'HGLG11', 'IVVB11', 'BTC', 'CDB Inter', 'Tesouro Selic 2029').
 2. 'name': Nome legível da empresa, fundo ou título (ex: 'Petrobras PN', 'Maxi Renda FII', 'CDB 110% CDI', 'Vale ON').
-3. 'type': Categoria do investimento ('Ações', 'FIIs', 'Renda Fixa', 'Tesouro Direto', 'ETFs', 'BDRs', 'Criptomoedas', 'Poupança' ou 'Outros').
+3. 'type': Categoria do investimento ('Ações', 'FIIs', 'Renda Fixa', 'Tesouro Direto', 'ETFs', 'Previdência Privada', 'BDRs', 'Criptomoedas', 'Poupança' ou 'Outros').
 4. 'quantity': Quantidade de cotas/ações (número decimal ou inteiro, ex: 100, 3, 15.5). Se for Renda Fixa sem quantidade, use 1.
 5. 'averagePrice': Preço Médio de compra por cota/ação em R$ (ex: 35.80, 10.15).
 6. 'totalInvested': Valor total investido / custo total em R$ (ex: 3580.00). Se não constar, calcule quantity * averagePrice.

@@ -18,6 +18,8 @@ export type Investment = {
   quantity?: number | null;
   average_price?: number | null;
   current_price?: number | null;
+  plan_type?: string | null; // e.g. 'PGBL' | 'VGBL'
+  tax_regime?: string | null; // e.g. 'Regressivo' | 'Progressivo'
   notes: string | null;
   due_date?: string | null;
   type_id: string | null;
@@ -150,6 +152,8 @@ export function useInvestments() {
     initial_amount?: number;
     date?: string;
     due_date?: string;
+    plan_type?: string | null;
+    tax_regime?: string | null;
     notes?: string;
   }) => {
     setError(null);
@@ -182,6 +186,8 @@ export function useInvestments() {
           quantity: input.quantity || 0,
           average_price: avgPrice,
           current_price: input.unit_price || avgPrice,
+          plan_type: input.plan_type || null,
+          tax_regime: input.tax_regime || null,
           institution: input.institution || null,
           due_date: input.due_date || null,
           notes: input.notes || null
@@ -272,6 +278,8 @@ export function useInvestments() {
       type_id?: string;
       institution?: string;
       due_date?: string | null;
+      plan_type?: string | null;
+      tax_regime?: string | null;
       notes?: string;
     }
   ) => {
@@ -283,6 +291,8 @@ export function useInvestments() {
       if (input.type_id !== undefined) payload.type_id = input.type_id;
       if (input.institution !== undefined) payload.institution = input.institution || null;
       if (input.due_date !== undefined) payload.due_date = input.due_date || null;
+      if (input.plan_type !== undefined) payload.plan_type = input.plan_type || null;
+      if (input.tax_regime !== undefined) payload.tax_regime = input.tax_regime || null;
       if (input.notes !== undefined) payload.notes = input.notes || null;
 
       const { error } = await (supabase
@@ -367,6 +377,10 @@ export function useInvestments() {
         }
         if (t.includes('cripto') || t.includes('crypto') || t.includes('bitcoin') || t.includes('btc') || t.includes('eth')) {
           const match = types.find(it => it.name.toLowerCase().includes('cripto'));
+          if (match) return match.id;
+        }
+        if (t.includes('previd') || t.includes('pgbl') || t.includes('vgbl') || t.includes('prev') || t.includes('pension')) {
+          const match = types.find(it => it.name.toLowerCase().includes('previd'));
           if (match) return match.id;
         }
         if (t.includes('etf')) {

@@ -152,7 +152,10 @@ export function ImportInvestmentsModal({
               if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
               else if (ticker.endsWith('11')) type = 'FIIs';
               else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
+              else if (name.toLowerCase().includes('prev') || name.toLowerCase().includes('pgbl') || name.toLowerCase().includes('vgbl')) type = 'Previdência Privada';
               else type = 'Renda Fixa';
+            } else if (type.toLowerCase().includes('prev') || type.toLowerCase().includes('pgbl') || type.toLowerCase().includes('vgbl')) {
+              type = 'Previdência Privada';
             }
 
             if (ticker || name) {

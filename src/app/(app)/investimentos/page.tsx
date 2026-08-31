@@ -69,6 +69,8 @@ export default function InvestmentsPage() {
     ticker: '',
     type_id: '',
     institution: '',
+    plan_type: 'PGBL' as 'PGBL' | 'VGBL' | '',
+    tax_regime: 'Regressivo' as 'Regressivo' | 'Progressivo' | '',
     quantity: '',
     unit_price: '',
     fees: '',
@@ -243,6 +245,8 @@ export default function InvestmentsPage() {
         ticker: invToEdit.ticker || '',
         type_id: invToEdit.type_id || (types.length > 0 ? types[0].id : ''),
         institution: invToEdit.institution || '',
+        plan_type: (invToEdit.plan_type as any) || 'PGBL',
+        tax_regime: (invToEdit.tax_regime as any) || 'Regressivo',
         quantity: invToEdit.quantity ? String(invToEdit.quantity) : '',
         unit_price: invToEdit.average_price ? String(invToEdit.average_price) : '',
         fees: '',
@@ -258,6 +262,8 @@ export default function InvestmentsPage() {
         ticker: '',
         type_id: types.length > 0 ? types[0].id : '',
         institution: '',
+        plan_type: 'PGBL',
+        tax_regime: 'Regressivo',
         quantity: '1',
         unit_price: '',
         fees: '',
@@ -367,6 +373,9 @@ export default function InvestmentsPage() {
     const fees = parseNumberInput(invForm.fees);
     const rawTotal = parseNumberInput(invForm.total_amount) || (qty * unitPrice + fees);
 
+    const selectedType = types.find(t => t.id === invForm.type_id);
+    const isPrevidencia = selectedType?.name.toLowerCase().includes('previd') || false;
+
     let success = false;
     if (editingInvId) {
       success = await updateInvestment(editingInvId, {
@@ -375,6 +384,8 @@ export default function InvestmentsPage() {
         type_id: invForm.type_id,
         institution: invForm.institution,
         due_date: invForm.due_date || null,
+        plan_type: isPrevidencia ? invForm.plan_type : null,
+        tax_regime: isPrevidencia ? invForm.tax_regime : null,
         notes: invForm.notes
       });
     } else {
@@ -383,6 +394,8 @@ export default function InvestmentsPage() {
         ticker: invForm.ticker,
         type_id: invForm.type_id,
         institution: invForm.institution,
+        plan_type: isPrevidencia ? invForm.plan_type : undefined,
+        tax_regime: isPrevidencia ? invForm.tax_regime : undefined,
         quantity: qty > 0 ? qty : undefined,
         unit_price: unitPrice > 0 ? unitPrice : undefined,
         fees: fees > 0 ? fees : undefined,
@@ -757,9 +770,24 @@ export default function InvestmentsPage() {
                             </span>
                           ) : null}
                           <div>
-                            <p className="font-bold text-gray-900 dark:text-white text-sm">{inv.name}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-bold text-gray-900 dark:text-white text-sm">{inv.name}</p>
+                              {inv.plan_type && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                  {inv.plan_type}
+                                </span>
+                              )}
+                              {inv.tax_regime && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                                  {inv.tax_regime}
+                                </span>
+                              )}
+                            </div>
                             {inv.due_date && (
-                              <span className="text-[10px] text-gray-400">Venc: {formatDate(inv.due_date)}</span>
+                              <span className="text-[10px] text-gray-400">
+                                {inv.investment_type?.name?.toLowerCase().includes('previd') ? 'Aposentadoria / Resgate: ' : 'Venc: '}
+                                {formatDate(inv.due_date)}
+                              </span>
                             )}
                           </div>
                         </div>
@@ -937,16 +965,124 @@ export default function InvestmentsPage() {
             <Select 
               label="Tipo de Investimento" 
               value={invForm.type_id}
-              onChange={(e) => setInvForm({...invForm, type_id: e.target.value})}
+              onChange={(e) => {
+                const newTypeId = e.target.value;
+                const isPrev = types.find(t => t.id === newTypeId)?.name.toLowerCase().includes('previd');
+                setInvForm({
+                  ...invForm, 
+                  type_id: newTypeId,
+                  plan_type: isPrev ? (invForm.plan_type || 'PGBL') : invForm.plan_type,
+                  tax_regime: isPrev ? (invForm.tax_regime || 'Regressivo') : invForm.tax_regime
+                });
+                if (isPrev) {
+                  setCalcMode('total');
+                }
+              }}
               options={types.map(t => ({ value: t.id, label: t.name }))}
             />
             <Input 
-              label="Instituição / Corretora" 
-              placeholder="Ex: Binance, Mercado Bitcoin, XP, NuInvest" 
+              label="Instituição / Seguradora / Corretora" 
+              placeholder="Ex: XP Seguros, Brasilprev, BTG, Itaú, Binance" 
               value={invForm.institution}
               onChange={(e) => setInvForm({...invForm, institution: e.target.value})}
             />
           </div>
+
+          {/* Previdência Privada Specific Fields */}
+          {types.find(t => t.id === invForm.type_id)?.name.toLowerCase().includes('previd') && (
+            <div className="p-3.5 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl space-y-3 border border-emerald-200 dark:border-emerald-800/40">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                <Icon name="shield" size="sm" className="text-emerald-600 dark:text-emerald-400" />
+                <span>Configurações do Plano de Previdência</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Modalidade do Plano
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInvForm({ ...invForm, plan_type: 'PGBL' })}
+                      className={`p-2 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center ${
+                        invForm.plan_type === 'PGBL'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-400'
+                      }`}
+                    >
+                      <span>PGBL</span>
+                      <span className="text-[10px] font-normal opacity-80">Abate até 12% IRPF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvForm({ ...invForm, plan_type: 'VGBL' })}
+                      className={`p-2 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center ${
+                        invForm.plan_type === 'VGBL'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-400'
+                      }`}
+                    >
+                      <span>VGBL</span>
+                      <span className="text-[10px] font-normal opacity-80">IR só no rendimento</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
+                    Regime de Tributação
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInvForm({ ...invForm, tax_regime: 'Regressivo' })}
+                      className={`p-2 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center ${
+                        invForm.tax_regime === 'Regressivo'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-400'
+                      }`}
+                    >
+                      <span>Regressivo</span>
+                      <span className="text-[10px] font-normal opacity-80">10% a 35% por tempo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvForm({ ...invForm, tax_regime: 'Progressivo' })}
+                      className={`p-2 rounded-lg text-xs font-bold border transition-all flex flex-col items-center justify-center ${
+                        invForm.tax_regime === 'Progressivo'
+                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm'
+                          : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-emerald-400'
+                      }`}
+                    >
+                      <span>Progressivo</span>
+                      <span className="text-[10px] font-normal opacity-80">Tabela Geral do IR</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seguradoras recomendadas */}
+              <div className="space-y-1 pt-1">
+                <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">Seguradoras / Bancos sugeridos:</span>
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    'XP Seguros', 'Brasilprev', 'BTG Pactual Prev', 'Itaú Prev', 
+                    'Bradesco Vida e Prev', 'Porto Seguro', 'Caixa Vida e Prev', 'SulAmérica'
+                  ].map(inst => (
+                    <button
+                      key={inst}
+                      type="button"
+                      onClick={() => setInvForm(prev => ({ ...prev, institution: inst }))}
+                      className="px-2 py-0.5 text-[10px] font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-emerald-500 rounded text-gray-700 dark:text-gray-300 transition-colors"
+                    >
+                      {inst}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Automatic Calculator: Qtd * Preço Unitário */}
           {!editingInvId && (
@@ -1033,7 +1169,11 @@ export default function InvestmentsPage() {
               onChange={(e) => setInvForm({...invForm, date: e.target.value})}
             />
             <Input 
-              label="Data de Vencimento / Carência (Opcional)" 
+              label={
+                types.find(t => t.id === invForm.type_id)?.name.toLowerCase().includes('previd')
+                  ? "Previsão de Aposentadoria / Resgate (Opcional)"
+                  : "Data de Vencimento / Carência (Opcional)"
+              } 
               type="date" 
               value={invForm.due_date}
               onChange={(e) => setInvForm({...invForm, due_date: e.target.value})}
