@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTransactions } from '@/hooks/useTransactions';
+import { useCreditCards } from '@/hooks/useCreditCards';
 import { useBiometricAuth } from '@/hooks/useBiometricAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { FamilyModal } from '../family/FamilyModal';
@@ -23,6 +24,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const { transactions } = useTransactions();
+  const { creditCards } = useCreditCards();
   const { family } = useFamily();
   const { isEnabled: isBioEnabled, hasBiometricCredential, enableBiometrics, disableBiometrics, registerBiometricCredential, lockApp } = useBiometricAuth();
 
@@ -47,11 +49,46 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const formattedDate = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(currentDate);
   const capitalizedDate = formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
 
-  // Check for bills due today
+  interface NotificationBill {
+    id: string;
+    description: string;
+    amount: number;
+    isInvoice?: boolean;
+  }
+
+  // Check for bills due today (excluding individual credit card purchases, which belong to the card invoice)
   const todayString = currentDate.toISOString().split('T')[0];
-  const dueTodayBills = transactions.filter(
-    t => t.type === 'despesa' && t.status === 'pendente' && t.date === todayString
-  );
+  const directBillsDueToday: NotificationBill[] = transactions
+    .filter(t => !t.credit_card_id && t.type === 'despesa' && t.status === 'pendente' && t.date === todayString)
+    .map(t => ({
+      id: t.id,
+      description: t.description,
+      amount: Number(t.amount),
+      isInvoice: false
+    }));
+
+  // Credit card invoices due today (when today is the card's due day and has pending items)
+  const currentDay = currentDate.getDate();
+  const currentMonthPrefix = todayString.substring(0, 7);
+  const cardInvoicesDueToday: NotificationBill[] = creditCards
+    .filter(card => Number(card.due_day) === currentDay)
+    .reduce<NotificationBill[]>((acc, card) => {
+      const pendingTxs = transactions.filter(
+        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonthPrefix)
+      );
+      const totalDue = pendingTxs.reduce((sum, t) => sum + Number(t.amount), 0);
+      if (totalDue > 0) {
+        acc.push({
+          id: `fatura-card-${card.id}`,
+          description: `Fatura ${card.name}`,
+          amount: totalDue,
+          isInvoice: true
+        });
+      }
+      return acc;
+    }, []);
+
+  const dueTodayBills: NotificationBill[] = [...directBillsDueToday, ...cardInvoicesDueToday];
   const hasNotifications = dueTodayBills.length > 0;
 
   const handleSaveSecurity = async (e: React.FormEvent) => {
@@ -221,12 +258,20 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
                         {dueTodayBills.map(bill => (
                           <li key={bill.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                             <div className="flex gap-3">
-                              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
-                                <Icon name="warning" size="sm" />
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                                bill.isInvoice 
+                                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
+                                  : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                              }`}>
+                                <Icon name={bill.isInvoice ? "credit_card" : "warning"} size="sm" />
                               </div>
                               <div>
                                 <p className="text-sm text-gray-800 dark:text-gray-200">
-                                  Você tem a conta <strong className="font-semibold">{bill.description}</strong> vencendo hoje!
+                                  {bill.isInvoice ? (
+                                    <>A <strong className="font-semibold">{bill.description}</strong> vence hoje!</>
+                                  ) : (
+                                    <>Você tem a conta <strong className="font-semibold">{bill.description}</strong> vencendo hoje!</>
+                                  )}
                                 </p>
                                 <p className="text-xs text-red-500 font-medium mt-1">
                                   Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(bill.amount))}

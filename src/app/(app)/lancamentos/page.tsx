@@ -376,10 +376,18 @@ export default function TransactionsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      {transaction.status === 'pendente' ? (
-                         <Badge color="yellow">Pendente</Badge>
+                      {transaction.credit_card_id ? (
+                        transaction.status === 'pendente' ? (
+                          <Badge color="purple">Na Fatura</Badge>
+                        ) : (
+                          <Badge color="green">Fatura Paga</Badge>
+                        )
                       ) : (
-                         <Badge color="green">Pago</Badge>
+                        transaction.status === 'pendente' ? (
+                          <Badge color="yellow">Pendente</Badge>
+                        ) : (
+                          <Badge color="green">Pago</Badge>
+                        )
                       )}
                     </td>
                     <td className={`px-4 py-4 text-right font-semibold whitespace-nowrap ${transaction.type === 'receita' ? 'text-wealth-green dark:text-green-400' : 'text-gray-900 dark:text-white'}`}>
