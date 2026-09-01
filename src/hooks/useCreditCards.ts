@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { getInvoiceMonthKey } from '@/lib/creditCardUtils';
 
 export type CreditCard = {
   id: string;
@@ -113,23 +114,41 @@ export function useCreditCards() {
   const payInvoice = async (cardId: string, month: string) => {
     setError(null);
     try {
-      const [yearStr, monthStr] = month.split('-');
-      const year = parseInt(yearStr, 10);
-      const monthNum = parseInt(monthStr, 10);
+      // Find card configuration
+      const { data: cardData } = await supabase
+        .from('credit_cards')
+        .select('*')
+        .eq('id', cardId)
+        .single() as any;
 
-      const startDate = `${yearStr}-${monthStr.padStart(2, '0')}-01`;
-      const lastDay = new Date(year, monthNum, 0).getDate();
-      const endDate = `${yearStr}-${monthStr.padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-      const { error } = await (supabase
-        .from('transactions') as any)
-        .update({ status: 'pago' })
+      // Fetch pending transactions for this card
+      const { data: pendingTxs, error: fetchErr } = await supabase
+        .from('transactions')
+        .select('id, date')
         .eq('credit_card_id', cardId)
-        .eq('status', 'pendente')
-        .gte('date', startDate)
-        .lte('date', endDate);
+        .eq('status', 'pendente');
 
-      if (error) throw error;
+      if (fetchErr) throw fetchErr;
+
+      // Filter transactions that belong to this invoice month (or older)
+      const targetIds = (pendingTxs || []).filter((t: any) => {
+        if (!cardData?.closing_day || !cardData?.due_day) {
+          return t.date.substring(0, 7) <= month;
+        }
+        const invMonth = getInvoiceMonthKey(t.date, cardData.closing_day, cardData.due_day);
+        return invMonth <= month;
+      }).map((t: any) => t.id);
+
+      if (targetIds.length > 0) {
+        const { error: updateErr } = await (supabase
+          .from('transactions') as any)
+          .update({ status: 'pago' })
+          .in('id', targetIds);
+
+        if (updateErr) throw updateErr;
+      }
+
+      await fetchCreditCards();
       return true;
     } catch (err: any) {
       console.error('Error paying invoice:', err);

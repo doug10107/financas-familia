@@ -11,6 +11,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useCreditCards, CreditCard } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
 import { CreditCardEvolutionChart } from '@/components/cartoes/CreditCardEvolutionChart';
+import { getInvoiceMonthKey } from '@/lib/creditCardUtils';
 
 export default function CreditCardsPage() {
   const { creditCards, loading, error, addCreditCard, updateCreditCard, deleteCreditCard, payInvoice } = useCreditCards();
@@ -146,11 +147,30 @@ export default function CreditCardsPage() {
       ) : creditCards.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {creditCards.map(card => {
-            const currentMonth = new Date().toISOString().substring(0, 7);
-            const pendingTransactions = transactions.filter(
-              t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonth)
-            );
-            const totalDue = pendingTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+            const today = new Date();
+            const currentYear = today.getFullYear();
+            const currentMonthNum = today.getMonth() + 1;
+            const currentMonth = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}`;
+            
+            // Chave do próximo mês para faturas futuras/em aberto
+            const nextDate = new Date(currentYear, currentMonthNum, 1);
+            const nextMonth = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
+
+            // Fatura Atual: compras pendentes que vencem no mês corrente ou anteriores
+            const currentInvoiceTxs = transactions.filter(t => {
+              if (t.credit_card_id !== card.id || t.status !== 'pendente') return false;
+              const invMonth = getInvoiceMonthKey(t.date, card.closing_day, card.due_day);
+              return invMonth <= currentMonth;
+            });
+            const totalDue = currentInvoiceTxs.reduce((acc, t) => acc + Number(t.amount), 0);
+
+            // Próxima Fatura: compras que caíram após o fechamento e vencem no mês seguinte
+            const nextInvoiceTxs = transactions.filter(t => {
+              if (t.credit_card_id !== card.id || t.status !== 'pendente') return false;
+              const invMonth = getInvoiceMonthKey(t.date, card.closing_day, card.due_day);
+              return invMonth === nextMonth;
+            });
+            const nextTotalDue = nextInvoiceTxs.reduce((acc, t) => acc + Number(t.amount), 0);
 
             return (
               <div 
@@ -179,20 +199,20 @@ export default function CreditCardsPage() {
                 
                 <div className="grid grid-cols-2 gap-4 text-white/90 mb-6">
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-white/70">Limite</p>
-                    <p className="font-semibold">{formatCurrency(card.limit_amount)}</p>
+                    <p className="text-xs uppercase tracking-wider text-white/70">Fatura Atual</p>
+                    <p className="font-semibold text-lg">{formatCurrency(totalDue)}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-white/70">Fatura (Atual)</p>
-                    <p className="font-semibold">{formatCurrency(totalDue)}</p>
+                    <p className="text-xs uppercase tracking-wider text-white/70">Próxima Fatura</p>
+                    <p className="font-semibold text-lg">{formatCurrency(nextTotalDue)}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wider text-white/70">Fechamento</p>
-                    <p className="font-semibold">Dia {card.closing_day}</p>
+                    <p className="font-medium text-sm">Dia {card.closing_day}</p>
                   </div>
                   <div>
                     <p className="text-xs uppercase tracking-wider text-white/70">Vencimento</p>
-                    <p className="font-semibold">Dia {card.due_day}</p>
+                    <p className="font-medium text-sm">Dia {card.due_day}</p>
                   </div>
                 </div>
 
@@ -203,7 +223,7 @@ export default function CreditCardsPage() {
                     className={`w-full py-2.5 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 ${totalDue > 0 ? 'bg-white text-gray-900 hover:bg-gray-50' : 'bg-white/20 text-white/50 cursor-not-allowed'}`}
                   >
                     <Icon name="check_circle" size="sm" />
-                    Pagar Fatura
+                    Pagar Fatura Atual
                   </button>
                 </div>
               </div>

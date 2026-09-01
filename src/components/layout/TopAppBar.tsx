@@ -12,6 +12,7 @@ import { useCreditCards } from '@/hooks/useCreditCards';
 import { useBiometricAuth } from '@/hooks/useBiometricAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { FamilyModal } from '../family/FamilyModal';
+import { getInvoiceMonthKey } from '@/lib/creditCardUtils';
 
 interface TopAppBarProps {
   userName?: string;
@@ -74,7 +75,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
     .filter(card => Number(card.due_day) === currentDay)
     .reduce<NotificationBill[]>((acc, card) => {
       const pendingTxs = transactions.filter(
-        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonthPrefix)
+        t => t.credit_card_id === card.id && t.status === 'pendente' && getInvoiceMonthKey(t.date, card.closing_day, card.due_day) === currentMonthPrefix
       );
       const totalDue = pendingTxs.reduce((sum, t) => sum + Number(t.amount), 0);
       if (totalDue > 0) {

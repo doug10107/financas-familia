@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
+import { calculateInvoiceDueDate } from '@/lib/creditCardUtils';
 
 export type Category = {
   id: string;
@@ -269,46 +270,6 @@ export function useTransactions() {
       setError(err.message || 'Erro ao salvar lançamento');
       return false;
     }
-  };
-
-  // Helper to calculate invoice due date based on purchase date, closing day and due day
-  const calculateInvoiceDueDate = (purchaseDate: Date, closingDay: number, dueDay: number, monthOffset: number) => {
-    const pYear = purchaseDate.getFullYear();
-    const pMonth = purchaseDate.getMonth();
-    const pDay = purchaseDate.getDate();
-
-    let invoiceMonth = pMonth;
-    let invoiceYear = pYear;
-
-    // If purchase day is on or after the closing day, it goes to the next month's invoice
-    if (pDay >= closingDay) {
-      invoiceMonth++;
-    }
-
-    // Add the installment offset
-    invoiceMonth += monthOffset;
-
-    // Adjust year if month goes beyond December
-    while (invoiceMonth > 11) {
-      invoiceMonth -= 12;
-      invoiceYear++;
-    }
-
-    // Usually if dueDay is less than closingDay (e.g. closing 25, due 05), the due date is actually in the following month of the closing date.
-    // E.g. buys on Aug 20. Closes Aug 25. Due Sep 05.
-    // E.g. buys on Aug 26. Closes Sep 25. Due Oct 05.
-    let finalDueMonth = invoiceMonth;
-    if (dueDay < closingDay) {
-      finalDueMonth++;
-      if (finalDueMonth > 11) {
-        finalDueMonth = 0;
-        invoiceYear++;
-      }
-    }
-
-    const maxDays = new Date(invoiceYear, finalDueMonth + 1, 0).getDate();
-    const safeDueDay = Math.min(dueDay, maxDays);
-    return new Date(invoiceYear, finalDueMonth, safeDueDay, 12, 0, 0);
   };
 
   const updateTransaction = async (id: string, transactionInput: {
