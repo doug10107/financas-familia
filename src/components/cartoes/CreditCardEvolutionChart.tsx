@@ -19,7 +19,6 @@ import { Select } from '@/components/ui/Select';
 import { Icon } from '@/components/ui/Icon';
 import { CreditCard } from '@/hooks/useCreditCards';
 import { Transaction } from '@/hooks/useTransactions';
-import { getInvoiceMonthKey } from '@/lib/creditCardUtils';
 
 ChartJS.register(
   CategoryScale,
@@ -56,18 +55,14 @@ export function CreditCardEvolutionChart({ creditCards, transactions }: CreditCa
       if (!t.credit_card_id) return;
       if (selectedCardId !== 'all' && t.credit_card_id !== selectedCardId) return;
 
-      const card = creditCards.find(c => c.id === t.credit_card_id);
-      const key = card 
-        ? getInvoiceMonthKey(t.date, card.closing_day, card.due_day)
-        : t.date.substring(0, 7);
-
+      const key = t.date.substring(0, 7);
       if (key > maxKey) {
         maxKey = key;
       }
     });
 
     return maxKey;
-  }, [transactions, selectedCardId, creditCards]);
+  }, [transactions, selectedCardId]);
 
   // Generate monthly data based on viewMode
   const chartInfo = useMemo(() => {
@@ -128,7 +123,7 @@ export function CreditCardEvolutionChart({ creditCards, transactions }: CreditCa
       });
     }
 
-    // Filter and sum transactions per month (using accurate invoice due month)
+    // Filter and sum transactions per month
     const cardMap = new Map(monthList.map(m => [m.key, 0]));
 
     transactions.forEach(t => {
@@ -136,11 +131,7 @@ export function CreditCardEvolutionChart({ creditCards, transactions }: CreditCa
       if (!t.credit_card_id) return;
       if (selectedCardId !== 'all' && t.credit_card_id !== selectedCardId) return;
 
-      const card = creditCards.find(c => c.id === t.credit_card_id);
-      const txKey = card 
-        ? getInvoiceMonthKey(t.date, card.closing_day, card.due_day)
-        : t.date.substring(0, 7);
-
+      const txKey = t.date.substring(0, 7); // YYYY-MM
       if (cardMap.has(txKey)) {
         const currentVal = cardMap.get(txKey) || 0;
         cardMap.set(txKey, currentVal + Number(t.amount));

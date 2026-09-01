@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Transaction } from './useTransactions';
-import { calculateInvoiceDueDate, getInvoiceMonthKey } from '@/lib/creditCardUtils';
 
 export type ProjectionMonth = {
   month: number;
@@ -67,7 +66,6 @@ export function useDashboard(monthFilter?: string) {
 
       const currentMonth = now.getMonth();
       const currentYear = now.getFullYear();
-      const filterMonthKey = `${filterYear}-${String(filterMonth + 1).padStart(2, '0')}`;
 
       let totalBalance = 0;
       let monthlyIncome = 0;
@@ -76,6 +74,9 @@ export function useDashboard(monthFilter?: string) {
 
       // Calcular Saldo Geral, Receitas/Despesas do mês selecionado e Contas Próximas
       transactions.forEach(t => {
+        const tDate = new Date(t.date + 'T12:00:00');
+        const tMonth = tDate.getMonth();
+        const tYear = tDate.getFullYear();
         const amount = Number(t.amount);
 
         // Saldo Atual (Considera apenas pagos/recebidos de todo o histórico)
@@ -87,16 +88,8 @@ export function useDashboard(monthFilter?: string) {
           }
         }
 
-        // Determinar o mês/ano de desembolso da transação
-        let txMonthKey = '';
-        if (t.credit_card && t.credit_card.closing_day && t.credit_card.due_day) {
-          txMonthKey = getInvoiceMonthKey(t.date, t.credit_card.closing_day, t.credit_card.due_day);
-        } else {
-          txMonthKey = t.date.substring(0, 7);
-        }
-
         // Mês Selecionado (Receitas e Despesas do mês)
-        if (txMonthKey === filterMonthKey) {
+        if (tMonth === filterMonth && tYear === filterYear) {
           if (t.type === 'receita') {
             monthlyIncome += amount;
           } else {
@@ -152,19 +145,8 @@ export function useDashboard(monthFilter?: string) {
         let mExpense = 0;
 
         transactions.forEach(t => {
-          let txYear = 0;
-          let txMonth = 0;
-          if (t.credit_card && t.credit_card.closing_day && t.credit_card.due_day) {
-            const dueDate = calculateInvoiceDueDate(t.date, t.credit_card.closing_day, t.credit_card.due_day);
-            txYear = dueDate.getFullYear();
-            txMonth = dueDate.getMonth();
-          } else {
-            const tDate = new Date(t.date + 'T12:00:00');
-            txYear = tDate.getFullYear();
-            txMonth = tDate.getMonth();
-          }
-
-          if (txYear === y && txMonth === m) {
+          const tDate = new Date(t.date + 'T12:00:00');
+          if (tDate.getFullYear() === y && tDate.getMonth() === m) {
             if (t.type === 'receita') {
               mIncome += Number(t.amount);
             } else if (t.type === 'despesa') {
@@ -221,16 +203,13 @@ export function useDashboard(monthFilter?: string) {
       const categoryExpenses: Record<string, { total: number; color: string; icon: string; transactions: any[] }> = {};
 
       transactions.forEach(t => {
+        const tDate = new Date(t.date + 'T12:00:00');
+        const tMonth = tDate.getMonth();
+        const tYear = tDate.getFullYear();
         const amount = Number(t.amount);
-        let txMonthKey = '';
-        if (t.credit_card && t.credit_card.closing_day && t.credit_card.due_day) {
-          txMonthKey = getInvoiceMonthKey(t.date, t.credit_card.closing_day, t.credit_card.due_day);
-        } else {
-          txMonthKey = t.date.substring(0, 7);
-        }
 
         // Category Expenses (For the selected month)
-        if (t.type === 'despesa' && txMonthKey === filterMonthKey) {
+        if (t.type === 'despesa' && tMonth === filterMonth && tYear === filterYear) {
           const catName = t.category?.name || 'Sem Categoria';
           const catColor = t.category?.color || '#6c7a71';
           const catIcon = t.category?.icon || 'category';
@@ -247,18 +226,17 @@ export function useDashboard(monthFilter?: string) {
       const consolidatedCards: Record<string, any> = {};
 
       upcomingBillsRaw.forEach(t => {
-        if (t.credit_card && t.credit_card.closing_day && t.credit_card.due_day) {
-          const dueDate = calculateInvoiceDueDate(t.date, t.credit_card.closing_day, t.credit_card.due_day);
-          const monthKey = `${dueDate.getFullYear()}-${dueDate.getMonth()}`;
+        if (t.credit_card) {
+          const tDate = new Date(t.date + 'T12:00:00');
+          const monthKey = `${tDate.getFullYear()}-${tDate.getMonth()}`;
           const key = `${t.credit_card_id}-${monthKey}`;
-          const invoiceDateStr = dueDate.toISOString().split('T')[0];
           
           if (!consolidatedCards[key]) {
             consolidatedCards[key] = {
               id: `fatura-${key}`,
               description: `Fatura - ${t.credit_card.name}`,
               amount: 0,
-              date: invoiceDateStr,
+              date: t.date,
               type: 'despesa',
               status: 'pendente',
               isInvoice: true,
@@ -267,7 +245,7 @@ export function useDashboard(monthFilter?: string) {
             upcomingBills.push(consolidatedCards[key]);
           }
           consolidatedCards[key].amount += Number(t.amount);
-        } else if (!t.credit_card) {
+        } else {
           upcomingBills.push(t);
         }
       });
