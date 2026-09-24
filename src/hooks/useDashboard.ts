@@ -27,6 +27,7 @@ export type DashboardData = {
   projectionMonths: ProjectionMonth[];
   expensesByCategory: any;
   topExpenses: { name: string; amount: number; color: string; percentage: number }[];
+  monthlyTransactions: any[];
 };
 
 export function useDashboard(monthFilter?: string) {
@@ -123,7 +124,8 @@ export function useDashboard(monthFilter?: string) {
       );
 
       const allProjectionMonths: ProjectionMonth[] = [];
-      let runningAccumulatedBalance = totalBalance;
+      // Saldo acumulado começa do zero: representa o acúmulo relativo desde o primeiro mês exibido
+      let runningAccumulatedBalance = 0;
 
       for (let i = 0; i < totalMonthsToProject; i++) {
         const d = new Date(startMonthDate.getFullYear(), startMonthDate.getMonth() + i, 1);
@@ -156,11 +158,9 @@ export function useDashboard(monthFilter?: string) {
         });
 
         const mBalance = mIncome - mExpense;
-        
-        // Se for mês futuro, projeta o saldo acumulado
-        if (isFuture) {
-          runningAccumulatedBalance += mBalance;
-        }
+
+        // Acumula o resultado de TODOS os meses (passados, atual e futuros)
+        runningAccumulatedBalance += mBalance;
 
         allProjectionMonths.push({
           month: m,
@@ -175,7 +175,7 @@ export function useDashboard(monthFilter?: string) {
           income: mIncome,
           expense: mExpense,
           balance: mBalance,
-          accumulatedBalance: isFuture ? runningAccumulatedBalance : totalBalance
+          accumulatedBalance: runningAccumulatedBalance
         });
       }
 
@@ -328,6 +328,11 @@ export function useDashboard(monthFilter?: string) {
         percentage: Math.round((e.amount / totalMonthlyExp) * 100)
       }));
 
+      const monthlyTransactions = transactions.filter(t => {
+        const tDate = new Date(t.date + 'T12:00:00');
+        return tDate.getMonth() === filterMonth && tDate.getFullYear() === filterYear;
+      });
+
       setData({
         totalBalance,
         monthlyIncome,
@@ -336,7 +341,8 @@ export function useDashboard(monthFilter?: string) {
         chartData,
         projectionMonths: allProjectionMonths,
         expensesByCategory,
-        topExpenses
+        topExpenses,
+        monthlyTransactions
       });
 
     } catch (err: any) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { callGeminiWithFallback, GEMINI_MODELS } from '@/lib/gemini';
 
 export async function POST(req: NextRequest) {
   try {
@@ -13,33 +14,38 @@ export async function POST(req: NextRequest) {
     const contentType = req.headers.get('content-type') || '';
     let promptParts: any[] = [];
 
-    const systemPrompt = `Você é um especialista em investimentos, mercado financeiro brasileiro (B3) e análise de relatórios de corretoras (Investidor10, Status Invest, B3 Área do Investidor, XP, NuInvest, BTG, Inter).
-Sua tarefa é analisar o arquivo (foto, PDF ou print de carteira) ou texto colado e extrair todos os ativos de investimento contidos no documento.
+    const systemPrompt = `Você é um especialista em investimentos, mercado financeiro brasileiro (B3) e análise de relatórios de corretoras (Investidor10, Status Invest, B3 Área do Investidor, XP, NuInvest, BTG, Inter, Avenue, Nomad).
+Sua tarefa é analisar o arquivo (foto, PDF ou print de carteira) ou texto colado e extrair TODOS os ativos de investimento contidos no documento, sem deixar nenhum de fora (incluindo Ações, FIIs, ETFs Internacionais, Criptomoedas, Tesouro Direto e Fundos/Previdência).
+
+IMPORTANTE SOBRE MOEDAS E ATIVOS INTERNACIONAIS:
+- Se houver ativos cotados em Dólar (US$ / USD), como ETFs Internacionais (ex: 'VXUS', 'IVV', 'TFLO', 'VOO', 'QQQ', 'VT') ou ações americanas:
+  Converta os valores (Preço Médio, Cotação e Total) para Reais (BRL) usando a taxa de câmbio USD/BRL indicada no relatório ou uma taxa padrão de R$ 5,20 por dólar.
+- Para todos os ativos, todos os valores numéricos ('averagePrice', 'totalInvested', 'currentPrice', 'currentBalance') DEVEM ser retornados em Reais (BRL) como números (float), nunca strings com US$ ou R$.
 
 Para cada ativo encontrado, identifique:
-1. 'ticker': Código do ativo se houver (ex: 'PETR4', 'VALE3', 'MXRF11', 'HGLG11', 'IVVB11', 'BTC', 'CDB Inter', 'Tesouro Selic 2029').
-2. 'name': Nome legível da empresa, fundo ou título (ex: 'Petrobras PN', 'Maxi Renda FII', 'CDB 110% CDI', 'Vale ON').
+1. 'ticker': Código do ativo se houver (ex: 'PETR4', 'VALE3', 'MXRF11', 'VXUS', 'IVV', 'TFLO', 'BTC', 'ETH', 'AUPO11', 'Tesouro IPCA+ 2032').
+2. 'name': Nome legível da empresa, fundo, título ou cripto (ex: 'Petrobras PN', 'Maxi Renda FII', 'Vanguard Total Intl', 'Trend Pós-Fixado Prev').
 3. 'type': Categoria do investimento ('Ações', 'FIIs', 'Renda Fixa', 'Tesouro Direto', 'ETFs', 'Previdência Privada', 'BDRs', 'Criptomoedas', 'Poupança' ou 'Outros').
-4. 'quantity': Quantidade de cotas/ações (número decimal ou inteiro, ex: 100, 3, 15.5). Se for Renda Fixa sem quantidade, use 1.
-5. 'averagePrice': Preço Médio de compra por cota/ação em R$ (ex: 35.80, 10.15).
-6. 'totalInvested': Valor total investido / custo total em R$ (ex: 3580.00). Se não constar, calcule quantity * averagePrice.
-7. 'currentPrice': Cotação atual ou preço de mercado em R$ (opcional, se constar no relatório).
-8. 'currentBalance': Saldo atual / valor de mercado em R$ (opcional).
-9. 'institution': Nome da corretora ou banco (ex: 'XP', 'NuInvest', 'Inter', 'Clear', 'BTG').
+4. 'quantity': Quantidade de cotas/ações/frações (número decimal ou inteiro, ex: 100, 3, 0.29667, 0.00025974). Se for título sem quantidade, use 1.
+5. 'averagePrice': Preço Médio de compra por cota em R$ (número). Se estava em US$, já convertido para R$.
+6. 'totalInvested': Valor total investido / custo total em R$ (número). Se não constar, calcule quantity * averagePrice.
+7. 'currentPrice': Cotação atual ou preço de mercado em R$ (opcional, número).
+8. 'currentBalance': Saldo atual / valor de mercado em R$ (opcional, número).
+9. 'institution': Nome da corretora ou banco (ex: 'XP', 'NuInvest', 'Investidor10', 'Avenue', 'Binance').
 
 Retorne SEMPRE um JSON válido no formato:
 {
   "assets": [
     {
-      "ticker": "PETR4",
-      "name": "Petrobras PN",
+      "ticker": "VALE3",
+      "name": "Vale ON",
       "type": "Ações",
-      "quantity": 100,
-      "averagePrice": 35.80,
-      "totalInvested": 3580.00,
-      "currentPrice": 38.50,
-      "currentBalance": 3850.00,
-      "institution": "XP Investimentos"
+      "quantity": 1,
+      "averagePrice": 78.83,
+      "totalInvested": 78.83,
+      "currentPrice": 78.46,
+      "currentBalance": 78.46,
+      "institution": "Investidor10"
     }
   ]
 }`;
@@ -87,46 +93,24 @@ Retorne SEMPRE um JSON válido no formato:
       }
     }
 
-    const payload = {
-      contents: [{ parts: promptParts }],
-      generationConfig: { response_mime_type: 'application/json' }
-    };
-
-    const models = ['gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-2.5-flash'];
-    let lastError: any = null;
     let parsedResult: any = null;
 
-    for (const model of models) {
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          }
-        );
-
-        if (!res.ok) {
-          lastError = await res.text();
-          continue;
+    try {
+      const result = await callGeminiWithFallback(
+        apiKey,
+        promptParts,
+        {
+          models: [...GEMINI_MODELS.VISION],
+          timeoutMs: 20_000,
+          generationConfig: {
+            response_mime_type: 'application/json',
+            temperature: 0.1,
+          },
         }
-
-        const data = await res.json();
-        const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidate) {
-          try {
-            parsedResult = JSON.parse(candidate);
-            if (parsedResult && (Array.isArray(parsedResult) || (Array.isArray(parsedResult.assets) && parsedResult.assets.length > 0))) {
-              break;
-            }
-          } catch (jsonErr) {
-            console.error('Erro no parse JSON:', jsonErr);
-          }
-        }
-      } catch (err) {
-        lastError = err;
-      }
+      );
+      parsedResult = result.parsed;
+    } catch (geminiErr: any) {
+      console.error('[scan-investments] Gemini falhou:', geminiErr);
     }
 
     let rawAssets: any[] = [];
@@ -138,7 +122,7 @@ Retorne SEMPRE um JSON válido no formato:
 
     if (rawAssets.length === 0) {
       return NextResponse.json(
-        { error: 'Não foi possível identificar os ativos no documento ou texto fornecido.', details: lastError },
+        { error: 'Não foi possível identificar os ativos no documento ou texto fornecido.' },
         { status: 422 }
       );
     }

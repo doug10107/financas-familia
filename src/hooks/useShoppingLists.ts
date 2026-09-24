@@ -13,6 +13,8 @@ export type ShoppingItem = {
   position?: number;
 };
 
+export type PaymentMethodType = 'benefit' | 'saldo' | 'credit';
+
 export type ShoppingList = {
   id: string;
   title: string;
@@ -20,6 +22,8 @@ export type ShoppingList = {
   createdAt: string;
   isCompleted: boolean;
   benefitCardId?: string;
+  paymentMethod?: PaymentMethodType;
+  creditCardId?: string;
   items: ShoppingItem[];
 };
 
@@ -88,6 +92,8 @@ export function useShoppingLists() {
         createdAt: l.created_at ? l.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
         isCompleted: Boolean(l.is_completed),
         benefitCardId: l.benefit_card_id || undefined,
+        paymentMethod: (l.payment_method as PaymentMethodType) || 'benefit',
+        creditCardId: l.credit_card_id || undefined,
         items
       };
     });
@@ -111,6 +117,8 @@ export function useShoppingLists() {
           description,
           is_completed,
           benefit_card_id,
+          payment_method,
+          credit_card_id,
           created_at,
           shopping_items (
             id,
@@ -182,6 +190,8 @@ export function useShoppingLists() {
                   description,
                   is_completed,
                   benefit_card_id,
+                  payment_method,
+                  credit_card_id,
                   created_at,
                   shopping_items (
                     id,
@@ -231,7 +241,13 @@ export function useShoppingLists() {
 
   const isValidUUID = (id?: string | null) => Boolean(id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
 
-  const createList = async (title: string, description?: string, benefitCardId?: string) => {
+  const createList = async (
+    title: string,
+    description?: string,
+    benefitCardId?: string,
+    paymentMethod: PaymentMethodType = 'benefit',
+    creditCardId?: string
+  ) => {
     try {
       const authInfo = await getFamilyId();
       if (!authInfo?.familyId) return null;
@@ -244,7 +260,9 @@ export function useShoppingLists() {
           title,
           description: description || '',
           is_completed: false,
-          benefit_card_id: isValidUUID(benefitCardId) ? benefitCardId : null
+          benefit_card_id: paymentMethod === 'benefit' && isValidUUID(benefitCardId) ? benefitCardId : null,
+          payment_method: paymentMethod || 'benefit',
+          credit_card_id: paymentMethod === 'credit' && isValidUUID(creditCardId) ? creditCardId : null
         } as any)
         .select()
         .single()) as any;
@@ -264,10 +282,12 @@ export function useShoppingLists() {
     title: string,
     description?: string,
     benefitCardId?: string,
-    items?: Omit<ShoppingItem, 'id' | 'isChecked'>[]
+    items?: Omit<ShoppingItem, 'id' | 'isChecked'>[],
+    paymentMethod: PaymentMethodType = 'benefit',
+    creditCardId?: string
   ) => {
     try {
-      const listId = await createList(title, description, benefitCardId);
+      const listId = await createList(title, description, benefitCardId, paymentMethod, creditCardId);
       if (!listId) return null;
 
       if (items && items.length > 0) {
@@ -675,6 +695,12 @@ export function useShoppingLists() {
       if (updatedData.benefitCardId !== undefined) {
         payload.benefit_card_id = isValidUUID(updatedData.benefitCardId) ? updatedData.benefitCardId : null;
       }
+      if (updatedData.paymentMethod !== undefined) {
+        payload.payment_method = updatedData.paymentMethod;
+      }
+      if (updatedData.creditCardId !== undefined) {
+        payload.credit_card_id = isValidUUID(updatedData.creditCardId) ? updatedData.creditCardId : null;
+      }
       if (updatedData.isCompleted !== undefined) payload.is_completed = updatedData.isCompleted;
 
       const { error } = await (supabase
@@ -699,7 +725,13 @@ export function useShoppingLists() {
       if (!sourceList) return null;
 
       const newTitle = `${sourceList.title} (Cópia)`;
-      const newListId = await createList(newTitle, sourceList.description, sourceList.benefitCardId);
+      const newListId = await createList(
+        newTitle,
+        sourceList.description,
+        sourceList.benefitCardId,
+        sourceList.paymentMethod,
+        sourceList.creditCardId
+      );
       if (!newListId) return null;
 
       if (sourceList.items.length > 0) {

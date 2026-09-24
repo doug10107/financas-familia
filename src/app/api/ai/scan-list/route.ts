@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { callGeminiWithFallback, GEMINI_MODELS } from '@/lib/gemini';
 
 function normalizeUnit(rawUnit: string, qty: number, name: string): string {
   const u = (rawUnit || '').toLowerCase().trim();
@@ -170,64 +171,25 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
       }
     }
 
-    const payload = {
-      contents: [
-        {
-          parts: promptParts
-        }
-      ],
-      generationConfig: {
-        response_mime_type: 'application/json'
-      }
-    };
-
-    // Use available Gemini models
-    const models = [
-      'gemini-3.5-flash-lite',
-      'gemini-3.5-flash',
-      'gemini-3.7-flash',
-      'gemini-2.5-flash'
-    ];
-
-    let lastError: any = null;
+    // Chamar API Gemini com fallback automático de modelos e timeout
     let parsedData: any = null;
 
-    for (const model of models) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
-          }
-        );
-
-        if (!response.ok) {
-          const errText = await response.text();
-          console.warn(`Tentativa com modelo ${model} retornou status ${response.status}: ${errText}`);
-          lastError = errText;
-          continue;
+    try {
+      const result = await callGeminiWithFallback(
+        apiKey,
+        promptParts,
+        {
+          models: [...GEMINI_MODELS.VISION],
+          timeoutMs: 20_000,
+          generationConfig: {
+            response_mime_type: 'application/json',
+            temperature: 0.1,
+          },
         }
-
-        const data = await response.json();
-        const candidate = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (candidate) {
-          try {
-            parsedData = JSON.parse(candidate);
-            if (parsedData && (Array.isArray(parsedData) || (Array.isArray(parsedData.items) && parsedData.items.length > 0))) {
-              break;
-            }
-          } catch (jsonErr) {
-            console.error(`Erro no parse JSON de ${model}:`, jsonErr, candidate);
-          }
-        }
-      } catch (callErr) {
-        console.warn(`Erro na chamada ao modelo ${model}:`, callErr);
-        lastError = callErr;
-      }
+      );
+      parsedData = result.parsed;
+    } catch (geminiErr: any) {
+      console.error('[scan-list] Gemini falhou:', geminiErr);
     }
 
     // Extract raw items and discount from parsedData
@@ -257,7 +219,6 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
       return NextResponse.json(
         {
           error: 'Não foi possível extrair os itens da imagem, texto ou QR Code. Tente novamente.',
-          details: lastError
         },
         { status: 422 }
       );

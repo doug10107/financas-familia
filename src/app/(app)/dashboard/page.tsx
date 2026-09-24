@@ -22,6 +22,7 @@ import {
 import { Doughnut } from 'react-chartjs-2';
 import { useDashboard } from '@/hooks/useDashboard';
 import { FinancialProjectionChart } from '@/components/dashboard/FinancialProjectionChart';
+import { DailyExpenseHeatmap } from '@/components/dashboard/DailyExpenseHeatmap';
 
 ChartJS.register(
   CategoryScale,
@@ -244,7 +245,15 @@ export default function DashboardPage() {
         </GlassCard>
       </div>
 
-      {/* Row 2: Top 5 Despesas (1 col - Left) + Despesas por Categoria (2 cols - Right) */}
+      {/* Row 2: Mapa de Calor de Gastos Diários (Calendário) */}
+      <DailyExpenseHeatmap 
+        monthFilter={filterMonth}
+        transactions={dashboardData.monthlyTransactions}
+        totalExpense={dashboardData.monthlyExpense}
+        totalIncome={dashboardData.monthlyIncome}
+      />
+
+      {/* Row 3: Top 5 Despesas (1 col - Left) + Despesas por Categoria (2 cols - Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
         {/* Top 5 Despesas (1 col - Left, exactly like Production Example Image 3) */}
         <GlassCard className="p-6 flex flex-col justify-between h-full">

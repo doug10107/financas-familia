@@ -46,6 +46,7 @@ export default function InvestmentsPage() {
     addInvestment,
     updateInvestment,
     deleteInvestment,
+    clearAllInvestments,
     addInvestmentEntry,
     batchImportInvestments
   } = useInvestments();
@@ -420,6 +421,12 @@ export default function InvestmentsPage() {
     }
   };
 
+  const handleClearAllInvestments = async () => {
+    if (window.confirm('Atenção: Deseja realmente excluir TODOS os investimentos da sua carteira e zerar o histórico? Essa ação não pode ser desfeita.')) {
+      await clearAllInvestments();
+    }
+  };
+
   const handleAddEntry = async () => {
     if (!selectedInv) return;
 
@@ -492,6 +499,20 @@ export default function InvestmentsPage() {
             <Icon name="file_download" size="sm" className="text-purple-500" />
             <span>Importar Investidor10</span>
           </Button>
+
+          {/* Clear Portfolio Button */}
+          {investments.length > 0 && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleClearAllInvestments}
+              className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/50"
+              title="Excluir todos os ativos da carteira"
+            >
+              <Icon name="delete_sweep" size="sm" className="text-red-500" />
+              <span>Limpar Carteira</span>
+            </Button>
+          )}
 
           {/* New Investment Button */}
           <Button
@@ -840,24 +861,24 @@ export default function InvestmentsPage() {
                       </td>
 
                       <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-1.5">
                           <button 
                             onClick={() => handleOpenEntryModal(inv)}
-                            className="p-1.5 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 transition-colors rounded-lg flex items-center gap-0.5 text-xs font-bold"
-                            title="Comprar mais / Nova movimentação"
+                            className="px-2 py-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors rounded-lg flex items-center gap-1 text-xs font-bold shadow-xs"
+                            title="Comprar mais / Novo aporte"
                           >
                             <Icon name="add_circle" size="sm" /> Aporte
                           </button>
                           <button 
                             onClick={() => handleOpenInvModal(inv)}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors rounded-lg"
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors rounded-lg"
                             title="Editar Ativo"
                           >
                             <Icon name="edit" size="sm" />
                           </button>
                           <button 
                             onClick={() => handleDeleteInvestment(inv.id, inv.name)}
-                            className="p-1.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg"
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors rounded-lg"
                             title="Excluir Ativo"
                           >
                             <Icon name="delete" size="sm" />
@@ -1187,11 +1208,31 @@ export default function InvestmentsPage() {
             onChange={(e) => setInvForm({...invForm, notes: e.target.value})}
           />
           
-          <div className="flex justify-end gap-2 mt-6">
-            <Button variant="ghost" onClick={() => setIsInvModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
-            <Button variant="primary" onClick={handleSaveInvestment} loading={isSubmitting}>
-              {editingInvId ? "Salvar Alterações" : "Adicionar à Carteira"}
-            </Button>
+          <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-100 dark:border-gray-800">
+            {editingInvId ? (
+              <Button 
+                type="button" 
+                variant="ghost" 
+                onClick={() => {
+                  const invToDelete = investments.find(i => i.id === editingInvId);
+                  setIsInvModalOpen(false);
+                  if (invToDelete) {
+                    handleDeleteInvestment(invToDelete.id, invToDelete.name);
+                  }
+                }} 
+                disabled={isSubmitting}
+                className="text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs flex items-center gap-1"
+              >
+                <Icon name="delete" size="sm" /> Excluir Ativo
+              </Button>
+            ) : <div />}
+
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => setIsInvModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
+              <Button variant="primary" onClick={handleSaveInvestment} loading={isSubmitting}>
+                {editingInvId ? "Salvar Alterações" : "Adicionar à Carteira"}
+              </Button>
+            </div>
           </div>
         </div>
       </Modal>

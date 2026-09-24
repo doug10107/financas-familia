@@ -11,15 +11,22 @@ import { Badge } from '@/components/ui/Badge';
 import { InvestmentType } from '@/hooks/useInvestments';
 
 function parseNumberInput(val: string | number | null | undefined): number {
-  if (typeof val === 'number') return val;
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (!val) return 0;
-  let str = String(val).replace(/[R$\s]/g, '').trim();
+  let str = String(val).replace(/[^0-9,.-]/g, '').trim();
   if (str.includes('.') && str.includes(',')) {
     str = str.replace(/\./g, '').replace(',', '.');
   } else if (str.includes(',')) {
     str = str.replace(',', '.');
   }
   return parseFloat(str) || 0;
+}
+
+// Check if string contains USD currency indicator (never match Brazilian Real R$)
+function isUsdCurrency(val: string | number | null | undefined): boolean {
+  if (!val) return false;
+  const str = String(val).toUpperCase();
+  return str.includes('US$') || str.includes('USD') || str.includes('U$') || (str.includes('$') && !str.includes('R$'));
 }
 
 interface ExtractedAsset {
@@ -31,7 +38,9 @@ interface ExtractedAsset {
   averagePrice: number;
   totalInvested: number;
   currentPrice?: number;
+  currentBalance?: number;
   institution?: string;
+  currency?: 'BRL' | 'USD';
   selected: boolean;
 }
 
@@ -86,12 +95,204 @@ export function ImportInvestmentsModal({
     return qty.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
   };
 
-  // CSV Parser for Investidor10 / B3 / StatusInvest
+  // Generic Row Parser for Investidor10 / B3 / StatusInvest
+  const processParsedRows = (rows: any[], estimatedUsdRate: number = 5.122146): ExtractedAsset[] => {
+    if (!rows || rows.length === 0) return [];
+
+    const parsed: ExtractedAsset[] = [];
+
+    rows.forEach((row, idx) => {
+      const ticker = (
+        row['Ticker'] ||
+        row['Código'] ||
+        row['Codigo'] ||
+        row['Ativo'] ||
+        row['Código de Negociação'] ||
+        row['Papel'] ||
+        ''
+      ).toString().toUpperCase().trim();
+
+      const name = (
+        row['Nome'] ||
+        row['Empresa'] ||
+        row['Razão Social'] ||
+        row['Produto'] ||
+        ticker ||
+        `Ativo ${idx + 1}`
+      ).toString().trim();
+
+      // Skip invalid header / empty rows
+      if (!ticker && !name) return;
+      if (ticker === 'ATIVO' || ticker === 'TICKER' || name === 'Ativo' || name === 'Nome') return;
+
+      const rawQty = row['Quantidade'] || row['Qtd'] || row['Qtd.'] || row['Quant.'] || row['Quant'] || 1;
+      const quantity = parseNumberInput(rawQty) || 1;
+
+      const rawPrice =
+        row['Preço Médio'] ||
+        row['Preco Medio'] ||
+        row['Preço'] ||
+        row['Preco'] ||
+        row['Preço de Compra'] ||
+        row['Valor Unitário'] ||
+        0;
+
+      const rawCurPrice =
+        row['Preço Atual'] ||
+        row['Preco Atual'] ||
+        row['Cotação'] ||
+        row['Cotacao'] ||
+        0;
+
+      const rawTotal =
+        row['Total Investido'] ||
+        row['Valor Total'] ||
+        row['Total'] ||
+        row['Valor da Operação'] ||
+        row['Custo Total'] ||
+        0;
+
+      const rawSaldo =
+        row['Saldo'] ||
+        row['Posição'] ||
+        row['Valor Atual'] ||
+        0;
+
+      const rawType = row['Tipo de ativo'] || row['Tipo'] || row['Categoria'] || row['Classe'] || '';
+      let typeStr = String(rawType).trim();
+
+      // Check if this row is in USD (e.g. ETFs Intern., Stocks, US$)
+      const isUsd = (
+        isUsdCurrency(rawPrice) ||
+        isUsdCurrency(rawCurPrice) ||
+        isUsdCurrency(rawTotal) ||
+        isUsdCurrency(rawSaldo) ||
+        typeStr.toLowerCase().includes('intern') ||
+        typeStr.toLowerCase().includes('eua') ||
+        typeStr.toLowerCase().includes('exterior') ||
+        ['VXUS', 'IVV', 'TFLO', 'VOO', 'QQQ', 'VTI', 'VT', 'SCHD'].includes(ticker)
+      );
+
+      let averagePrice = parseNumberInput(rawPrice);
+      let currentPrice = parseNumberInput(rawCurPrice);
+      let currentBalance = parseNumberInput(rawSaldo);
+      let totalInvested = parseNumberInput(rawTotal);
+
+      // If average price is missing (e.g. Tesouro Direto), fallback to current price or saldo/qty
+      if (averagePrice === 0) {
+        if (currentPrice > 0) {
+          averagePrice = currentPrice;
+        } else if (currentBalance > 0 && quantity > 0) {
+          averagePrice = currentBalance / quantity;
+        }
+      }
+
+      // If in USD, convert to BRL using USD rate
+      if (isUsd) {
+        if (averagePrice > 0) {
+          averagePrice = Number((averagePrice * estimatedUsdRate).toFixed(2));
+        }
+        if (currentPrice > 0) {
+          currentPrice = Number((currentPrice * estimatedUsdRate).toFixed(2));
+        }
+        if (currentBalance > 0) {
+          currentBalance = Number((currentBalance * estimatedUsdRate).toFixed(2));
+        }
+        if (totalInvested > 0) {
+          totalInvested = Number((totalInvested * estimatedUsdRate).toFixed(2));
+        } else if (quantity > 0 && averagePrice > 0) {
+          totalInvested = Number((quantity * averagePrice).toFixed(2));
+        }
+      } else {
+        if (!totalInvested && quantity > 0 && averagePrice > 0) {
+          totalInvested = Number((quantity * averagePrice).toFixed(2));
+        }
+      }
+
+      const rawInst = row['Instituição'] || row['Instituicao'] || row['Corretora'] || row['Banco'] || '';
+      const institution = String(rawInst).trim() || (isUsd ? 'Internacional' : 'Investidor10');
+
+      // Normalize Type Classification
+      let type = typeStr;
+      if (!type) {
+        if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
+        else if (ticker.endsWith('11')) type = 'FIIs';
+        else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
+        else if (isUsd) type = 'ETFs';
+        else if (name.toLowerCase().includes('prev') || name.toLowerCase().includes('pgbl') || name.toLowerCase().includes('vgbl')) type = 'Previdência Privada';
+        else if (name.toLowerCase().includes('tesouro')) type = 'Tesouro Direto';
+        else type = 'Renda Fixa';
+      } else {
+        const lowerType = type.toLowerCase();
+        if (lowerType.includes('ação') || lowerType.includes('acoes') || lowerType.includes('ações')) type = 'Ações';
+        else if (lowerType.includes('fii')) type = 'FIIs';
+        else if (lowerType.includes('etf')) type = 'ETFs';
+        else if (lowerType.includes('cripto')) type = 'Criptomoedas';
+        else if (lowerType.includes('tesouro')) type = 'Tesouro Direto';
+        else if (lowerType.includes('prev') || lowerType.includes('pgbl') || lowerType.includes('vgbl')) type = 'Previdência Privada';
+        else if (lowerType.includes('fundo')) type = 'Renda Fixa';
+        else if (lowerType.includes('renda fixa')) type = 'Renda Fixa';
+      }
+
+      parsed.push({
+        tempId: `asset-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
+        ticker,
+        name,
+        type,
+        quantity,
+        averagePrice: Number(averagePrice.toFixed(2)),
+        totalInvested: Number((totalInvested || quantity * averagePrice).toFixed(2)),
+        currentPrice: currentPrice > 0 ? Number(currentPrice.toFixed(2)) : undefined,
+        currentBalance: currentBalance > 0 ? Number(currentBalance.toFixed(2)) : undefined,
+        institution,
+        currency: isUsd ? 'USD' : 'BRL',
+        selected: true
+      });
+    });
+
+    return parsed;
+  };
+
+  // CSV Parser for Files or Text
+  const parseCSVString = (csvContent: string) => {
+    Papa.parse(csvContent, {
+      header: true,
+      skipEmptyLines: true,
+      dynamicTyping: false,
+      complete: (results) => {
+        try {
+          const rows = results.data as any[];
+          if (!rows || rows.length === 0) {
+            throw new Error('Nenhum dado encontrado no texto / CSV.');
+          }
+
+          const parsed = processParsedRows(rows);
+          if (parsed.length === 0) {
+            throw new Error('Não foi possível identificar as colunas de ativos.');
+          }
+
+          setExtractedAssets(parsed);
+          setStep('review');
+          setIsProcessing(false);
+        } catch (err: any) {
+          console.error('Erro no parse CSV:', err);
+          setErrorMessage(err.message || 'Erro ao ler arquivo CSV.');
+          setIsProcessing(false);
+        }
+      },
+      error: (err: any) => {
+        console.error('Erro PapaParse:', err);
+        setErrorMessage('Erro ao processar o arquivo CSV.');
+        setIsProcessing(false);
+      }
+    });
+  };
+
   const parseCSV = (csvFile: File) => {
     Papa.parse(csvFile, {
       header: true,
       skipEmptyLines: true,
-      dynamicTyping: true,
+      dynamicTyping: false,
       complete: (results) => {
         try {
           const rows = results.data as any[];
@@ -99,80 +300,7 @@ export function ImportInvestmentsModal({
             throw new Error('Nenhum dado encontrado no arquivo CSV.');
           }
 
-          const parsed: ExtractedAsset[] = [];
-
-          rows.forEach((row, idx) => {
-            const ticker = (
-              row['Ticker'] ||
-              row['Código'] ||
-              row['Codigo'] ||
-              row['Ativo'] ||
-              row['Código de Negociação'] ||
-              row['Papel'] ||
-              ''
-            ).toString().toUpperCase().trim();
-
-            const name = (
-              row['Nome'] ||
-              row['Empresa'] ||
-              row['Razão Social'] ||
-              row['Produto'] ||
-              ticker ||
-              `Ativo ${idx + 1}`
-            ).toString().trim();
-
-            const rawQty = row['Quantidade'] || row['Qtd'] || row['Qtd.'] || row['Quant.'] || 1;
-            const quantity = parseNumberInput(rawQty) || 1;
-
-            const rawPrice =
-              row['Preço Médio'] ||
-              row['Preco Medio'] ||
-              row['Preço'] ||
-              row['Preco'] ||
-              row['Preço de Compra'] ||
-              row['Valor Unitário'] ||
-              0;
-            const averagePrice = parseNumberInput(rawPrice);
-
-            const rawTotal =
-              row['Total Investido'] ||
-              row['Valor Total'] ||
-              row['Total'] ||
-              row['Valor da Operação'] ||
-              row['Saldo'] ||
-              (quantity * averagePrice);
-            const totalInvested = parseNumberInput(rawTotal) || (quantity * averagePrice);
-
-            const rawInst = row['Instituição'] || row['Instituicao'] || row['Corretora'] || row['Banco'] || '';
-            const institution = String(rawInst).trim();
-
-            const rawType = row['Tipo'] || row['Categoria'] || row['Classe'] || '';
-            let type = String(rawType).trim();
-            if (!type) {
-              if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
-              else if (ticker.endsWith('11')) type = 'FIIs';
-              else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
-              else if (name.toLowerCase().includes('prev') || name.toLowerCase().includes('pgbl') || name.toLowerCase().includes('vgbl')) type = 'Previdência Privada';
-              else type = 'Renda Fixa';
-            } else if (type.toLowerCase().includes('prev') || type.toLowerCase().includes('pgbl') || type.toLowerCase().includes('vgbl')) {
-              type = 'Previdência Privada';
-            }
-
-            if (ticker || name) {
-              parsed.push({
-                tempId: `csv-asset-${Date.now()}-${idx}`,
-                ticker,
-                name,
-                type,
-                quantity: quantity,
-                averagePrice: averagePrice,
-                totalInvested: Number(totalInvested.toFixed(2)),
-                institution,
-                selected: true
-              });
-            }
-          });
-
+          const parsed = processParsedRows(rows);
           if (parsed.length === 0) {
             throw new Error('Não foi possível identificar as colunas de ativos no arquivo CSV.');
           }
@@ -218,7 +346,7 @@ export function ImportInvestmentsModal({
           if (!res.ok) throw new Error(data.error || 'Erro na análise com IA');
           if (!data.assets || data.assets.length === 0) throw new Error('Nenhum ativo encontrado no arquivo.');
 
-          setExtractedAssets(data.assets.map((a: any) => ({ ...a, tempId: a.id || `ai-${Date.now()}`, selected: true })));
+          setExtractedAssets(data.assets.map((a: any) => ({ ...a, tempId: a.id || `ai-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`, selected: true })));
           setStep('review');
         } catch (err: any) {
           setErrorMessage(err.message || 'Erro ao processar com IA.');
@@ -233,6 +361,25 @@ export function ImportInvestmentsModal({
       }
 
       setIsProcessing(true);
+
+      // First try deterministic CSV/TSV table parsing if text contains delimiters (; or \t or ,)
+      const trimmed = rawText.trim();
+      const firstLine = trimmed.split('\n')[0] || '';
+      const isDelimitedTable = (
+        (firstLine.includes(';') || firstLine.includes('\t') || firstLine.includes(',')) &&
+        (firstLine.toLowerCase().includes('ativo') || firstLine.toLowerCase().includes('ticker') || firstLine.toLowerCase().includes('preço') || firstLine.toLowerCase().includes('quant'))
+      );
+
+      if (isDelimitedTable) {
+        try {
+          parseCSVString(rawText);
+          return;
+        } catch (e) {
+          console.warn('Falha no parse direto de texto delimitado, tentando IA...', e);
+        }
+      }
+
+      // Fallback to AI Scan
       try {
         const res = await fetch('/api/ai/scan-investments', {
           method: 'POST',
@@ -243,7 +390,7 @@ export function ImportInvestmentsModal({
         if (!res.ok) throw new Error(data.error || 'Erro na análise com IA');
         if (!data.assets || data.assets.length === 0) throw new Error('Nenhum ativo encontrado no texto.');
 
-        setExtractedAssets(data.assets.map((a: any) => ({ ...a, tempId: a.id || `ai-${Date.now()}`, selected: true })));
+        setExtractedAssets(data.assets.map((a: any) => ({ ...a, tempId: a.id || `ai-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`, selected: true })));
         setStep('review');
       } catch (err: any) {
         setErrorMessage(err.message || 'Erro ao processar texto com IA.');
@@ -314,6 +461,7 @@ export function ImportInvestmentsModal({
     <Modal
       isOpen={isOpen}
       onClose={handleClose}
+      size="2xl"
       title={step === 'input' ? 'Importar Carteira (Investidor10 / B3 / Corretora)' : 'Conferir Ativos Extraídos'}
     >
       <div className="space-y-4">

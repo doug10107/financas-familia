@@ -330,6 +330,35 @@ export function useInvestments() {
     }
   };
 
+  const clearAllInvestments = async (): Promise<boolean> => {
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('family_id')
+        .eq('id', user.id)
+        .single() as any;
+
+      if (!profile) throw new Error('Perfil não encontrado');
+
+      const invIds = investments.map(i => i.id);
+      if (invIds.length > 0) {
+        await (supabase.from('investment_entries') as any).delete().in('investment_id', invIds);
+        await (supabase.from('investments') as any).delete().eq('family_id', profile.family_id);
+      }
+
+      await refreshData();
+      return true;
+    } catch (err: any) {
+      console.error('Error clearing investments:', err);
+      setError(err.message || 'Erro ao limpar carteira');
+      return false;
+    }
+  };
+
   // Batch import from Investidor10 or AI Scan
   const batchImportInvestments = async (assets: {
     ticker?: string;
@@ -470,6 +499,7 @@ export function useInvestments() {
     addInvestment,
     updateInvestment,
     deleteInvestment,
+    clearAllInvestments,
     addInvestmentEntry,
     batchImportInvestments
   };

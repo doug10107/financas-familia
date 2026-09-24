@@ -8,8 +8,10 @@ import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
-import { useShoppingLists, ShoppingList, ShoppingItem } from '@/hooks/useShoppingLists';
+import { useShoppingLists, ShoppingList, ShoppingItem, PaymentMethodType } from '@/hooks/useShoppingLists';
 import { useBenefitCards } from '@/hooks/useBenefitCards';
+import { useCreditCards } from '@/hooks/useCreditCards';
+import { useTransactions } from '@/hooks/useTransactions';
 import { ImportShoppingListModal } from '@/components/compras/ImportShoppingListModal';
 
 const UNIT_OPTIONS = [
@@ -53,6 +55,8 @@ export default function ComprasPage() {
   } = useShoppingLists();
 
   const { cards, debitBalance } = useBenefitCards();
+  const { creditCards } = useCreditCards();
+  const { addTransaction, categories } = useTransactions();
 
   const [activeListId, setActiveListId] = useState<string | null>(null);
 
@@ -75,12 +79,16 @@ export default function ComprasPage() {
   // New List Form State
   const [newListTitle, setNewListTitle] = useState('');
   const [newListDesc, setNewListDesc] = useState('');
+  const [newListPaymentMethod, setNewListPaymentMethod] = useState<PaymentMethodType>('benefit');
   const [newListCardId, setNewListCardId] = useState('');
+  const [newListCreditCardId, setNewListCreditCardId] = useState('');
 
   // Edit List Form State
   const [editListTitle, setEditListTitle] = useState('');
   const [editListDesc, setEditListDesc] = useState('');
+  const [editListPaymentMethod, setEditListPaymentMethod] = useState<PaymentMethodType>('benefit');
   const [editListCardId, setEditListCardId] = useState('');
+  const [editListCreditCardId, setEditListCreditCardId] = useState('');
 
   // New Item Form State
   const [itemName, setItemName] = useState('');
@@ -89,7 +97,10 @@ export default function ComprasPage() {
   const [itemUnit, setItemUnit] = useState('un');
   const [itemEstPrice, setItemEstPrice] = useState('');
 
-  // Finalize Form State (Single & Split Payment)
+  // Finalize Form State (Single & Split Payment & Pix/Credit)
+  const [finalizePaymentMethod, setFinalizePaymentMethod] = useState<PaymentMethodType>('benefit');
+  const [finalizeCreditCardId, setFinalizeCreditCardId] = useState('');
+  const [finalizeInstallments, setFinalizeInstallments] = useState(1);
   const [selectedCardForPayment, setSelectedCardForPayment] = useState('');
   const [isSplitPayment, setIsSplitPayment] = useState(false);
   
@@ -107,6 +118,13 @@ export default function ComprasPage() {
     }
   }, [cards]);
 
+  React.useEffect(() => {
+    if (creditCards.length > 0) {
+      if (!newListCreditCardId) setNewListCreditCardId(creditCards[0].id);
+      if (!finalizeCreditCardId) setFinalizeCreditCardId(creditCards[0].id);
+    }
+  }, [creditCards]);
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
@@ -121,10 +139,32 @@ export default function ComprasPage() {
   const card1 = cards.find(c => c.id === card1Id);
   const card2 = cards.find(c => c.id === card2Id);
 
+  const PAYMENT_METHOD_OPTIONS = [
+    { value: 'benefit', label: '🥗 Vale Benefício (VA / VR)' },
+    { value: 'saldo', label: '💸 Pix / Débito (Saldo da Conta)' },
+    { value: 'credit', label: '💳 Cartão de Crédito (Fatura)' }
+  ];
+
+  const cardSelectOptions = [
+    { value: '', label: 'Selecione o cartão de benefício' },
+    ...cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))
+  ];
+
+  const creditCardSelectOptions = [
+    { value: '', label: 'Selecione o cartão de crédito' },
+    ...creditCards.map(c => ({ value: c.id, label: `${c.name} (Venc. dia ${c.due_day})` }))
+  ];
+
   const handleCreateList = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newListTitle) return;
-    const newId = await createList(newListTitle, newListDesc, newListCardId || undefined);
+    const newId = await createList(
+      newListTitle,
+      newListDesc,
+      newListPaymentMethod === 'benefit' ? newListCardId : undefined,
+      newListPaymentMethod,
+      newListPaymentMethod === 'credit' ? newListCreditCardId : undefined
+    );
     if (newId) setActiveListId(newId);
     setNewListTitle('');
     setNewListDesc('');
@@ -135,7 +175,9 @@ export default function ComprasPage() {
     if (!activeList) return;
     setEditListTitle(activeList.title);
     setEditListDesc(activeList.description || '');
+    setEditListPaymentMethod(activeList.paymentMethod || (activeList.benefitCardId ? 'benefit' : 'benefit'));
     setEditListCardId(activeList.benefitCardId || (cards.length > 0 ? cards[0].id : ''));
+    setEditListCreditCardId(activeList.creditCardId || (creditCards.length > 0 ? creditCards[0].id : ''));
     setIsEditListOpen(true);
   };
 
@@ -146,7 +188,9 @@ export default function ComprasPage() {
     await updateList(activeList.id, {
       title: editListTitle,
       description: editListDesc,
-      benefitCardId: editListCardId || undefined
+      paymentMethod: editListPaymentMethod,
+      benefitCardId: editListPaymentMethod === 'benefit' ? editListCardId : undefined,
+      creditCardId: editListPaymentMethod === 'credit' ? editListCreditCardId : undefined
     });
 
     setIsEditListOpen(false);
@@ -177,9 +221,16 @@ export default function ComprasPage() {
 
   const handleOpenFinalizeModal = () => {
     if (!activeList) return;
+    const currentMethod: PaymentMethodType = activeList.paymentMethod || (activeList.benefitCardId ? 'benefit' : 'benefit');
+    setFinalizePaymentMethod(currentMethod);
+
     const defaultCardId = activeList.benefitCardId || (cards.length > 0 ? cards[0].id : '');
     setSelectedCardForPayment(defaultCardId);
     setIsSplitPayment(false);
+
+    const defaultCreditCardId = activeList.creditCardId || (creditCards.length > 0 ? creditCards[0].id : '');
+    setFinalizeCreditCardId(defaultCreditCardId);
+    setFinalizeInstallments(1);
 
     // Default Split values
     setCard1Id(defaultCardId);
@@ -204,31 +255,92 @@ export default function ComprasPage() {
     setCard2Amount(String(Number(remaining.toFixed(2))));
   };
 
-  const handleFinalizePurchase = (e: React.FormEvent) => {
+  const handleFinalizePurchase = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeList) return;
 
     const checkedItems = activeList.items.filter(i => i.isChecked);
-    const itemsToSave = (checkedItems.length > 0 ? checkedItems : activeList.items).map(item => ({
+    const selectedItems = checkedItems.length > 0 ? checkedItems : activeList.items;
+    const itemsToSave = selectedItems.map(item => ({
       name: `${item.name}${item.unit && item.unit !== 'un' ? ` (${item.quantity} ${item.unit})` : ''}`,
       quantity: Number(item.quantity) || 1,
       price: Number(item.actualPrice) > 0 ? Number(item.actualPrice) : Number(item.estimatedPrice)
     }));
 
-    if (totalInCart > 0) {
-      if (isSplitPayment) {
-        const amt1 = parseFloat(card1Amount.replace(',', '.')) || 0;
-        const amt2 = parseFloat(card2Amount.replace(',', '.')) || 0;
+    // Use actual prices if available, otherwise fall back to estimated prices
+    const amountToRegister = totalInCart > 0
+      ? totalInCart
+      : selectedItems.reduce((acc, i) => acc + (i.quantity * (i.estimatedPrice || 0)), 0);
 
-        if (amt1 > 0 && card1) {
-          debitBalance(card1.id, amt1, `Compra (Parte 1/2): ${activeList.title}`, 'Alimentação', itemsToSave);
-        }
-        if (amt2 > 0 && card2) {
-          debitBalance(card2.id, amt2, `Compra (Parte 2/2): ${activeList.title}`, 'Alimentação', itemsToSave);
+    if (amountToRegister > 0) {
+      if (finalizePaymentMethod === 'benefit') {
+        // Benefit Cards (VA / VR)
+        if (isSplitPayment) {
+          const amt1 = parseFloat(card1Amount.replace(',', '.')) || 0;
+          const amt2 = parseFloat(card2Amount.replace(',', '.')) || 0;
+
+          if (amt1 > 0 && card1) {
+            debitBalance(card1.id, amt1, `Compra (Parte 1/2): ${activeList.title}`, 'Alimentação', itemsToSave);
+          }
+          if (amt2 > 0 && card2) {
+            debitBalance(card2.id, amt2, `Compra (Parte 2/2): ${activeList.title}`, 'Alimentação', itemsToSave);
+          }
+        } else {
+          if (selectedPaymentCard) {
+            debitBalance(selectedPaymentCard.id, amountToRegister, `Compra: ${activeList.title}`, 'Alimentação', itemsToSave);
+          }
         }
       } else {
-        if (selectedPaymentCard) {
-          debitBalance(selectedPaymentCard.id, totalInCart, `Compra: ${activeList.title}`, 'Alimentação', itemsToSave);
+        // Finance transaction (Pix/Débito or Cartão de Crédito)
+        const defaultCategory = categories.find(c =>
+          c.type === 'despesa' && (c.name.toLowerCase().includes('alimenta') || c.name.toLowerCase().includes('mercado'))
+        ) || categories.find(c => c.type === 'despesa') || categories[0];
+
+        if (!defaultCategory) {
+          console.error('Nenhuma categoria de despesa encontrada para registrar a compra.');
+          alert('Erro: nenhuma categoria encontrada. Por favor, crie uma categoria de despesa primeiro.');
+          return;
+        }
+
+        const todayStr = new Date().toISOString().split('T')[0];
+
+        if (finalizePaymentMethod === 'saldo') {
+          // Pix / Débito: Debita diretamente do Saldo da Conta Corrente (status: pago)
+          const success = await addTransaction({
+            type: 'despesa',
+            description: `Compra Mercado: ${activeList.title}`,
+            amount: amountToRegister,
+            date: todayStr,
+            category_id: defaultCategory.id,
+            status: 'pago'
+          });
+          if (!success) {
+            console.error('Falha ao registrar transação via PIX/Débito');
+            return;
+          }
+        } else if (finalizePaymentMethod === 'credit') {
+          // Cartão de Crédito: Adiciona à fatura do cartão
+          const chosenCard = creditCards.find(c => c.id === finalizeCreditCardId) || creditCards[0];
+          if (!chosenCard) {
+            console.error('Nenhum cartão de crédito selecionado');
+            alert('Selecione um cartão de crédito para continuar.');
+            return;
+          }
+          const success = await addTransaction({
+            type: 'despesa',
+            description: `Compra Mercado: ${activeList.title}`,
+            amount: amountToRegister,
+            date: todayStr,
+            category_id: defaultCategory.id,
+            credit_card_id: chosenCard.id,
+            card_due_day: chosenCard.due_day,
+            card_closing_day: chosenCard.closing_day,
+            installments: finalizeInstallments > 1 ? finalizeInstallments : 1
+          });
+          if (!success) {
+            console.error('Falha ao registrar transação no cartão de crédito');
+            return;
+          }
         }
       }
     }
@@ -236,11 +348,6 @@ export default function ComprasPage() {
     completeList(activeList.id);
     setIsFinalizeOpen(false);
   };
-
-  const cardSelectOptions = [
-    { value: '', label: 'Nenhum (ou selecionar depois)' },
-    ...cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))
-  ];
 
   return (
     <div className="space-y-6">
@@ -435,9 +542,28 @@ export default function ComprasPage() {
 
                 <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-xl col-span-2 sm:col-span-1">
                   <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wider block">Forma de Pagamento</span>
-                  <span className="text-xs font-bold text-blue-700 dark:text-blue-300">
-                    {cards.find(c => c.id === activeList.benefitCardId)?.name || 'VA / VR'}
-                  </span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    {activeList.paymentMethod === 'saldo' ? (
+                      <>
+                        <Icon name="account_balance_wallet" size="sm" className="text-emerald-600 dark:text-emerald-400" />
+                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-300">Pix / Débito (Saldo)</span>
+                      </>
+                    ) : activeList.paymentMethod === 'credit' ? (
+                      <>
+                        <Icon name="credit_card" size="sm" className="text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs font-bold text-purple-700 dark:text-purple-300 truncate">
+                          {creditCards.find(c => c.id === activeList.creditCardId)?.name || 'Cartão de Crédito'}
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="restaurant" size="sm" className="text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs font-bold text-blue-700 dark:text-blue-300 truncate">
+                          {cards.find(c => c.id === activeList.benefitCardId)?.name || 'VA / VR'}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -602,18 +728,25 @@ export default function ComprasPage() {
 
             {/* Bottom Finalize Bar */}
             {!activeList.isCompleted && activeList.items.length > 0 && (
-              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center">
+              <div className="pt-4 border-t border-gray-100 dark:border-gray-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                 <div>
-                  <span className="text-xs text-gray-500 dark:text-gray-400">Total a ser debitado do VA/VR:</span>
-                  <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalInCart)}</p>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    Total no Carrinho:
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalInCart)}</p>
+                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                      {activeList.paymentMethod === 'saldo' ? 'via Pix/Débito' : activeList.paymentMethod === 'credit' ? 'via Cartão de Crédito' : 'via VA/VR'}
+                    </span>
+                  </div>
                 </div>
 
                 <Button
                   variant="primary"
                   onClick={handleOpenFinalizeModal}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
                 >
-                  <Icon name="check_circle" size="sm" /> Finalizar Compra & Abater VA
+                  <Icon name="check_circle" size="sm" /> Finalizar Compra
                 </Button>
               </div>
             )}
@@ -642,11 +775,37 @@ export default function ComprasPage() {
             onChange={(e) => setNewListDesc(e.target.value)}
           />
           <Select
-            label="Cartão de Benefício Preferencial"
-            value={newListCardId}
-            onChange={(e) => setNewListCardId(e.target.value)}
-            options={cardSelectOptions}
+            label="Forma de Pagamento Preferencial"
+            value={newListPaymentMethod}
+            onChange={(e) => setNewListPaymentMethod(e.target.value as PaymentMethodType)}
+            options={PAYMENT_METHOD_OPTIONS}
           />
+
+          {newListPaymentMethod === 'benefit' && (
+            <Select
+              label="Cartão de Benefício Preferencial"
+              value={newListCardId}
+              onChange={(e) => setNewListCardId(e.target.value)}
+              options={cardSelectOptions}
+            />
+          )}
+
+          {newListPaymentMethod === 'credit' && (
+            <Select
+              label="Cartão de Crédito"
+              value={newListCreditCardId}
+              onChange={(e) => setNewListCreditCardId(e.target.value)}
+              options={creditCardSelectOptions}
+            />
+          )}
+
+          {newListPaymentMethod === 'saldo' && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+              <Icon name="account_balance_wallet" size="sm" />
+              <span>O valor será debitado diretamente do Saldo da Conta ao finalizar a compra.</span>
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsNewListOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">Criar Lista</Button>
@@ -668,12 +827,38 @@ export default function ComprasPage() {
             value={editListDesc}
             onChange={(e) => setEditListDesc(e.target.value)}
           />
+
           <Select
-            label="Cartão de Benefício Preferencial"
-            value={editListCardId}
-            onChange={(e) => setEditListCardId(e.target.value)}
-            options={cardSelectOptions}
+            label="Forma de Pagamento Preferencial"
+            value={editListPaymentMethod}
+            onChange={(e) => setEditListPaymentMethod(e.target.value as PaymentMethodType)}
+            options={PAYMENT_METHOD_OPTIONS}
           />
+
+          {editListPaymentMethod === 'benefit' && (
+            <Select
+              label="Cartão de Benefício Preferencial"
+              value={editListCardId}
+              onChange={(e) => setEditListCardId(e.target.value)}
+              options={cardSelectOptions}
+            />
+          )}
+
+          {editListPaymentMethod === 'credit' && (
+            <Select
+              label="Cartão de Crédito"
+              value={editListCreditCardId}
+              onChange={(e) => setEditListCreditCardId(e.target.value)}
+              options={creditCardSelectOptions}
+            />
+          )}
+
+          {editListPaymentMethod === 'saldo' && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/50 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+              <Icon name="account_balance_wallet" size="sm" />
+              <span>O valor será debitado diretamente do Saldo da Conta ao finalizar a compra.</span>
+            </div>
+          )}
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsEditListOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">Salvar Alterações</Button>
@@ -736,94 +921,201 @@ export default function ComprasPage() {
         </form>
       </Modal>
 
-      {/* Modal: Finalize Purchase (Supports Split Payment) */}
+      {/* Modal: Finalize Purchase (Supports VA/VR, Pix/Débito, and Cartão de Crédito) */}
       <Modal isOpen={isFinalizeOpen} onClose={() => setIsFinalizeOpen(false)} title="Finalizar Compra no Mercado">
         <form onSubmit={handleFinalizePurchase} className="space-y-4">
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            Você está prestes a finalizar a compra <strong>"{activeList?.title}"</strong> no valor total de <strong className="text-emerald-600">{formatCurrency(totalInCart)}</strong>.
-          </p>
-
-          {/* Toggle Split Payment Option */}
-          <div className="flex items-center gap-2 p-3 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/30">
-            <input
-              type="checkbox"
-              id="split_payment"
-              checked={isSplitPayment}
-              onChange={(e) => setIsSplitPayment(e.target.checked)}
-              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-            />
-            <label htmlFor="split_payment" className="text-xs font-bold text-blue-900 dark:text-blue-200 select-none cursor-pointer">
-              Dividir pagamento entre 2 cartões de benefício?
-            </label>
+          <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Você está prestes a finalizar a compra <strong>"{activeList?.title}"</strong>:
+            </p>
+            <div className="flex justify-between items-center pt-1">
+              <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Total no Carrinho:</span>
+              <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">{formatCurrency(totalInCart)}</span>
+            </div>
           </div>
 
-          {!isSplitPayment ? (
-            /* Single Card Payment */
-            <div className="space-y-3">
-              <Select
-                label="Selecione o Cartão para Debitar"
-                value={selectedCardForPayment}
-                onChange={(e) => setSelectedCardForPayment(e.target.value)}
-                options={cards.map(c => ({ value: c.id, label: `${c.name} - Saldo: ${formatCurrency(c.balance)}` }))}
-              />
+          {/* Payment Method Selector Tabs */}
+          <div>
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 block mb-1.5">
+              Como deseja pagar?
+            </label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setFinalizePaymentMethod('benefit')}
+                className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                  finalizePaymentMethod === 'benefit'
+                    ? 'bg-blue-50 border-blue-500 text-blue-700 dark:bg-blue-950/50 dark:border-blue-500 dark:text-blue-300 shadow-2xs'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <Icon name="restaurant" size="sm" />
+                <span>VA / VR</span>
+              </button>
 
-              {selectedPaymentCard && (
-                <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Saldo Atual:</span>
-                    <span className="font-bold">{formatCurrency(selectedPaymentCard.balance)}</span>
+              <button
+                type="button"
+                onClick={() => setFinalizePaymentMethod('saldo')}
+                className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                  finalizePaymentMethod === 'saldo'
+                    ? 'bg-emerald-50 border-emerald-500 text-emerald-700 dark:bg-emerald-950/50 dark:border-emerald-500 dark:text-emerald-300 shadow-2xs'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <Icon name="account_balance_wallet" size="sm" />
+                <span>Pix / Débito</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFinalizePaymentMethod('credit')}
+                className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center justify-center gap-1 transition-all ${
+                  finalizePaymentMethod === 'credit'
+                    ? 'bg-purple-50 border-purple-500 text-purple-700 dark:bg-purple-950/50 dark:border-purple-500 dark:text-purple-300 shadow-2xs'
+                    : 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                }`}
+              >
+                <Icon name="credit_card" size="sm" />
+                <span>Crédito</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Option 1: VA / VR Benefit Cards */}
+          {finalizePaymentMethod === 'benefit' && (
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-2 p-3 bg-blue-50/60 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/30">
+                <input
+                  type="checkbox"
+                  id="split_payment"
+                  checked={isSplitPayment}
+                  onChange={(e) => setIsSplitPayment(e.target.checked)}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                />
+                <label htmlFor="split_payment" className="text-xs font-bold text-blue-900 dark:text-blue-200 select-none cursor-pointer">
+                  Dividir pagamento entre 2 cartões de benefício?
+                </label>
+              </div>
+
+              {!isSplitPayment ? (
+                <div className="space-y-3">
+                  <Select
+                    label="Selecione o Cartão para Debitar"
+                    value={selectedCardForPayment}
+                    onChange={(e) => setSelectedCardForPayment(e.target.value)}
+                    options={cards.map(c => ({ value: c.id, label: `${c.name} - Saldo: ${formatCurrency(c.balance)}` }))}
+                  />
+
+                  {selectedPaymentCard && (
+                    <div className="p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-xs space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Saldo Atual:</span>
+                        <span className="font-bold">{formatCurrency(selectedPaymentCard.balance)}</span>
+                      </div>
+                      <div className="flex justify-between text-emerald-600">
+                        <span>Saldo Pós-Compra:</span>
+                        <span className="font-bold">{formatCurrency(Math.max(0, selectedPaymentCard.balance - totalInCart))}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-800">
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3">
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">1º Cartão (Parte 1)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        value={card1Id}
+                        onChange={(e) => setCard1Id(e.target.value)}
+                        options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
+                      />
+                      <Input
+                        label="Valor (R$)"
+                        type="number"
+                        step="0.01"
+                        value={card1Amount}
+                        onChange={(e) => handleCard1AmountChange(e.target.value)}
+                      />
+                    </div>
                   </div>
-                  <div className="flex justify-between text-emerald-600">
-                    <span>Saldo Pós-Compra:</span>
-                    <span className="font-bold">{formatCurrency(Math.max(0, selectedPaymentCard.balance - totalInCart))}</span>
+
+                  <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3">
+                    <p className="text-xs font-bold text-gray-700 dark:text-gray-300">2º Cartão (Parte 2)</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Select
+                        value={card2Id}
+                        onChange={(e) => setCard2Id(e.target.value)}
+                        options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
+                      />
+                      <Input
+                        label="Valor Restante (R$)"
+                        type="number"
+                        step="0.01"
+                        value={card2Amount}
+                        onChange={(e) => setCard2Amount(e.target.value)}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          ) : (
-            /* Split Payment between 2 Cards */
-            <div className="space-y-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">1º Cartão (Parte 1)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Select
-                    value={card1Id}
-                    onChange={(e) => setCard1Id(e.target.value)}
-                    options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
-                  />
-                  <Input
-                    label="Valor (R$)"
-                    type="number"
-                    step="0.01"
-                    value={card1Amount}
-                    onChange={(e) => handleCard1AmountChange(e.target.value)}
-                  />
+          )}
+
+          {/* Option 2: Pix / Débito (Saldo da Conta) */}
+          {finalizePaymentMethod === 'saldo' && (
+            <div className="p-4 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl border border-emerald-200 dark:border-emerald-800/60 space-y-2">
+              <div className="flex items-center gap-2 text-emerald-800 dark:text-emerald-200 font-bold text-xs">
+                <Icon name="payments" size="sm" className="text-emerald-600" />
+                <span>Débito em Conta Corrente / Pix</span>
+              </div>
+              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                O valor de <strong>{formatCurrency(totalInCart)}</strong> será lançado como uma <strong>despesa paga à vista</strong> na categoria de alimentação, abatendo diretamente do seu <strong>Saldo Atual</strong> no painel financeiro.
+              </p>
+            </div>
+          )}
+
+          {/* Option 3: Cartão de Crédito (Fatura) */}
+          {finalizePaymentMethod === 'credit' && (
+            <div className="space-y-3 pt-1">
+              <Select
+                label="Selecione o Cartão de Crédito"
+                value={finalizeCreditCardId}
+                onChange={(e) => setFinalizeCreditCardId(e.target.value)}
+                options={creditCardSelectOptions}
+              />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Select
+                  label="Parcelamento"
+                  value={String(finalizeInstallments)}
+                  onChange={(e) => setFinalizeInstallments(parseInt(e.target.value) || 1)}
+                  options={[
+                    { value: '1', label: `1x de ${formatCurrency(totalInCart)} (À vista)` },
+                    { value: '2', label: `2x de ${formatCurrency(totalInCart / 2)}` },
+                    { value: '3', label: `3x de ${formatCurrency(totalInCart / 3)}` },
+                    { value: '4', label: `4x de ${formatCurrency(totalInCart / 4)}` },
+                    { value: '5', label: `5x de ${formatCurrency(totalInCart / 5)}` },
+                    { value: '6', label: `6x de ${formatCurrency(totalInCart / 6)}` },
+                    { value: '10', label: `10x de ${formatCurrency(totalInCart / 10)}` },
+                    { value: '12', label: `12x de ${formatCurrency(totalInCart / 12)}` }
+                  ]}
+                />
+
+                <div className="p-2.5 bg-purple-50/60 dark:bg-purple-950/30 rounded-xl border border-purple-200/60 dark:border-purple-800/40 text-xs flex flex-col justify-center">
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 font-bold uppercase">Destino</span>
+                  <span className="font-bold text-purple-700 dark:text-purple-300">Fatura do Cartão</span>
                 </div>
               </div>
 
-              <div className="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3">
-                <p className="text-xs font-bold text-gray-700 dark:text-gray-300">2º Cartão (Parte 2)</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <Select
-                    value={card2Id}
-                    onChange={(e) => setCard2Id(e.target.value)}
-                    options={cards.map(c => ({ value: c.id, label: `${c.name} (${formatCurrency(c.balance)})` }))}
-                  />
-                  <Input
-                    label="Valor Restante (R$)"
-                    type="number"
-                    step="0.01"
-                    value={card2Amount}
-                    onChange={(e) => setCard2Amount(e.target.value)}
-                  />
-                </div>
-              </div>
+              <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                A despesa será adicionada à fatura do cartão com vencimento correspondente e status pendente.
+              </p>
             </div>
           )}
 
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsFinalizeOpen(false)}>Cancelar</Button>
-            <Button type="submit" variant="primary">Confirmar & Debitar</Button>
+            <Button type="submit" variant="primary">Confirmar & Finalizar</Button>
           </div>
         </form>
       </Modal>

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { useBenefitCards, BenefitCard, BenefitTransaction, BenefitTransactionItem } from '@/hooks/useBenefitCards';
 import { useShoppingLists } from '@/hooks/useShoppingLists';
+import { PurchaseInsightsModal, MonthlyShoppingListSuggestion } from '@/components/beneficios/PurchaseInsightsModal';
 
 export default function BeneficiosPage() {
   const router = useRouter();
@@ -31,6 +32,7 @@ export default function BeneficiosPage() {
   const [selectedCardForRecharge, setSelectedCardForRecharge] = useState<BenefitCard | null>(null);
   const [selectedCardForEdit, setSelectedCardForEdit] = useState<BenefitCard | null>(null);
   const [isNewCardModalOpen, setIsNewCardModalOpen] = useState(false);
+  const [isInsightsModalOpen, setIsInsightsModalOpen] = useState(false);
   
   const [rechargeAmount, setRechargeAmount] = useState('');
   
@@ -261,6 +263,72 @@ export default function BeneficiosPage() {
     }
   };
 
+  const handleCreateListFromInsights = async (suggestedItems: string[]) => {
+    if (!suggestedItems || suggestedItems.length === 0) return;
+
+    const itemsToCopy = suggestedItems.map((item, idx) => ({
+      name: item,
+      category: 'Alimentação',
+      quantity: 1,
+      unit: 'un',
+      estimatedPrice: 0,
+      actualPrice: 0,
+      position: idx
+    }));
+
+    const dateFormatted = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const firstVACard = cards.find(c => c.type === 'va');
+
+    const newId = await createListWithItems(
+      `Lista Sugerida (${dateFormatted})`,
+      'Itens essenciais e frequentes sugeridos pelo assistente de IA',
+      firstVACard?.id || undefined,
+      itemsToCopy
+    );
+
+    if (newId) {
+      setIsInsightsModalOpen(false);
+      router.push('/compras');
+    }
+  };
+
+  const handleCreateMonthlyListFromInsights = async (suggestion: MonthlyShoppingListSuggestion) => {
+    if (!suggestion || !suggestion.itens || suggestion.itens.length === 0) return;
+
+    const itemsToCopy = suggestion.itens.map((item, idx) => ({
+      name: item.nome,
+      category: item.categoria || 'Alimentação',
+      quantity: Number(item.quantidadeSugerida) || 1,
+      unit: item.unidade || 'un',
+      estimatedPrice: Number(item.precoUnitarioMedio) || 0,
+      actualPrice: Number(item.precoUnitarioMedio) || 0,
+      position: idx
+    }));
+
+    const dateFormatted = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const firstVACard = cards.find(c => c.type === 'va');
+
+    const title = suggestion.titulo
+      ? `${suggestion.titulo} (${dateFormatted})`
+      : `Abastecimento Mensal (${dateFormatted})`;
+
+    const description = suggestion.resumoConsumo
+      ? `${suggestion.resumoConsumo} • Total Estimado: R$ ${Number(suggestion.custoEstimadoTotal || 0).toFixed(2)}`
+      : `Lista gerada por IA com projeção de quantidades para o consumo de 30 dias`;
+
+    const newId = await createListWithItems(
+      title,
+      description,
+      firstVACard?.id || undefined,
+      itemsToCopy
+    );
+
+    if (newId) {
+      setIsInsightsModalOpen(false);
+      router.push('/compras');
+    }
+  };
+
   const totalVABalance = cards.filter(c => c.type === 'va').reduce((acc, c) => acc + c.balance, 0);
   const totalVRBalance = cards.filter(c => c.type === 'vr').reduce((acc, c) => acc + c.balance, 0);
 
@@ -399,20 +467,36 @@ export default function BeneficiosPage() {
             </p>
           </div>
 
-          {transactions.length > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                if (window.confirm('Deseja realmente limpar todo o histórico do extrato?')) {
-                  clearAllTransactions();
-                }
-              }}
-              className="text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-1"
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setIsInsightsModalOpen(true)}
+              disabled={transactions.length === 0}
+              className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs ${
+                transactions.length > 0
+                  ? 'bg-gradient-to-r from-emerald-500/15 via-teal-500/15 to-blue-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 hover:border-emerald-500 hover:shadow-md hover:from-emerald-500/25 cursor-pointer'
+                  : 'bg-gray-100 text-gray-400 border border-gray-200 dark:bg-gray-800 dark:text-gray-600 dark:border-gray-700 cursor-not-allowed'
+              }`}
+              title="Analisar compras, economia em feiras/dias da semana e ritmo do saldo com IA"
             >
-              <Icon name="delete_sweep" size="sm" /> Limpar Extrato
-            </Button>
-          )}
+              <Icon name="auto_awesome" size="sm" className="text-emerald-500 !text-base animate-pulse" />
+              <span>Analisar Hábitos de Compra (IA)</span>
+            </button>
+
+            {transactions.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  if (window.confirm('Deseja realmente limpar todo o histórico do extrato?')) {
+                    clearAllTransactions();
+                  }
+                }}
+                className="text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-1"
+              >
+                <Icon name="delete_sweep" size="sm" /> Limpar Extrato
+              </Button>
+            )}
+          </div>
         </div>
 
         <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
@@ -867,6 +951,15 @@ export default function BeneficiosPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Purchase AI Insights Modal */}
+      <PurchaseInsightsModal
+        isOpen={isInsightsModalOpen}
+        onClose={() => setIsInsightsModalOpen(false)}
+        transactions={transactions}
+        onCreateListFromInsights={handleCreateListFromInsights}
+        onCreateMonthlyListFromInsights={handleCreateMonthlyListFromInsights}
+      />
     </div>
   );
 }
