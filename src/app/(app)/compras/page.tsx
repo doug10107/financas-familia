@@ -13,6 +13,7 @@ import { useBenefitCards } from '@/hooks/useBenefitCards';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useTransactions } from '@/hooks/useTransactions';
 import { ImportShoppingListModal } from '@/components/compras/ImportShoppingListModal';
+import { PurchaseInsightsModal, MonthlyShoppingListSuggestion } from '@/components/beneficios/PurchaseInsightsModal';
 
 const UNIT_OPTIONS = [
   { value: 'un', label: 'un (unidade)' },
@@ -54,7 +55,7 @@ export default function ComprasPage() {
     completeList
   } = useShoppingLists();
 
-  const { cards, debitBalance } = useBenefitCards();
+  const { cards, transactions, debitBalance } = useBenefitCards();
   const { creditCards } = useCreditCards();
   const { addTransaction, categories } = useTransactions();
 
@@ -75,6 +76,7 @@ export default function ComprasPage() {
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
   const [isImportAiOpen, setIsImportAiOpen] = useState(false);
+  const [isMonthlyPlannerOpen, setIsMonthlyPlannerOpen] = useState(false);
 
   // New List Form State
   const [newListTitle, setNewListTitle] = useState('');
@@ -349,6 +351,43 @@ export default function ComprasPage() {
     setIsFinalizeOpen(false);
   };
 
+  const handleCreateMonthlyListFromPlanner = async (suggestion: MonthlyShoppingListSuggestion) => {
+    if (!suggestion || !suggestion.itens || suggestion.itens.length === 0) return;
+
+    const itemsToCopy = suggestion.itens.map((item, idx) => ({
+      name: item.nome,
+      category: item.categoria || 'Alimentação',
+      quantity: Number(item.quantidadeSugerida) || 1,
+      unit: item.unidade || 'un',
+      estimatedPrice: Number(item.precoUnitarioMedio) || 0,
+      actualPrice: Number(item.precoUnitarioMedio) || 0,
+      position: idx
+    }));
+
+    const dateFormatted = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const firstVACard = cards.find(c => c.type === 'va');
+
+    const title = suggestion.titulo
+      ? `${suggestion.titulo} (${dateFormatted})`
+      : `Abastecimento Mensal (${dateFormatted})`;
+
+    const description = suggestion.resumoConsumo
+      ? `${suggestion.resumoConsumo} • Total Estimado: R$ ${Number(suggestion.custoEstimadoTotal || 0).toFixed(2)}`
+      : `Lista gerada por IA com base no histórico de consumo e média de preços`;
+
+    const newId = await createListWithItems(
+      title,
+      description,
+      firstVACard?.id || undefined,
+      itemsToCopy
+    );
+
+    if (newId) {
+      setActiveListId(newId);
+      setIsMonthlyPlannerOpen(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -363,14 +402,25 @@ export default function ComprasPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* Monthly Restock AI Generator Button */}
+          <Button
+            variant="secondary"
+            onClick={() => setIsMonthlyPlannerOpen(true)}
+            className="flex items-center gap-1.5 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 bg-emerald-50/80 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 shadow-xs font-semibold"
+            title="Gerar lista completa para o mês todo com base nas compras anteriores e média de preços"
+          >
+            <Icon name="auto_awesome" size="sm" className="text-emerald-500" />
+            <span>Lista do Mês (IA)</span>
+          </Button>
+
           {/* AI Import Button */}
           <Button
             variant="secondary"
             onClick={() => setIsImportAiOpen(true)}
             className="flex items-center gap-1.5 border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 bg-blue-50/70 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 shadow-sm"
           >
-            <Icon name="auto_awesome" size="sm" className="text-blue-500" />
-            <span>Importar com IA</span>
+            <Icon name="photo_camera" size="sm" className="text-blue-500" />
+            <span>Importar Cupom</span>
           </Button>
 
           {/* New List Button */}
@@ -1135,6 +1185,14 @@ export default function ComprasPage() {
           const newId = await createListWithItems(title, description, benefitCardId, items);
           if (newId) setActiveListId(newId);
         }}
+      />
+
+      {/* Modal: AI Monthly Restock Planner & Consumption Insights */}
+      <PurchaseInsightsModal
+        isOpen={isMonthlyPlannerOpen}
+        onClose={() => setIsMonthlyPlannerOpen(false)}
+        transactions={transactions}
+        onCreateMonthlyListFromInsights={handleCreateMonthlyListFromPlanner}
       />
     </div>
   );

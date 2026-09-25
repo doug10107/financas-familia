@@ -6,17 +6,18 @@
  */
 
 export const GEMINI_MODELS = {
-  /** Modelos disponíveis para análise (atualizados set/2026) */
+  /** Modelos disponíveis e ativos para análise (alta disponibilidade e baixa latência) */
   DEFAULT: [
-    'gemini-3.6-flash',
-    'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.6-flash',
   ] as const,
 
   /** Modelos com suporte a visão (imagens/PDFs) */
   VISION: [
-    'gemini-3.6-flash',
     'gemini-2.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.6-flash',
   ] as const,
 } as const;
 
@@ -43,7 +44,7 @@ export interface GeminiCallResult {
  *
  * @param apiKey - Chave da API Gemini (GEMINI_API_KEY)
  * @param promptParts - Array de parts do Gemini (text, inline_data, etc.)
- * @param options - Opções de chamada (modelos, timeout, generationConfig, systemInstruction)
+ * @param options - Opções de chamada (modelos, timeout, generationConfig)
  * @returns Resultado com rawText, parsed (se JSON) e modelUsed
  * @throws Error se todos os modelos falharem
  */
@@ -101,14 +102,32 @@ export async function callGeminiWithFallback(
         continue;
       }
 
-      // Tentar parsear JSON automaticamente
+      // Tentar parsear JSON automaticamente removendo possíveis blocos de markdown
       let parsed: unknown | undefined;
+      const cleanJsonText = rawText
+        .replace(/^```(?:json)?\s*/i, '')
+        .replace(/\s*```$/i, '')
+        .trim();
+
       try {
-        parsed = JSON.parse(rawText);
+        parsed = JSON.parse(cleanJsonText);
       } catch (jsonErr) {
-        console.warn(`[Gemini] Falha no parse JSON do modelo ${model}:`, jsonErr);
-        lastError = jsonErr;
-        continue;
+        // Fallback: tentar extrair substring entre o primeiro '{' e o último '}'
+        const firstBrace = cleanJsonText.indexOf('{');
+        const lastBrace = cleanJsonText.lastIndexOf('}');
+        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+          try {
+            parsed = JSON.parse(cleanJsonText.slice(firstBrace, lastBrace + 1));
+          } catch {
+            console.warn(`[Gemini] Falha no parse JSON do modelo ${model}:`, jsonErr);
+            lastError = jsonErr;
+            continue;
+          }
+        } else {
+          console.warn(`[Gemini] Falha no parse JSON do modelo ${model}:`, jsonErr);
+          lastError = jsonErr;
+          continue;
+        }
       }
 
       console.info(`[Gemini] Sucesso com modelo: ${model}`);
