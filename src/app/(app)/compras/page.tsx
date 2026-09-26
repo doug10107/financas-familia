@@ -50,6 +50,7 @@ export default function ComprasPage() {
     toggleItem,
     toggleAllItems,
     updateItemPrice,
+    updateItem,
     deleteItem,
     deleteList,
     completeList
@@ -74,6 +75,7 @@ export default function ComprasPage() {
   const [isNewListOpen, setIsNewListOpen] = useState(false);
   const [isEditListOpen, setIsEditListOpen] = useState(false);
   const [isAddItemOpen, setIsAddItemOpen] = useState(false);
+  const [isEditItemOpen, setIsEditItemOpen] = useState(false);
   const [isFinalizeOpen, setIsFinalizeOpen] = useState(false);
   const [isImportAiOpen, setIsImportAiOpen] = useState(false);
   const [isMonthlyPlannerOpen, setIsMonthlyPlannerOpen] = useState(false);
@@ -98,6 +100,15 @@ export default function ComprasPage() {
   const [itemQuantity, setItemQuantity] = useState('1');
   const [itemUnit, setItemUnit] = useState('un');
   const [itemEstPrice, setItemEstPrice] = useState('');
+
+  // Edit Item Form State
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editItemName, setEditItemName] = useState('');
+  const [editItemCategory, setEditItemCategory] = useState('Alimentação');
+  const [editItemQuantity, setEditItemQuantity] = useState('1');
+  const [editItemUnit, setEditItemUnit] = useState('un');
+  const [editItemEstPrice, setEditItemEstPrice] = useState('');
+  const [editItemActualPrice, setEditItemActualPrice] = useState('');
 
   // Finalize Form State (Single & Split Payment & Pix/Credit)
   const [finalizePaymentMethod, setFinalizePaymentMethod] = useState<PaymentMethodType>('benefit');
@@ -219,6 +230,54 @@ export default function ComprasPage() {
     setItemUnit('un');
     setItemEstPrice('');
     setIsAddItemOpen(false);
+  };
+
+  const handleOpenEditItem = (item: ShoppingItem) => {
+    setEditingItemId(item.id);
+    setEditItemName(item.name);
+    setEditItemCategory(item.category || 'Alimentação');
+    setEditItemQuantity(String(item.quantity));
+    setEditItemUnit(item.unit || 'un');
+    setEditItemEstPrice(item.estimatedPrice ? String(item.estimatedPrice) : '');
+    setEditItemActualPrice(item.actualPrice ? String(item.actualPrice) : '');
+    setIsEditItemOpen(true);
+  };
+
+  const handleSaveEditItem = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeList || !editingItemId || !editItemName.trim()) return;
+
+    const qty = parseFloat(editItemQuantity.replace(',', '.')) || 1;
+    const est = parseFloat(editItemEstPrice.replace(',', '.')) || 0;
+    const act = editItemActualPrice !== '' ? parseFloat(editItemActualPrice.replace(',', '.')) || 0 : est;
+
+    await updateItem(activeList.id, editingItemId, {
+      name: editItemName.trim(),
+      category: editItemCategory,
+      quantity: Math.max(0.001, qty),
+      unit: editItemUnit || 'un',
+      estimatedPrice: est,
+      actualPrice: act
+    });
+
+    setIsEditItemOpen(false);
+    setEditingItemId(null);
+  };
+
+  const handleQuickQuantityStep = (itemId: string, currentQty: number, step: number, unit?: string) => {
+    if (!activeList) return;
+    const isWeight = unit === 'kg' || unit === 'g' || unit === 'L' || unit === 'ml';
+    const effectiveStep = (isWeight && Math.abs(currentQty) < 1) ? step / 2 : step;
+    const nextQty = Math.max(0.01, Number((currentQty + effectiveStep).toFixed(3)));
+    updateItem(activeList.id, itemId, { quantity: nextQty });
+  };
+
+  const handleQuickQuantityInput = (itemId: string, val: string) => {
+    if (!activeList) return;
+    const numeric = parseFloat(val.replace(',', '.'));
+    if (!isNaN(numeric) && numeric > 0) {
+      updateItem(activeList.id, itemId, { quantity: numeric });
+    }
   };
 
   const handleOpenFinalizeModal = () => {
@@ -694,16 +753,54 @@ export default function ComprasPage() {
                             onChange={() => toggleItem(activeList.id, item.id)}
                             className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer shrink-0"
                           />
-                          <div className="min-w-0">
+                          <div className="min-w-0 flex-1">
                             <p className={`font-semibold text-sm truncate ${item.isChecked ? 'line-through text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-white'}`}>
                               {item.name}
                             </p>
-                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400">
-                              <span className="font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
-                                {item.quantity} {item.unit || 'un'}
-                              </span>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-400 mt-1">
+                              {/* Interactive Quick Quantity Stepper & Input */}
+                              {!activeList.isCompleted ? (
+                                <div
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="inline-flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5 border border-gray-200/70 dark:border-gray-700/60 shadow-2xs"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickQuantityStep(item.id, item.quantity, -1, item.unit)}
+                                    disabled={item.quantity <= 0.05}
+                                    className="w-5 h-5 rounded flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-extrabold text-xs transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Diminuir quantidade"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    step="any"
+                                    min="0.01"
+                                    value={item.quantity}
+                                    onChange={(e) => handleQuickQuantityInput(item.id, e.target.value)}
+                                    className="w-12 text-center bg-transparent font-bold text-xs text-gray-900 dark:text-white focus:outline-none p-0 focus:ring-1 focus:ring-blue-500 rounded"
+                                    title="Clique para digitar a quantidade"
+                                  />
+                                  <span className="text-[10px] font-semibold text-gray-500 pr-1 select-none">{item.unit || 'un'}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleQuickQuantityStep(item.id, item.quantity, 1, item.unit)}
+                                    className="w-5 h-5 rounded flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 font-extrabold text-xs transition-colors"
+                                    title="Aumentar quantidade"
+                                  >
+                                    +
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded">
+                                  {item.quantity} {item.unit || 'un'}
+                                </span>
+                              )}
+
                               <span>•</span>
                               <span>{formatCurrency(currentPrice)}/{item.unit || 'un'}</span>
+
                               {item.quantity !== 1 && (
                                 <>
                                   <span>•</span>
@@ -712,18 +809,19 @@ export default function ComprasPage() {
                                   </span>
                                 </>
                               )}
+
                               {item.category && item.category !== 'Alimentação' && (
                                 <>
                                   <span>•</span>
-                                  <span className="text-[10px] text-blue-500 dark:text-blue-400">{item.category}</span>
+                                  <span className="text-[10px] text-blue-500 dark:text-blue-400 font-medium">{item.category}</span>
                                 </>
                               )}
                             </div>
                           </div>
                         </div>
 
-                        {/* Actual Unit Price Input & Subtotal */}
-                        <div className="flex items-center gap-3 shrink-0">
+                        {/* Actual Unit Price Input & Actions */}
+                        <div className="flex items-center gap-2.5 shrink-0">
                           <div className="text-right">
                             <div className="w-24">
                               <Input
@@ -740,12 +838,27 @@ export default function ComprasPage() {
                             </span>
                           </div>
 
-                          <button
-                            onClick={() => deleteItem(activeList.id, item.id)}
-                            className="text-gray-400 hover:text-red-500 p-1"
-                          >
-                            <Icon name="close" size="sm" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            {!activeList.isCompleted && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditItem(item)}
+                                className="text-gray-400 hover:text-blue-500 p-1 transition-colors"
+                                title="Editar item completo (nome, categoria, quantidade, preços)"
+                              >
+                                <Icon name="edit" size="sm" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => deleteItem(activeList.id, item.id)}
+                              className="text-gray-400 hover:text-red-500 p-1 transition-colors"
+                              title="Excluir item da lista"
+                            >
+                              <Icon name="close" size="sm" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -967,6 +1080,71 @@ export default function ComprasPage() {
           <div className="flex justify-end gap-3 pt-3">
             <Button type="button" variant="ghost" onClick={() => setIsAddItemOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">Adicionar Item</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Edit Item (Change name, quantity, unit, category, prices) */}
+      <Modal isOpen={isEditItemOpen} onClose={() => setIsEditItemOpen(false)} title="Editar Item da Lista">
+        <form onSubmit={handleSaveEditItem} className="space-y-4">
+          <Input
+            label="Nome do Produto"
+            placeholder="Ex: Alcatra Bife, Banana Prata, Leite"
+            value={editItemName}
+            onChange={(e) => setEditItemName(e.target.value)}
+            required
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Categoria"
+              value={editItemCategory}
+              onChange={(e) => setEditItemCategory(e.target.value)}
+              options={CATEGORY_OPTIONS}
+            />
+
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                label="Quantidade"
+                type="number"
+                step="0.001"
+                min="0.001"
+                placeholder="1"
+                value={editItemQuantity}
+                onChange={(e) => setEditItemQuantity(e.target.value)}
+                required
+              />
+              <Select
+                label="Unidade"
+                value={editItemUnit}
+                onChange={(e) => setEditItemUnit(e.target.value)}
+                options={UNIT_OPTIONS}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Preço Estimado Unitário (R$)"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={editItemEstPrice}
+              onChange={(e) => setEditItemEstPrice(e.target.value)}
+            />
+            <Input
+              label="Preço Real no Caixa (R$)"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              value={editItemActualPrice}
+              onChange={(e) => setEditItemActualPrice(e.target.value)}
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-3">
+            <Button type="button" variant="ghost" onClick={() => setIsEditItemOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="primary">Salvar Alterações</Button>
           </div>
         </form>
       </Modal>
