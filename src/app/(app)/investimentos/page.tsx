@@ -18,6 +18,7 @@ import {
 import { Doughnut } from 'react-chartjs-2';
 import { useInvestments, Investment } from '@/hooks/useInvestments';
 import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestmentsModal';
+import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTable';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -237,7 +238,7 @@ export default function InvestmentsPage() {
   })).sort((a, b) => b.total - a.total);
 
   // Modal Open Handlers
-  const handleOpenInvModal = (invToEdit?: Investment) => {
+  const handleOpenInvModal = (invToEdit?: Investment, prefilledTicker?: string, prefilledPrice?: number) => {
     setFormError('');
     if (invToEdit) {
       setEditingInvId(invToEdit.id);
@@ -258,21 +259,28 @@ export default function InvestmentsPage() {
       });
     } else {
       setEditingInvId(null);
+      const cleanTicker = (prefilledTicker || '').toUpperCase().trim();
+      const acoesType = types.find(t => t.name.toLowerCase().includes('ações') || t.name.toLowerCase().includes('acoes'));
+      
       setInvForm({
-        name: '',
-        ticker: '',
-        type_id: types.length > 0 ? types[0].id : '',
+        name: cleanTicker || '',
+        ticker: cleanTicker,
+        type_id: acoesType ? acoesType.id : (types.length > 0 ? types[0].id : ''),
         institution: '',
         plan_type: 'PGBL',
         tax_regime: 'Regressivo',
         quantity: '1',
-        unit_price: '',
+        unit_price: prefilledPrice ? String(prefilledPrice) : '',
         fees: '',
-        total_amount: '',
+        total_amount: prefilledPrice ? String(prefilledPrice) : '',
         date: new Date().toISOString().split('T')[0],
         due_date: '',
-        notes: ''
+        notes: cleanTicker ? `Compra via análise Graham: ${cleanTicker}` : ''
       });
+
+      if (cleanTicker) {
+        handleFetchTickerQuote(cleanTicker);
+      }
     }
     setIsInvModalOpen(true);
   };
@@ -901,6 +909,13 @@ export default function InvestmentsPage() {
           </div>
         )}
       </GlassCard>
+
+      {/* Tabela & Análise Fundamentalista de Graham para Ações (B3) */}
+      <GrahamAnalysisTable
+        investments={investments}
+        onOpenEntryModal={handleOpenEntryModal}
+        onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
+      />
 
       {/* Modal - Novo / Editar Investimento (com Calculadora Qtd * Preço) */}
       <Modal 
