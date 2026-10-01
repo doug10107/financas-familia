@@ -173,6 +173,29 @@ export function ImportInvestmentsModal({
         ['VXUS', 'IVV', 'TFLO', 'VOO', 'QQQ', 'VTI', 'VT', 'SCHD'].includes(ticker)
       );
 
+      // Normalize type
+      let type = typeStr;
+      if (!type) {
+        if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
+        else if (ticker.endsWith('11')) type = 'FIIs';
+        else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
+        else if (isUsd) type = 'ETFs Internacionais';
+        else if (name.toLowerCase().includes('prev') || name.toLowerCase().includes('pgbl') || name.toLowerCase().includes('vgbl')) type = 'Previdência Privada';
+        else if (name.toLowerCase().includes('tesouro')) type = 'Tesouro Direto';
+        else type = 'Renda Fixa';
+      } else {
+        const lowerType = type.toLowerCase();
+        if (lowerType.includes('intern') || (isUsd && lowerType.includes('etf'))) type = 'ETFs Internacionais';
+        else if (lowerType.includes('ação') || lowerType.includes('acoes') || lowerType.includes('ações')) type = 'Ações';
+        else if (lowerType.includes('fii')) type = 'FIIs';
+        else if (lowerType.includes('etf')) type = 'ETFs';
+        else if (lowerType.includes('cripto')) type = 'Criptomoedas';
+        else if (lowerType.includes('tesouro')) type = 'Tesouro Direto';
+        else if (lowerType.includes('prev') || lowerType.includes('pgbl') || lowerType.includes('vgbl')) type = 'Previdência Privada';
+        else if (lowerType.includes('fundo')) type = 'Renda Fixa';
+        else if (lowerType.includes('renda fixa')) type = 'Renda Fixa';
+      }
+
       let averagePrice = parseNumberInput(rawPrice);
       let currentPrice = parseNumberInput(rawCurPrice);
       let currentBalance = parseNumberInput(rawSaldo);
@@ -187,52 +210,12 @@ export function ImportInvestmentsModal({
         }
       }
 
-      // If in USD, convert to BRL using USD rate
-      if (isUsd) {
-        if (averagePrice > 0) {
-          averagePrice = Number((averagePrice * estimatedUsdRate).toFixed(2));
-        }
-        if (currentPrice > 0) {
-          currentPrice = Number((currentPrice * estimatedUsdRate).toFixed(2));
-        }
-        if (currentBalance > 0) {
-          currentBalance = Number((currentBalance * estimatedUsdRate).toFixed(2));
-        }
-        if (totalInvested > 0) {
-          totalInvested = Number((totalInvested * estimatedUsdRate).toFixed(2));
-        } else if (quantity > 0 && averagePrice > 0) {
-          totalInvested = Number((quantity * averagePrice).toFixed(2));
-        }
-      } else {
-        if (!totalInvested && quantity > 0 && averagePrice > 0) {
-          totalInvested = Number((quantity * averagePrice).toFixed(2));
-        }
+      if (!totalInvested && quantity > 0 && averagePrice > 0) {
+        totalInvested = Number((quantity * averagePrice).toFixed(2));
       }
 
       const rawInst = row['Instituição'] || row['Instituicao'] || row['Corretora'] || row['Banco'] || '';
       const institution = String(rawInst).trim() || (isUsd ? 'Internacional' : 'Investidor10');
-
-      // Normalize Type Classification
-      let type = typeStr;
-      if (!type) {
-        if (['BTC', 'ETH', 'SOL', 'USDT'].includes(ticker)) type = 'Criptomoedas';
-        else if (ticker.endsWith('11')) type = 'FIIs';
-        else if (/^[A-Z]{4}\d[A-Z]?$/.test(ticker)) type = 'Ações';
-        else if (isUsd) type = 'ETFs';
-        else if (name.toLowerCase().includes('prev') || name.toLowerCase().includes('pgbl') || name.toLowerCase().includes('vgbl')) type = 'Previdência Privada';
-        else if (name.toLowerCase().includes('tesouro')) type = 'Tesouro Direto';
-        else type = 'Renda Fixa';
-      } else {
-        const lowerType = type.toLowerCase();
-        if (lowerType.includes('ação') || lowerType.includes('acoes') || lowerType.includes('ações')) type = 'Ações';
-        else if (lowerType.includes('fii')) type = 'FIIs';
-        else if (lowerType.includes('etf')) type = 'ETFs';
-        else if (lowerType.includes('cripto')) type = 'Criptomoedas';
-        else if (lowerType.includes('tesouro')) type = 'Tesouro Direto';
-        else if (lowerType.includes('prev') || lowerType.includes('pgbl') || lowerType.includes('vgbl')) type = 'Previdência Privada';
-        else if (lowerType.includes('fundo')) type = 'Renda Fixa';
-        else if (lowerType.includes('renda fixa')) type = 'Renda Fixa';
-      }
 
       parsed.push({
         tempId: `asset-${Date.now()}-${idx}-${Math.random().toString(36).substring(2, 6)}`,
@@ -240,9 +223,9 @@ export function ImportInvestmentsModal({
         name,
         type,
         quantity,
-        averagePrice: Number(averagePrice.toFixed(2)),
+        averagePrice: Number(averagePrice.toFixed(4)),
         totalInvested: Number((totalInvested || quantity * averagePrice).toFixed(2)),
-        currentPrice: currentPrice > 0 ? Number(currentPrice.toFixed(2)) : undefined,
+        currentPrice: currentPrice > 0 ? Number(currentPrice.toFixed(4)) : undefined,
         currentBalance: currentBalance > 0 ? Number(currentBalance.toFixed(2)) : undefined,
         institution,
         currency: isUsd ? 'USD' : 'BRL',

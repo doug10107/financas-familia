@@ -131,6 +131,38 @@ async function fetchCryptoQuote(cleanTicker: string) {
   };
 }
 
+async function fetchUsdExchangeRate(): Promise<number> {
+  try {
+    const res = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const bid = parseFloat(data?.USDBRL?.bid);
+      if (bid > 0) return Number(bid.toFixed(4));
+    }
+  } catch (e) {
+    console.warn('Erro AwesomeAPI USD-BRL:', e);
+  }
+
+  try {
+    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/USDBRL%3DX?interval=1d&range=1d', {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      cache: 'no-store'
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const price = Number(data?.chart?.result?.[0]?.meta?.regularMarketPrice);
+      if (price > 0) return Number(price.toFixed(4));
+    }
+  } catch (e) {
+    console.warn('Erro Yahoo USD-BRL:', e);
+  }
+
+  return 5.18;
+}
+
 function formatYahooTicker(raw: string): string {
   const clean = raw.trim().toUpperCase();
   if (!clean) return '';
@@ -157,6 +189,8 @@ export async function GET(req: NextRequest) {
   };
 
   try {
+    const usdRate = await fetchUsdExchangeRate();
+
     // Autocomplete / Search endpoint
     if (search) {
       const cleanSearch = search.trim().toUpperCase();
@@ -204,7 +238,7 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      return NextResponse.json({ results: searchResults }, { headers });
+      return NextResponse.json({ results: searchResults, usdRate }, { headers });
     }
 
     // Single Ticker Quote endpoint
@@ -215,11 +249,11 @@ export async function GET(req: NextRequest) {
       if (CRYPTO_MAP[cleanTicker] || cleanTicker.includes('BITCOIN') || cleanTicker === 'BTC') {
         const cryptoQuote = await fetchCryptoQuote(cleanTicker === 'BITCOIN' ? 'BTC' : cleanTicker);
         if (cryptoQuote) {
-          return NextResponse.json(cryptoQuote, { headers });
+          return NextResponse.json({ ...cryptoQuote, usdRate }, { headers });
         }
       }
 
-      // 2. Try B3 Stocks / FIIs via Yahoo Finance
+      // 2. Try B3 Stocks / FIIs / US Stocks & ETFs via Yahoo Finance
       const formattedTicker = formatYahooTicker(cleanTicker);
       const quoteUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formattedTicker)}?interval=1d&range=1d`;
       
@@ -231,13 +265,13 @@ export async function GET(req: NextRequest) {
       });
 
       if (!res.ok) {
-        return NextResponse.json({ error: 'Ativo não encontrado ou erro na cotação' }, { status: 404, headers });
+        return NextResponse.json({ error: 'Ativo não encontrado ou erro na cotação', usdRate }, { status: 404, headers });
       }
 
       const data = await res.json();
       const result = data?.chart?.result?.[0];
       if (!result || !result.meta) {
-        return NextResponse.json({ error: 'Dados do ativo não disponíveis' }, { status: 404, headers });
+        return NextResponse.json({ error: 'Dados do ativo não disponíveis', usdRate }, { status: 404, headers });
       }
 
       const meta = result.meta;
@@ -249,19 +283,25 @@ export async function GET(req: NextRequest) {
       let cleanSymbol = meta.symbol;
       if (cleanSymbol.endsWith('.SA')) cleanSymbol = cleanSymbol.replace('.SA', '');
 
+      const isUSD = (meta.currency || '').toUpperCase() === 'USD' || !meta.symbol.endsWith('.SA');
+      const currency = isUSD ? 'USD' : (meta.currency || 'BRL');
+      const priceBrl = currency === 'USD' ? Number((currentPrice * usdRate).toFixed(2)) : Number(currentPrice.toFixed(2));
+
       return NextResponse.json({
         symbol: cleanSymbol,
         name: meta.shortName || meta.longName || cleanSymbol,
         price: Number(currentPrice.toFixed(2)),
+        priceBrl,
         previousClose: Number(prevClose.toFixed(2)),
         change: Number(change.toFixed(2)),
         changePercent: Number(changePercent.toFixed(2)),
-        currency: meta.currency || 'BRL',
+        currency,
+        usdRate,
         lastUpdated: new Date().toISOString()
       }, { headers });
     }
 
-    return NextResponse.json({ error: 'Parâmetro ticker ou search obrigatório' }, { status: 400, headers });
+    return NextResponse.json({ error: 'Parâmetro ticker ou search obrigatório', usdRate }, { status: 400, headers });
   } catch (error: any) {
     console.error('Erro na rota de cotações:', error);
     return NextResponse.json({ error: error.message || 'Erro ao buscar cotação' }, { status: 500, headers });
@@ -277,9 +317,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const tickers: string[] = body.tickers || [];
+    const usdRate = await fetchUsdExchangeRate();
 
     if (!Array.isArray(tickers) || tickers.length === 0) {
-      return NextResponse.json({ quotes: {} }, { headers });
+      return NextResponse.json({ quotes: {}, usdRate }, { headers });
     }
 
     const quotes: Record<string, any> = {};
@@ -294,13 +335,13 @@ export async function POST(req: NextRequest) {
           if (CRYPTO_MAP[cleanTicker] || cleanTicker.includes('BITCOIN') || cleanTicker === 'BTC') {
             const cryptoQuote = await fetchCryptoQuote(cleanTicker);
             if (cryptoQuote) {
-              quotes[cleanTicker] = cryptoQuote;
-              quotes[cryptoQuote.symbol] = cryptoQuote;
+              quotes[cleanTicker] = { ...cryptoQuote, usdRate };
+              quotes[cryptoQuote.symbol] = { ...cryptoQuote, usdRate };
               return;
             }
           }
 
-          // Stock / FII
+          // Stock / FII / US ETF
           const formatted = formatYahooTicker(cleanTicker);
           const quoteUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(formatted)}?interval=1d&range=1d`;
           
@@ -323,13 +364,18 @@ export async function POST(req: NextRequest) {
               let clean = meta.symbol;
               if (clean.endsWith('.SA')) clean = clean.replace('.SA', '');
 
+              const isUSD = (meta.currency || '').toUpperCase() === 'USD' || !meta.symbol.endsWith('.SA');
+              const currency = isUSD ? 'USD' : (meta.currency || 'BRL');
+              const priceBrl = currency === 'USD' ? Number((currentPrice * usdRate).toFixed(2)) : Number(currentPrice.toFixed(2));
+
               quotes[cleanTicker] = {
                 symbol: clean,
                 name: meta.shortName || clean,
                 price: Number(currentPrice.toFixed(2)),
+                priceBrl,
                 change: Number(change.toFixed(2)),
                 changePercent: Number(changePercent.toFixed(2)),
-                currency: meta.currency || 'BRL'
+                currency
               };
             }
           }
@@ -339,7 +385,7 @@ export async function POST(req: NextRequest) {
       })
     );
 
-    return NextResponse.json({ quotes }, { headers });
+    return NextResponse.json({ quotes, usdRate }, { headers });
   } catch (error: any) {
     console.error('Erro no batch quotes:', error);
     return NextResponse.json({ error: error.message || 'Erro ao processar cotações' }, { status: 500, headers });

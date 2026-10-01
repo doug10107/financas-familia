@@ -18,6 +18,7 @@ export type Investment = {
   quantity?: number | null;
   average_price?: number | null;
   current_price?: number | null;
+  currency?: 'BRL' | 'USD' | string | null;
   plan_type?: string | null; // e.g. 'PGBL' | 'VGBL'
   tax_regime?: string | null; // e.g. 'Regressivo' | 'Progressivo'
   notes: string | null;
@@ -34,6 +35,7 @@ export type InvestmentEntry = {
   quantity?: number | null;
   unit_price?: number | null;
   fees?: number | null;
+  currency?: 'BRL' | 'USD' | string | null;
   date: string;
   notes: string | null;
 };
@@ -44,7 +46,15 @@ export function useInvestments() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSyncingQuotes, setIsSyncingQuotes] = useState(false);
+  const [usdRate, setUsdRate] = useState<number>(5.18);
   const supabase = createClient();
+
+  const isUsdAsset = (inv: { ticker?: string | null; currency?: string | null; name?: string }) => {
+    if (inv.currency === 'USD') return true;
+    const tick = (inv.ticker || '').toUpperCase().trim();
+    if (['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD', 'SPY', 'DIA', 'IWM', 'AAPL', 'MSFT', 'TSLA', 'NVDA', 'AMZN', 'GOOGL', 'META'].includes(tick)) return true;
+    return false;
+  };
 
   const fetchTypes = useCallback(async () => {
     const { data, error } = await supabase
@@ -67,15 +77,19 @@ export function useInvestments() {
 
     if (error) throw error;
     
-    const mapped = (data || []).map((t: any) => ({
-      ...t,
-      quantity: Number(t.quantity) || 0,
-      average_price: Number(t.average_price) || 0,
-      current_price: Number(t.current_price) || 0,
-      current_balance: Number(t.current_balance) || 0,
-      total_invested: Number(t.total_invested) || 0,
-      investment_type: Array.isArray(t.investment_type) ? t.investment_type[0] : t.investment_type
-    })) as Investment[];
+    const mapped = (data || []).map((t: any) => {
+      const isUsd = t.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((t.ticker || '').toUpperCase());
+      return {
+        ...t,
+        quantity: Number(t.quantity) || 0,
+        average_price: Number(t.average_price) || 0,
+        current_price: Number(t.current_price) || 0,
+        current_balance: Number(t.current_balance) || 0,
+        total_invested: Number(t.total_invested) || 0,
+        currency: isUsd ? 'USD' : (t.currency || 'BRL'),
+        investment_type: Array.isArray(t.investment_type) ? t.investment_type[0] : t.investment_type
+      };
+    }) as Investment[];
     setInvestments(mapped);
   }, [supabase]);
 
@@ -96,7 +110,7 @@ export function useInvestments() {
     refreshData();
   }, [refreshData]);
 
-  // Sync real-time stock and FII prices from B3
+  // Sync real-time stock and FII prices from B3 & USD assets
   const syncLiveQuotes = useCallback(async (customList?: Investment[]) => {
     const listToSync = customList || investments;
     const tickers = listToSync
@@ -114,7 +128,11 @@ export function useInvestments() {
       });
 
       if (res.ok) {
-        const { quotes } = await res.json();
+        const { quotes, usdRate: fetchedUsdRate } = await res.json();
+        if (fetchedUsdRate && fetchedUsdRate > 0) {
+          setUsdRate(fetchedUsdRate);
+        }
+
         if (quotes && Object.keys(quotes).length > 0) {
           setInvestments(prev =>
             prev.map(inv => {
@@ -123,8 +141,10 @@ export function useInvestments() {
               if (quote && quote.price > 0) {
                 const qty = Number(inv.quantity) || 1;
                 const newBalance = qty * quote.price;
+                const isQuoteUsd = quote.currency === 'USD' || isUsdAsset(inv);
                 return {
                   ...inv,
+                  currency: isQuoteUsd ? 'USD' : (inv.currency || 'BRL'),
                   current_price: quote.price,
                   current_balance: newBalance > 0 ? Number(newBalance.toFixed(2)) : inv.current_balance
                 };
@@ -145,6 +165,7 @@ export function useInvestments() {
     name: string;
     ticker?: string;
     type_id: string;
+    currency?: 'BRL' | 'USD' | string;
     institution?: string;
     quantity?: number;
     unit_price?: number;
@@ -175,6 +196,10 @@ export function useInvestments() {
 
       const avgPrice = input.unit_price || (input.quantity && input.quantity > 0 ? totalCalculated / input.quantity : 0);
 
+      const cleanTicker = input.ticker ? input.ticker.toUpperCase().trim() : null;
+      const isUsd = input.currency === 'USD' || (cleanTicker && ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes(cleanTicker));
+      const currency = isUsd ? 'USD' : (input.currency || 'BRL');
+
       const { data: newInv, error: invError } = await (supabase
         .from('investments')
         .insert({
@@ -182,7 +207,8 @@ export function useInvestments() {
           user_id: user.id,
           type_id: input.type_id,
           name: input.name,
-          ticker: input.ticker ? input.ticker.toUpperCase().trim() : null,
+          ticker: cleanTicker,
+          currency,
           quantity: input.quantity || 0,
           average_price: avgPrice,
           current_price: input.unit_price || avgPrice,
@@ -205,6 +231,7 @@ export function useInvestments() {
             user_id: user.id,
             type: 'aporte',
             amount: totalCalculated,
+            currency,
             quantity: input.quantity || null,
             unit_price: input.unit_price || null,
             fees: input.fees || 0,
@@ -228,6 +255,7 @@ export function useInvestments() {
     investment_id: string;
     type: 'aporte' | 'resgate' | 'rendimento';
     amount?: number;
+    currency?: 'BRL' | 'USD' | string;
     quantity?: number;
     unit_price?: number;
     fees?: number;
@@ -245,6 +273,9 @@ export function useInvestments() {
 
       if (finalAmount <= 0) throw new Error('Valor inválido para movimentação');
 
+      const parentInv = investments.find(i => i.id === input.investment_id);
+      const currency = input.currency || parentInv?.currency || 'BRL';
+
       const { error } = await (supabase
         .from('investment_entries')
         .insert({
@@ -252,6 +283,7 @@ export function useInvestments() {
           user_id: user.id,
           type: input.type,
           amount: finalAmount,
+          currency,
           quantity: input.quantity || null,
           unit_price: input.unit_price || null,
           fees: input.fees || 0,
@@ -276,6 +308,7 @@ export function useInvestments() {
       name?: string;
       ticker?: string;
       type_id?: string;
+      currency?: 'BRL' | 'USD' | string;
       institution?: string;
       due_date?: string | null;
       plan_type?: string | null;
@@ -289,6 +322,7 @@ export function useInvestments() {
       if (input.name !== undefined) payload.name = input.name;
       if (input.ticker !== undefined) payload.ticker = input.ticker ? input.ticker.toUpperCase().trim() : null;
       if (input.type_id !== undefined) payload.type_id = input.type_id;
+      if (input.currency !== undefined) payload.currency = input.currency;
       if (input.institution !== undefined) payload.institution = input.institution || null;
       if (input.due_date !== undefined) payload.due_date = input.due_date || null;
       if (input.plan_type !== undefined) payload.plan_type = input.plan_type || null;
@@ -364,6 +398,7 @@ export function useInvestments() {
     ticker?: string;
     name: string;
     type?: string;
+    currency?: 'BRL' | 'USD';
     quantity: number;
     averagePrice: number;
     totalInvested: number;
@@ -388,6 +423,10 @@ export function useInvestments() {
         const t = (rawType || '').toLowerCase();
         const tick = (ticker || '').toUpperCase();
 
+        if (t.includes('intern') || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes(tick)) {
+          const match = types.find(it => it.name.toLowerCase().includes('intern') || it.name.toLowerCase().includes('etf'));
+          if (match) return match.id;
+        }
         if (t.includes('fii') || t.includes('imob') || tick.endsWith('11')) {
           const match = types.find(it => it.name.toLowerCase().includes('fii'));
           if (match) return match.id;
@@ -424,10 +463,13 @@ export function useInvestments() {
         const resolvedName = item.name || item.ticker || 'Novo Ativo';
         const total = item.totalInvested > 0 ? item.totalInvested : item.quantity * item.averagePrice;
         const avg = item.averagePrice > 0 ? item.averagePrice : (item.quantity > 0 ? total / item.quantity : 0);
+        const cleanTicker = item.ticker ? item.ticker.toUpperCase().trim() : null;
+        const isUsd = item.currency === 'USD' || (cleanTicker && ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes(cleanTicker));
+        const currency = isUsd ? 'USD' : (item.currency || 'BRL');
 
         // Check if investment with same ticker or name already exists in this family
         const existing = investments.find(
-          i => (item.ticker && i.ticker?.toUpperCase() === item.ticker.toUpperCase()) ||
+          i => (cleanTicker && i.ticker?.toUpperCase() === cleanTicker) ||
                i.name.toLowerCase() === resolvedName.toLowerCase()
         );
 
@@ -438,6 +480,7 @@ export function useInvestments() {
             user_id: user.id,
             type: 'aporte',
             amount: total,
+            currency,
             quantity: item.quantity,
             unit_price: avg,
             fees: 0,
@@ -453,11 +496,12 @@ export function useInvestments() {
               user_id: user.id,
               type_id: resolvedTypeId,
               name: resolvedName,
-              ticker: item.ticker ? item.ticker.toUpperCase().trim() : null,
+              ticker: cleanTicker,
+              currency,
               quantity: item.quantity,
               average_price: avg,
               current_price: item.currentPrice || avg,
-              institution: item.institution || 'Investidor10',
+              institution: item.institution || (isUsd ? 'Internacional' : 'Investidor10'),
               notes: 'Importado do Investidor10'
             } as any)
             .select('id')
@@ -469,6 +513,7 @@ export function useInvestments() {
               user_id: user.id,
               type: 'aporte',
               amount: total,
+              currency,
               quantity: item.quantity,
               unit_price: avg,
               fees: 0,
@@ -494,6 +539,7 @@ export function useInvestments() {
     loading,
     error,
     isSyncingQuotes,
+    usdRate,
     refreshData,
     syncLiveQuotes,
     addInvestment,

@@ -43,6 +43,7 @@ export default function InvestmentsPage() {
     loading,
     error: loadError,
     isSyncingQuotes,
+    usdRate,
     syncLiveQuotes,
     addInvestment,
     updateInvestment,
@@ -70,6 +71,7 @@ export default function InvestmentsPage() {
     name: '',
     ticker: '',
     type_id: '',
+    currency: 'BRL' as 'BRL' | 'USD',
     institution: '',
     plan_type: 'PGBL' as 'PGBL' | 'VGBL' | '',
     tax_regime: 'Regressivo' as 'Regressivo' | 'Progressivo' | '',
@@ -119,11 +121,16 @@ export default function InvestmentsPage() {
             const fees = parseNumberInput(prev.fees) || 0;
             const total = (qty * price) + fees;
 
-            // Auto-select type for crypto / fii / ações
+            const isUsd = data.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD', 'SPY', 'AAPL', 'MSFT', 'TSLA', 'NVDA'].includes(clean);
+
+            // Auto-select type for crypto / fii / ações / etfs internacionais
             let autoTypeId = prev.type_id;
             if (data.isCrypto || ['BTC', 'ETH', 'SOL', 'USDT', 'ADA', 'XRP', 'DOGE'].includes(clean)) {
               const cryptoType = types.find(t => t.name.toLowerCase().includes('cripto'));
               if (cryptoType) autoTypeId = cryptoType.id;
+            } else if (isUsd) {
+              const etfInternType = types.find(t => t.name.toLowerCase().includes('intern') || t.name.toLowerCase().includes('etf'));
+              if (etfInternType) autoTypeId = etfInternType.id;
             } else if (clean.endsWith('11')) {
               const fiiType = types.find(t => t.name.toLowerCase().includes('fii'));
               if (fiiType) autoTypeId = fiiType.id;
@@ -136,6 +143,7 @@ export default function InvestmentsPage() {
               ...prev,
               ticker: data.symbol || clean,
               name: data.name || clean,
+              currency: isUsd ? 'USD' : 'BRL',
               type_id: autoTypeId,
               unit_price: String(price),
               quantity: prev.quantity || '1',
@@ -158,7 +166,10 @@ export default function InvestmentsPage() {
     }
   }, [investments.length]);
 
-  const formatCurrency = (value: number) => {
+  const formatCurrency = (value: number, currency: string = 'BRL') => {
+    if (currency === 'USD') {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+    }
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
@@ -177,29 +188,44 @@ export default function InvestmentsPage() {
     return qty.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 4 });
   };
 
-  // Calculations
-  const totalInvested = investments.reduce((acc, curr) => acc + Number(curr.total_invested), 0);
-  const totalCurrent = investments.reduce((acc, curr) => acc + Number(curr.current_balance), 0);
+  // Calculations in BRL for total portfolio balance
+  const totalInvested = investments.reduce((acc, curr) => {
+    const invested = Number(curr.total_invested) || 0;
+    const isUsd = curr.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((curr.ticker || '').toUpperCase());
+    return acc + (isUsd ? invested * usdRate : invested);
+  }, 0);
+
+  const totalCurrent = investments.reduce((acc, curr) => {
+    const balance = Number(curr.current_balance) || 0;
+    const isUsd = curr.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((curr.ticker || '').toUpperCase());
+    return acc + (isUsd ? balance * usdRate : balance);
+  }, 0);
+
   const totalProfit = totalCurrent - totalInvested;
   const totalYield = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const lockedInvestments = investments.filter(i => i.due_date && i.due_date > todayStr);
-  const totalLocked = lockedInvestments.reduce((acc, curr) => acc + Number(curr.current_balance), 0);
+  const totalLocked = lockedInvestments.reduce((acc, curr) => {
+    const balance = Number(curr.current_balance) || 0;
+    const isUsd = curr.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((curr.ticker || '').toUpperCase());
+    return acc + (isUsd ? balance * usdRate : balance);
+  }, 0);
   const totalLiquid = totalCurrent - totalLocked;
 
   // Breakdown by Type
   const typeAgg: { [key: string]: { name: string; icon: string; color: string; total: number; count: number } } = {};
   investments.forEach(inv => {
-    const typeName = inv.investment_type?.name || 'Outros';
-    const color = inv.investment_type?.color || '#3b82f6';
-    const icon = inv.investment_type?.icon || 'account_balance_wallet';
-    const balance = Number(inv.current_balance) || 0;
+    const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
+    const typeName = isUsd ? (inv.investment_type?.name?.includes('Intern') ? inv.investment_type.name : 'ETFs Internacionais') : (inv.investment_type?.name || 'Outros');
+    const color = isUsd ? '#0ea5e9' : (inv.investment_type?.color || '#3b82f6');
+    const icon = isUsd ? 'public' : (inv.investment_type?.icon || 'account_balance_wallet');
+    const balanceBrl = isUsd ? (Number(inv.current_balance) || 0) * usdRate : (Number(inv.current_balance) || 0);
 
     if (!typeAgg[typeName]) {
       typeAgg[typeName] = { name: typeName, icon, color, total: 0, count: 0 };
     }
-    typeAgg[typeName].total += balance;
+    typeAgg[typeName].total += balanceBrl;
     typeAgg[typeName].count += 1;
   });
 
@@ -222,13 +248,14 @@ export default function InvestmentsPage() {
   // Breakdown by Institution
   const instAgg: { [key: string]: { name: string; total: number; count: number } } = {};
   investments.forEach(inv => {
-    const instName = inv.institution?.trim() || 'Sem Instituição';
-    const balance = Number(inv.current_balance) || 0;
+    const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
+    const instName = inv.institution?.trim() || (isUsd ? 'Internacional' : 'Sem Instituição');
+    const balanceBrl = isUsd ? (Number(inv.current_balance) || 0) * usdRate : (Number(inv.current_balance) || 0);
 
     if (!instAgg[instName]) {
       instAgg[instName] = { name: instName, total: 0, count: 0 };
     }
-    instAgg[instName].total += balance;
+    instAgg[instName].total += balanceBrl;
     instAgg[instName].count += 1;
   });
 
@@ -237,15 +264,18 @@ export default function InvestmentsPage() {
     percentage: totalCurrent > 0 ? Number(((i.total / totalCurrent) * 100).toFixed(1)) : 0
   })).sort((a, b) => b.total - a.total);
 
+
   // Modal Open Handlers
   const handleOpenInvModal = (invToEdit?: Investment, prefilledTicker?: string, prefilledPrice?: number) => {
     setFormError('');
     if (invToEdit) {
       setEditingInvId(invToEdit.id);
+      const isUsd = invToEdit.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((invToEdit.ticker || '').toUpperCase());
       setInvForm({
         name: invToEdit.name,
         ticker: invToEdit.ticker || '',
         type_id: invToEdit.type_id || (types.length > 0 ? types[0].id : ''),
+        currency: isUsd ? 'USD' : 'BRL',
         institution: invToEdit.institution || '',
         plan_type: (invToEdit.plan_type as any) || 'PGBL',
         tax_regime: (invToEdit.tax_regime as any) || 'Regressivo',
@@ -260,13 +290,17 @@ export default function InvestmentsPage() {
     } else {
       setEditingInvId(null);
       const cleanTicker = (prefilledTicker || '').toUpperCase().trim();
-      const acoesType = types.find(t => t.name.toLowerCase().includes('ações') || t.name.toLowerCase().includes('acoes'));
+      const isUsd = ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD', 'SPY', 'AAPL', 'MSFT', 'TSLA', 'NVDA'].includes(cleanTicker);
+      const targetType = isUsd
+        ? types.find(t => t.name.toLowerCase().includes('intern') || t.name.toLowerCase().includes('etf'))
+        : types.find(t => t.name.toLowerCase().includes('ações') || t.name.toLowerCase().includes('acoes'));
       
       setInvForm({
         name: cleanTicker || '',
         ticker: cleanTicker,
-        type_id: acoesType ? acoesType.id : (types.length > 0 ? types[0].id : ''),
-        institution: '',
+        currency: isUsd ? 'USD' : 'BRL',
+        type_id: targetType ? targetType.id : (types.length > 0 ? types[0].id : ''),
+        institution: isUsd ? 'Internacional' : '',
         plan_type: 'PGBL',
         tax_regime: 'Regressivo',
         quantity: '1',
@@ -275,7 +309,7 @@ export default function InvestmentsPage() {
         total_amount: prefilledPrice ? String(prefilledPrice) : '',
         date: new Date().toISOString().split('T')[0],
         due_date: '',
-        notes: cleanTicker ? `Compra via análise Graham: ${cleanTicker}` : ''
+        notes: cleanTicker ? `Ativo: ${cleanTicker}` : ''
       });
 
       if (cleanTicker) {
@@ -391,6 +425,7 @@ export default function InvestmentsPage() {
         name: invForm.name,
         ticker: invForm.ticker,
         type_id: invForm.type_id,
+        currency: invForm.currency,
         institution: invForm.institution,
         due_date: invForm.due_date || null,
         plan_type: isPrevidencia ? invForm.plan_type : null,
@@ -402,6 +437,7 @@ export default function InvestmentsPage() {
         name: invForm.name,
         ticker: invForm.ticker,
         type_id: invForm.type_id,
+        currency: invForm.currency,
         institution: invForm.institution,
         plan_type: isPrevidencia ? invForm.plan_type : undefined,
         tax_regime: isPrevidencia ? invForm.tax_regime : undefined,
@@ -455,6 +491,7 @@ export default function InvestmentsPage() {
       investment_id: selectedInv.id,
       type: entryForm.type,
       amount: finalAmount,
+      currency: selectedInv.currency || 'BRL',
       quantity: qty > 0 ? qty : undefined,
       unit_price: unitPrice > 0 ? unitPrice : undefined,
       fees: fees > 0 ? fees : undefined,
@@ -479,11 +516,17 @@ export default function InvestmentsPage() {
             <Icon name="trending_up" className="text-emerald-500" /> Carteira de Investimentos
           </h1>
           <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-            Controle de ações, FIIs, criptomoedas e renda fixa com cotações em tempo real da B3 e integração com Investidor10
+            Controle de ações, FIIs, ETFs internacionais, criptomoedas e renda fixa com cotações em tempo real da B3 e suporte a Dólar (USD)
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* USD Rate Badge */}
+          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-xs" title="Cotação comercial do dólar atualizada">
+            <span className="text-base leading-none">💵</span>
+            <span>USD = {formatCurrency(usdRate, 'BRL')}</span>
+          </div>
+
           {/* Live Quote Sync Button */}
           <Button
             variant="secondary"
@@ -491,10 +534,10 @@ export default function InvestmentsPage() {
             onClick={() => syncLiveQuotes()}
             disabled={isSyncingQuotes || investments.length === 0}
             className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40"
-            title="Atualizar cotações atuais de mercado na B3"
+            title="Atualizar cotações atuais de mercado na B3 e mercado internacional"
           >
             <Icon name="refresh" size="sm" className={isSyncingQuotes ? 'animate-spin' : ''} />
-            <span>{isSyncingQuotes ? 'Atualizando...' : 'Cotações B3'}</span>
+            <span>{isSyncingQuotes ? 'Atualizando...' : 'Cotações em Tempo Real'}</span>
           </Button>
 
           {/* Investidor10 / CSV Import Button */}
@@ -546,16 +589,16 @@ export default function InvestmentsPage() {
         {/* Total Patrimony */}
         <GlassCard className="p-5 flex flex-col justify-between space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Atual (Mercado)</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Total (Mercado)</span>
             <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
               <Icon name="account_balance_wallet" className="w-5 h-5" />
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatCurrency(totalCurrent)}</h2>
+            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
               <span className={`font-semibold ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit)} ({totalYield.toFixed(2)}%)
+                {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')} ({totalYield.toFixed(2)}%)
               </span>
             </p>
           </div>
@@ -570,7 +613,7 @@ export default function InvestmentsPage() {
             </div>
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalInvested)}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalInvested, 'BRL')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {investments.length} {investments.length === 1 ? 'ativo na carteira' : 'ativos na carteira'}
             </p>
@@ -587,7 +630,7 @@ export default function InvestmentsPage() {
           </div>
           <div>
             <h2 className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-              {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit)}
+              {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')}
             </h2>
             <Badge color={totalProfit >= 0 ? 'green' : 'red'} className="mt-1">
               {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}% de retorno
@@ -608,13 +651,13 @@ export default function InvestmentsPage() {
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <Icon name="check_circle" className="text-emerald-500 w-3.5 h-3.5" /> Imediata:
               </span>
-              <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totalLiquid)}</span>
+              <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totalLiquid, 'BRL')}</span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
                 <Icon name="lock" className="text-amber-500 w-3.5 h-3.5" /> Com Prazo/Carência:
               </span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalLocked)}</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalLocked, 'BRL')}</span>
             </div>
           </div>
         </GlassCard>
@@ -627,7 +670,7 @@ export default function InvestmentsPage() {
           <div className="flex justify-between items-center">
             <div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white">Alocação por Tipo de Ativo</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Distribuição do seu patrimônio entre categorias de investimentos</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Distribuição do seu patrimônio (em Reais) entre categorias de investimentos</p>
             </div>
             <span className="px-3 py-1 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-full text-xs font-bold flex items-center gap-1">
               <Icon name="pie_chart" size="sm" /> {typeList.length} Tipos
@@ -664,7 +707,7 @@ export default function InvestmentsPage() {
                       PATRIMÔNIO
                     </span>
                     <span className="text-lg font-extrabold text-gray-900 dark:text-white">
-                      {formatCurrency(totalCurrent)}
+                      {formatCurrency(totalCurrent, 'BRL')}
                     </span>
                   </div>
                 </div>
@@ -682,7 +725,7 @@ export default function InvestmentsPage() {
                         {type.name} ({type.count})
                       </span>
                       <span className="font-bold text-gray-900 dark:text-white">
-                        {formatCurrency(type.total)} ({type.percentage}%)
+                        {formatCurrency(type.total, 'BRL')} ({type.percentage}%)
                       </span>
                     </div>
                     <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
@@ -728,7 +771,7 @@ export default function InvestmentsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-extrabold text-gray-900 dark:text-white text-xs">{formatCurrency(inst.total)}</p>
+                        <p className="font-extrabold text-gray-900 dark:text-white text-xs">{formatCurrency(inst.total, 'BRL')}</p>
                         <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">{inst.percentage}%</p>
                       </div>
                     </div>
@@ -758,7 +801,7 @@ export default function InvestmentsPage() {
             <p className="text-xs text-gray-400">Posição, Preço Médio, Cotação Atual e Rentabilidade da Carteira</p>
           </div>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            Total em Carteira: <strong className="text-gray-900 dark:text-white">{formatCurrency(totalCurrent)}</strong>
+            Total em Carteira: <strong className="text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</strong>
           </span>
         </div>
         
@@ -784,8 +827,14 @@ export default function InvestmentsPage() {
               </thead>
               <tbody>
                 {investments.map((inv) => {
-                  const invYield = inv.total_invested > 0 ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 : 0;
-                  const isPositive = inv.current_balance >= inv.total_invested;
+                  const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
+                  const curr = isUsd ? 'USD' : 'BRL';
+                  
+                  const invYield = inv.total_invested > 0 
+                    ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 
+                    : (inv.average_price && inv.average_price > 0 && inv.current_price ? ((inv.current_price - inv.average_price) / inv.average_price) * 100 : 0);
+                  
+                  const isPositive = invYield >= 0;
                   const profitAmt = inv.current_balance - inv.total_invested;
                   const hasQty = inv.quantity && inv.quantity > 0;
                   
@@ -794,13 +843,23 @@ export default function InvestmentsPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           {inv.ticker ? (
-                            <span className="px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-mono font-bold text-xs">
+                            <span className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 ${
+                              isUsd 
+                                ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
+                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
+                            }`}>
+                              {isUsd && <span>🇺🇸</span>}
                               {inv.ticker}
                             </span>
                           ) : null}
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="font-bold text-gray-900 dark:text-white text-sm">{inv.name}</p>
+                              {isUsd && (
+                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                                  Dólar (USD)
+                                </span>
+                              )}
                               {inv.plan_type && (
                                 <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
                                   {inv.plan_type}
@@ -826,12 +885,12 @@ export default function InvestmentsPage() {
                         <div className="space-y-1">
                           <span 
                             className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-xs inline-flex items-center gap-1"
-                            style={{ backgroundColor: inv.investment_type?.color || '#0058be' }}
+                            style={{ backgroundColor: isUsd ? '#0ea5e9' : (inv.investment_type?.color || '#0058be') }}
                           >
-                            <Icon name={inv.investment_type?.icon || 'account_balance_wallet'} className="w-3 h-3" />
-                            {inv.investment_type?.name || 'Outro'}
+                            <Icon name={isUsd ? 'public' : (inv.investment_type?.icon || 'account_balance_wallet')} className="w-3 h-3" />
+                            {isUsd ? 'ETFs Internacionais' : (inv.investment_type?.name || 'Outro')}
                           </span>
-                          <p className="text-[11px] text-gray-400">{inv.institution || '-'}</p>
+                          <p className="text-[11px] text-gray-400">{inv.institution || (isUsd ? 'Internacional' : '-')}</p>
                         </div>
                       </td>
 
@@ -846,25 +905,36 @@ export default function InvestmentsPage() {
                       </td>
 
                       <td className="px-4 py-4 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap text-xs">
-                        {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price) : '-'}
+                        {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price, curr) : '-'}
                       </td>
 
                       <td className="px-4 py-4 text-right font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap text-xs">
-                        {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price) : '-'}
+                        {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price, curr) : '-'}
                       </td>
 
-                      <td className="px-4 py-4 text-right text-gray-500 dark:text-gray-400 whitespace-nowrap text-xs">
-                        {formatCurrency(inv.total_invested)}
+                      <td className="px-4 py-4 text-right whitespace-nowrap text-xs">
+                        <p className="font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(inv.total_invested, curr)}</p>
+                        {isUsd && (
+                          <p className="text-[10px] text-gray-400">≈ {formatCurrency(inv.total_invested * usdRate, 'BRL')}</p>
+                        )}
                       </td>
 
-                      <td className="px-4 py-4 text-right font-extrabold text-gray-900 dark:text-white whitespace-nowrap">
-                        {formatCurrency(inv.current_balance)}
+                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                        <p className="font-extrabold text-gray-900 dark:text-white">{formatCurrency(inv.current_balance, curr)}</p>
+                        {isUsd && (
+                          <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">≈ {formatCurrency(inv.current_balance * usdRate, 'BRL')}</p>
+                        )}
                       </td>
 
                       <td className="px-4 py-4 text-right whitespace-nowrap">
                         <div className={`font-bold text-xs ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                          <span>{isPositive ? '+' : ''}{formatCurrency(profitAmt)}</span>
+                          <span>{isPositive ? '+' : ''}{formatCurrency(profitAmt, curr)}</span>
                           <span className="text-[10px] block opacity-80">({isPositive ? '+' : ''}{invYield.toFixed(2)}%)</span>
+                          {isUsd && (
+                            <span className="text-[9px] text-gray-400 block font-normal">
+                              ≈ {isPositive ? '+' : ''}{formatCurrency(profitAmt * usdRate, 'BRL')}
+                            </span>
+                          )}
                         </div>
                       </td>
 
@@ -930,15 +1000,48 @@ export default function InvestmentsPage() {
             </div>
           )}
 
+          {/* Currency Toggle */}
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+              Moeda do Investimento
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setInvForm(prev => ({ ...prev, currency: 'BRL' }))}
+                className={`p-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  invForm.currency === 'BRL'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
+                }`}
+              >
+                <span>🇧🇷</span>
+                <span>Real Brasileiro (R$)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInvForm(prev => ({ ...prev, currency: 'USD' }))}
+                className={`p-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                  invForm.currency === 'USD'
+                    ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-sky-400'
+                }`}
+              >
+                <span>🇺🇸</span>
+                <span>Dólar Americano (US$)</span>
+              </button>
+            </div>
+          </div>
+
           {/* Ticker Search & Auto Complete */}
           <div className="space-y-1">
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-              Ticker / Código do Ativo (B3 ou Cripto) (Opcional)
+              Ticker / Código do Ativo (B3 ou EUA / Cripto)
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
-                  placeholder="Ex: BTC, BITCOIN, PETR4, MXRF11, VALE3, ETH" 
+                  placeholder="Ex: IVV, VXUS, TFLO, VOO, PETR4, MXRF11, BTC" 
                   value={invForm.ticker}
                   onChange={(e) => setInvForm({...invForm, ticker: e.target.value.toUpperCase()})}
                   onKeyDown={(e) => {
@@ -966,13 +1069,13 @@ export default function InvestmentsPage() {
             {/* Quick Chips */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {[
+                { symbol: 'IVV', label: '🇺🇸 IVV (S&P 500)' },
+                { symbol: 'VXUS', label: '🇺🇸 VXUS (Total Intl)' },
+                { symbol: 'TFLO', label: '🇺🇸 TFLO (Treasury)' },
                 { symbol: 'BTC', label: '₿ Bitcoin' },
-                { symbol: 'ETH', label: 'Ethereum' },
                 { symbol: 'PETR4', label: 'Petrobras' },
                 { symbol: 'VALE3', label: 'Vale' },
-                { symbol: 'MXRF11', label: 'Maxi Renda' },
-                { symbol: 'HGLG11', label: 'CSHG Log' },
-                { symbol: 'IVVB11', label: 'S&P 500' }
+                { symbol: 'MXRF11', label: 'Maxi Renda' }
               ].map(chip => (
                 <button
                   key={chip.symbol}
@@ -991,7 +1094,7 @@ export default function InvestmentsPage() {
 
           <Input 
             label="Nome do Ativo" 
-            placeholder="Ex: Bitcoin, Petrobras PN, Maxi Renda FII, CDB Inter" 
+            placeholder="Ex: iShares Core S&P 500 ETF, Vanguard Total Intl, Bitcoin, Petrobras" 
             value={invForm.name}
             onChange={(e) => setInvForm({...invForm, name: e.target.value})}
             required
@@ -1018,7 +1121,7 @@ export default function InvestmentsPage() {
             />
             <Input 
               label="Instituição / Seguradora / Corretora" 
-              placeholder="Ex: XP Seguros, Brasilprev, BTG, Itaú, Binance" 
+              placeholder={invForm.currency === 'USD' ? "Ex: Avenue, Nomad, Interactive Brokers, XP" : "Ex: XP, BTG, Itaú, Binance"} 
               value={invForm.institution}
               onChange={(e) => setInvForm({...invForm, institution: e.target.value})}
             />
@@ -1097,26 +1200,6 @@ export default function InvestmentsPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Seguradoras recomendadas */}
-              <div className="space-y-1 pt-1">
-                <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-400">Seguradoras / Bancos sugeridos:</span>
-                <div className="flex flex-wrap gap-1">
-                  {[
-                    'XP Seguros', 'Brasilprev', 'BTG Pactual Prev', 'Itaú Prev', 
-                    'Bradesco Vida e Prev', 'Porto Seguro', 'Caixa Vida e Prev', 'SulAmérica'
-                  ].map(inst => (
-                    <button
-                      key={inst}
-                      type="button"
-                      onClick={() => setInvForm(prev => ({ ...prev, institution: inst }))}
-                      className="px-2 py-0.5 text-[10px] font-medium bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:border-emerald-500 rounded text-gray-700 dark:text-gray-300 transition-colors"
-                    >
-                      {inst}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
           )}
 
@@ -1125,7 +1208,7 @@ export default function InvestmentsPage() {
             <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3 border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                  <Icon name="calculate" size="sm" className="text-emerald-500" /> Calculadora de Compra
+                  <Icon name="calculate" size="sm" className="text-emerald-500" /> Calculadora de Compra ({invForm.currency === 'USD' ? 'Dólar US$' : 'Reais R$'})
                 </span>
                 <div className="flex gap-1 text-[11px]">
                   <button
@@ -1155,19 +1238,19 @@ export default function InvestmentsPage() {
                     <Input 
                       label="Quantidade / Fração" 
                       type="text" 
-                      placeholder="Ex: 0,00025974 ou 10" 
+                      placeholder={invForm.currency === 'USD' ? "Ex: 0.05597 ou 10" : "Ex: 100"} 
                       value={invForm.quantity}
                       onChange={(e) => handleInvQtyChange(e.target.value)}
                     />
                     <Input 
-                      label="Preço Unitário / Cotação (R$)" 
+                      label={`Preço Unitário (${invForm.currency === 'USD' ? 'US$' : 'R$'})`} 
                       type="text" 
-                      placeholder="Ex: 397.484,01" 
+                      placeholder={invForm.currency === 'USD' ? "Ex: 769.54" : "Ex: 35,80"} 
                       value={invForm.unit_price}
                       onChange={(e) => handleInvPriceChange(e.target.value)}
                     />
                     <Input 
-                      label="Taxas (R$)" 
+                      label={`Taxas (${invForm.currency === 'USD' ? 'US$' : 'R$'})`} 
                       type="text" 
                       placeholder="0,00" 
                       value={invForm.fees}
@@ -1178,16 +1261,23 @@ export default function InvestmentsPage() {
                   {/* Calculated total display banner */}
                   <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
                     <span className="font-semibold text-emerald-800 dark:text-emerald-300">
-                      Total da Operação ({invForm.quantity || 0} x {formatCurrency(parseNumberInput(invForm.unit_price))}):
+                      Total ({invForm.quantity || 0} x {formatCurrency(parseNumberInput(invForm.unit_price), invForm.currency)}):
                     </span>
-                    <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(parseNumberInput(invForm.total_amount))}
-                    </strong>
+                    <div className="text-right">
+                      <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 block">
+                        {formatCurrency(parseNumberInput(invForm.total_amount), invForm.currency)}
+                      </strong>
+                      {invForm.currency === 'USD' && (
+                        <span className="text-[10px] text-gray-500">
+                          ≈ {formatCurrency(parseNumberInput(invForm.total_amount) * usdRate, 'BRL')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
                 <Input 
-                  label="Valor Total da Aplicação (R$)" 
+                  label={`Valor Total da Aplicação (${invForm.currency === 'USD' ? 'US$' : 'R$'})`} 
                   type="text" 
                   placeholder="0,00" 
                   value={invForm.total_amount}
@@ -1218,7 +1308,7 @@ export default function InvestmentsPage() {
 
           <Input 
             label="Observações" 
-            placeholder="Ex: Compra fracionário, aporte mensal, objetivo..." 
+            placeholder="Ex: Compra fracionário, ETF americano, aporte mensal..." 
             value={invForm.notes}
             onChange={(e) => setInvForm({...invForm, notes: e.target.value})}
           />
@@ -1256,7 +1346,7 @@ export default function InvestmentsPage() {
       <Modal 
         isOpen={isEntryModalOpen} 
         onClose={() => !isSubmitting && setIsEntryModalOpen(false)} 
-        title={`Nova Movimentação: ${selectedInv?.name || ''}`}
+        title={`Nova Movimentação: ${selectedInv?.name || ''} ${selectedInv?.currency === 'USD' ? '(US$)' : '(R$)'}`}
       >
         <div className="space-y-4">
           {formError && (
@@ -1280,7 +1370,7 @@ export default function InvestmentsPage() {
             <div className="p-3.5 bg-gray-50 dark:bg-gray-800/60 rounded-xl space-y-3 border border-gray-100 dark:border-gray-700">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                  Calculadora de Compra
+                  Calculadora de Compra ({selectedInv?.currency === 'USD' ? 'US$' : 'R$'})
                 </span>
                 <div className="flex gap-1 text-[11px]">
                   <button
@@ -1310,14 +1400,14 @@ export default function InvestmentsPage() {
                     <Input 
                       label="Quantidade / Fração" 
                       type="text" 
-                      placeholder="Ex: 0,00025974 ou 3" 
+                      placeholder="Ex: 0.05597 ou 3" 
                       value={entryForm.quantity}
                       onChange={(e) => handleEntryQtyChange(e.target.value)}
                     />
                     <Input 
-                      label="Preço Unitário (R$)" 
+                      label={`Preço Unitário (${selectedInv?.currency === 'USD' ? 'US$' : 'R$'})`} 
                       type="text" 
-                      placeholder="Ex: 397.484,01" 
+                      placeholder="0,00" 
                       value={entryForm.unit_price}
                       onChange={(e) => handleEntryPriceChange(e.target.value)}
                     />
@@ -1325,14 +1415,21 @@ export default function InvestmentsPage() {
 
                   <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg flex justify-between items-center text-xs">
                     <span className="font-semibold text-emerald-800 dark:text-emerald-300">Total do Aporte:</span>
-                    <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400">
-                      {formatCurrency(parseNumberInput(entryForm.amount))}
-                    </strong>
+                    <div className="text-right">
+                      <strong className="text-base font-extrabold text-emerald-600 dark:text-emerald-400 block">
+                        {formatCurrency(parseNumberInput(entryForm.amount), selectedInv?.currency || 'BRL')}
+                      </strong>
+                      {selectedInv?.currency === 'USD' && (
+                        <span className="text-[10px] text-gray-500">
+                          ≈ {formatCurrency(parseNumberInput(entryForm.amount) * usdRate, 'BRL')}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               ) : (
                 <Input 
-                  label="Valor Total (R$)" 
+                  label={`Valor Total (${selectedInv?.currency === 'USD' ? 'US$' : 'R$'})`} 
                   type="text" 
                   placeholder="0,00" 
                   value={entryForm.amount}
@@ -1342,7 +1439,7 @@ export default function InvestmentsPage() {
             </div>
           ) : (
             <Input 
-              label="Valor (R$)" 
+              label={`Valor (${selectedInv?.currency === 'USD' ? 'US$' : 'R$'})`} 
               type="text" 
               placeholder="0,00" 
               value={entryForm.amount}

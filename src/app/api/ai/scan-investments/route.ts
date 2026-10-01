@@ -18,20 +18,26 @@ export async function POST(req: NextRequest) {
 Sua tarefa é analisar o arquivo (foto, PDF ou print de carteira) ou texto colado e extrair TODOS os ativos de investimento contidos no documento, sem deixar nenhum de fora (incluindo Ações, FIIs, ETFs Internacionais, Criptomoedas, Tesouro Direto e Fundos/Previdência).
 
 IMPORTANTE SOBRE MOEDAS E ATIVOS INTERNACIONAIS:
-- Se houver ativos cotados em Dólar (US$ / USD), como ETFs Internacionais (ex: 'VXUS', 'IVV', 'TFLO', 'VOO', 'QQQ', 'VT') ou ações americanas:
-  Converta os valores (Preço Médio, Cotação e Total) para Reais (BRL) usando a taxa de câmbio USD/BRL indicada no relatório ou uma taxa padrão de R$ 5,20 por dólar.
-- Para todos os ativos, todos os valores numéricos ('averagePrice', 'totalInvested', 'currentPrice', 'currentBalance') DEVEM ser retornados em Reais (BRL) como números (float), nunca strings com US$ ou R$.
+- Identifique a moeda do ativo: 'BRL' ou 'USD'.
+- Se o ativo for cotado em Dólar (US$ / USD), como ETFs Internacionais (ex: 'VXUS', 'IVV', 'TFLO', 'VOO', 'QQQ', 'VT') ou ações americanas/corretoras como Avenue/Nomad/Stake:
+  - Defina 'currency': 'USD'.
+  - 'type': 'ETFs Internacionais' (ou 'Ações' se for ação americana).
+  - 'averagePrice', 'totalInvested', 'currentPrice' e 'currentBalance' DEVEM permanecer nos seus valores nativos em US$ (Dólares).
+- Para ativos brasileiros (B3):
+  - Defina 'currency': 'BRL'.
+  - Todos os valores numéricos em Reais (BRL).
 
 Para cada ativo encontrado, identifique:
 1. 'ticker': Código do ativo se houver (ex: 'PETR4', 'VALE3', 'MXRF11', 'VXUS', 'IVV', 'TFLO', 'BTC', 'ETH', 'AUPO11', 'Tesouro IPCA+ 2032').
 2. 'name': Nome legível da empresa, fundo, título ou cripto (ex: 'Petrobras PN', 'Maxi Renda FII', 'Vanguard Total Intl', 'Trend Pós-Fixado Prev').
-3. 'type': Categoria do investimento ('Ações', 'FIIs', 'Renda Fixa', 'Tesouro Direto', 'ETFs', 'Previdência Privada', 'BDRs', 'Criptomoedas', 'Poupança' ou 'Outros').
-4. 'quantity': Quantidade de cotas/ações/frações (número decimal ou inteiro, ex: 100, 3, 0.29667, 0.00025974). Se for título sem quantidade, use 1.
-5. 'averagePrice': Preço Médio de compra por cota em R$ (número). Se estava em US$, já convertido para R$.
-6. 'totalInvested': Valor total investido / custo total em R$ (número). Se não constar, calcule quantity * averagePrice.
-7. 'currentPrice': Cotação atual ou preço de mercado em R$ (opcional, número).
-8. 'currentBalance': Saldo atual / valor de mercado em R$ (opcional, número).
-9. 'institution': Nome da corretora ou banco (ex: 'XP', 'NuInvest', 'Investidor10', 'Avenue', 'Binance').
+3. 'type': Categoria do investimento ('Ações', 'FIIs', 'Renda Fixa', 'Tesouro Direto', 'ETFs', 'ETFs Internacionais', 'Previdência Privada', 'BDRs', 'Criptomoedas', 'Poupança' ou 'Outros').
+4. 'currency': 'BRL' ou 'USD'.
+5. 'quantity': Quantidade de cotas/ações/frações (número decimal ou inteiro, ex: 100, 3, 0.29667, 0.00025974). Se for título sem quantidade, use 1.
+6. 'averagePrice': Preço Médio de compra por cota na moeda do ativo (número).
+7. 'totalInvested': Valor total investido / custo total na moeda do ativo (número). Se não constar, calcule quantity * averagePrice.
+8. 'currentPrice': Cotação atual ou preço de mercado na moeda do ativo (opcional, número).
+9. 'currentBalance': Saldo atual / valor de mercado na moeda do ativo (opcional, número).
+10. 'institution': Nome da corretora ou banco (ex: 'XP', 'NuInvest', 'Investidor10', 'Avenue', 'Binance').
 
 Retorne SEMPRE um JSON válido no formato:
 {
@@ -40,6 +46,7 @@ Retorne SEMPRE um JSON válido no formato:
       "ticker": "VALE3",
       "name": "Vale ON",
       "type": "Ações",
+      "currency": "BRL",
       "quantity": 1,
       "averagePrice": 78.83,
       "totalInvested": 78.83,
@@ -131,6 +138,7 @@ Retorne SEMPRE um JSON válido no formato:
       const ticker = (asset.ticker || '').toUpperCase().trim();
       const name = (asset.name || ticker || `Ativo ${idx + 1}`).trim();
       const type = asset.type || (ticker.includes('11') ? 'FIIs' : 'Ações');
+      const currency = asset.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SPY', 'SCHD', 'BND', 'VTI'].includes(ticker) ? 'USD' : 'BRL';
       const quantity = Number(asset.quantity) > 0 ? Number(asset.quantity) : 1;
       const averagePrice = Number(asset.averagePrice) >= 0 ? Number(asset.averagePrice) : 0;
       const totalInvested = Number(asset.totalInvested) > 0 ? Number(asset.totalInvested) : Number((quantity * averagePrice).toFixed(2));
@@ -142,6 +150,7 @@ Retorne SEMPRE um JSON válido no formato:
         ticker,
         name,
         type,
+        currency,
         quantity,
         averagePrice: Number(averagePrice.toFixed(2)),
         totalInvested: Number(totalInvested.toFixed(2)),
