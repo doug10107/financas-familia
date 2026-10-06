@@ -323,9 +323,9 @@ export default function GoalsPage() {
                   {goal.description && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 line-clamp-2">{goal.description}</p>
                   )}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 flex items-center">
-                    <Icon name="calendar_month" className="w-3.5 h-3.5 mr-1" />
-                    Prazo: {formatDate(goal.deadline)}
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 flex items-center gap-2">
+                    <Icon name="calendar_month" size="sm" className="text-gray-400 shrink-0" />
+                    <span>Prazo: {formatDate(goal.deadline)}</span>
                   </p>
                 </div>
 
@@ -348,21 +348,23 @@ export default function GoalsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      variant="secondary"
-                      className="text-xs py-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50"
+                    <button
+                      type="button"
                       onClick={() => handleOpenMovementModal(goal, 'aporte')}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
                     >
-                      <Icon name="add_circle" className="w-3.5 h-3.5 mr-1" /> Aporte
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="text-xs py-2 bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/50"
+                      <Icon name="add_circle" size="sm" className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>Aporte</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleOpenMovementModal(goal, 'resgate')}
                       disabled={goal.current_amount <= 0}
+                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <Icon name="remove_circle" className="w-3.5 h-3.5 mr-1" /> Resgatar
-                    </Button>
+                      <Icon name="remove_circle" size="sm" className="text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span>Resgatar</span>
+                    </button>
                   </div>
                 </div>
               </GlassCard>
@@ -499,8 +501,8 @@ export default function GoalsPage() {
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Icon name="add_circle" className="w-4 h-4" />
-              Aporte (Guardar)
+              <Icon name="add_circle" size="sm" className="shrink-0" />
+              <span>Aporte (Guardar)</span>
             </button>
             <button
               type="button"
@@ -517,8 +519,8 @@ export default function GoalsPage() {
                   : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
               }`}
             >
-              <Icon name="remove_circle" className="w-4 h-4" />
-              Resgate (Retirar)
+              <Icon name="remove_circle" size="sm" className="shrink-0" />
+              <span>Resgate (Retirar)</span>
             </button>
           </div>
 

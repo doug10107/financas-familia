@@ -20,7 +20,7 @@ export function Button({
   disabled,
   ...props
 }: ButtonProps) {
-  const baseClasses = 'inline-flex items-center justify-center rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
+  const baseClasses = 'inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed';
   
   const sizeClasses = {
     sm: 'px-3 py-1.5 text-sm',
@@ -42,9 +42,9 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <Icon name="progress_activity" className="animate-spin mr-2" size={size === 'lg' ? 'md' : 'sm'} />
+        <Icon name="progress_activity" className="animate-spin" size={size === 'lg' ? 'md' : 'sm'} />
       ) : icon ? (
-        <Icon name={icon} className="mr-2" size={size === 'lg' ? 'md' : 'sm'} />
+        <Icon name={icon} size={size === 'lg' ? 'md' : 'sm'} />
       ) : null}
       {children}
     </button>
