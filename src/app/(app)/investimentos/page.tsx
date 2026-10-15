@@ -19,6 +19,7 @@ import { Doughnut } from 'react-chartjs-2';
 import { useInvestments, Investment } from '@/hooks/useInvestments';
 import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestmentsModal';
 import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTable';
+import { AdvancedStockScreener } from '@/components/investimentos/AdvancedStockScreener';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -52,6 +53,10 @@ export default function InvestmentsPage() {
     addInvestmentEntry,
     batchImportInvestments
   } = useInvestments();
+
+  // Main Section Navigation: 'carteira' | 'screener' | 'analise'
+  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'analise'>('carteira');
+  const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
 
   // Modals state
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
@@ -584,16 +589,66 @@ export default function InvestmentsPage() {
         </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Patrimony */}
-        <GlassCard className="p-5 flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Total (Mercado)</span>
-            <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-              <Icon name="account_balance_wallet" className="w-5 h-5" />
-            </div>
-          </div>
+      {/* Navigation Sub-Tabs */}
+      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl w-fit border border-gray-200 dark:border-gray-700/60 shadow-xs">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('carteira')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'carteira'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="account_balance_wallet" size="sm" className="text-emerald-500" />
+          <span>Minha Carteira & Posições</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-extrabold">
+            {investments.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('screener')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'screener'
+              ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="search" size="sm" className="text-blue-500" />
+          <span>Busca Avançada / Screener</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-extrabold">
+            NOVO ✨
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('analise')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'analise'
+              ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="analytics" size="sm" className="text-purple-500" />
+          <span>Análise Fundamentalista (Graham / Bazin / FIIs)</span>
+        </button>
+      </div>
+
+      {activeMainTab === 'carteira' && (
+        <div className="space-y-6">
+          {/* KPI Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Total Patrimony */}
+            <GlassCard className="p-5 flex flex-col justify-between space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Total (Mercado)</span>
+                <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                  <Icon name="account_balance_wallet" className="w-5 h-5" />
+                </div>
+              </div>
           <div>
             <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</h2>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
@@ -979,13 +1034,29 @@ export default function InvestmentsPage() {
           </div>
         )}
       </GlassCard>
+        </div>
+      )}
 
-      {/* Tabela & Análise Fundamentalista de Graham para Ações (B3) */}
-      <GrahamAnalysisTable
-        investments={investments}
-        onOpenEntryModal={handleOpenEntryModal}
-        onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
-      />
+      {/* 2. Busca Avançada / Screener de Ativos (Ações, Stocks & FIIs) */}
+      {activeMainTab === 'screener' && (
+        <AdvancedStockScreener
+          onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
+          onNavigateToGraham={(ticker) => {
+            setSelectedGrahamTicker(ticker);
+            setActiveMainTab('analise');
+          }}
+        />
+      )}
+
+      {/* 3. Tabela & Análise Fundamentalista de Graham, Bazin e FIIs */}
+      {activeMainTab === 'analise' && (
+        <GrahamAnalysisTable
+          investments={investments}
+          initialTicker={selectedGrahamTicker}
+          onOpenEntryModal={handleOpenEntryModal}
+          onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
+        />
+      )}
 
       {/* Modal - Novo / Editar Investimento (com Calculadora Qtd * Preço) */}
       <Modal 

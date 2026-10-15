@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Icon } from '@/components/ui/Icon';
 import { Button } from '@/components/ui/Button';
@@ -10,11 +11,14 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useGoals, Goal, GoalContribution } from '@/hooks/useGoals';
+import { SmartGoalCalculator } from '@/components/metas/SmartGoalCalculator';
+import { calculateMonthsRemaining } from '@/lib/goalCalculators';
 
 export default function GoalsPage() {
   const {
     goals,
     categories,
+    investments,
     loading,
     error,
     addGoal,
@@ -31,6 +35,7 @@ export default function GoalsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isMovementModalOpen, setIsMovementModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [isSimulatorModalOpen, setIsSimulatorModalOpen] = useState(false);
 
   // Selected goal state
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
@@ -51,7 +56,10 @@ export default function GoalsPage() {
     deadline: '',
     description: '',
     icon: 'flag',
-    color: '#10b981'
+    color: '#10b981',
+    target_monthly_deposit: '',
+    estimated_annual_rate: '10.5',
+    investment_id: ''
   });
 
   const [movementForm, setMovementForm] = useState({
@@ -61,7 +69,9 @@ export default function GoalsPage() {
     syncTransaction: false,
     transactionType: 'despesa' as 'despesa' | 'receita',
     categoryId: '',
-    customDescription: ''
+    customDescription: '',
+    syncInvestment: false,
+    investmentId: ''
   });
 
   const formatCurrency = (value: number) => {
@@ -89,7 +99,10 @@ export default function GoalsPage() {
         deadline: goal.deadline || '',
         description: goal.description || '',
         icon: goal.icon,
-        color: goal.color
+        color: goal.color,
+        target_monthly_deposit: goal.target_monthly_deposit ? goal.target_monthly_deposit.toString() : '',
+        estimated_annual_rate: goal.estimated_annual_rate ? goal.estimated_annual_rate.toString() : '10.5',
+        investment_id: goal.investment_id || ''
       });
     } else {
       setEditingId(null);
@@ -100,10 +113,18 @@ export default function GoalsPage() {
         deadline: '',
         description: '',
         icon: 'flag',
-        color: '#10b981'
+        color: '#10b981',
+        target_monthly_deposit: '',
+        estimated_annual_rate: '10.5',
+        investment_id: ''
       });
     }
     setIsModalOpen(true);
+  };
+
+  const handleOpenSimulatorModal = (goal: Goal) => {
+    setSelectedGoal(goal);
+    setIsSimulatorModalOpen(true);
   };
 
   const handleOpenMovementModal = (goal: Goal, type: 'aporte' | 'resgate' = 'aporte') => {
@@ -117,7 +138,9 @@ export default function GoalsPage() {
       syncTransaction: false,
       transactionType: type === 'resgate' ? 'despesa' : 'despesa',
       categoryId: categories.length > 0 ? categories[0].id : '',
-      customDescription: ''
+      customDescription: '',
+      syncInvestment: !!goal.investment_id,
+      investmentId: goal.investment_id || (investments.length > 0 ? investments[0].id : '')
     });
     setIsMovementModalOpen(true);
   };
@@ -149,6 +172,13 @@ export default function GoalsPage() {
     setIsSubmitting(true);
     setFormError('');
 
+    const targetMonthly = goalForm.target_monthly_deposit
+      ? parseFloat(goalForm.target_monthly_deposit.replace(',', '.'))
+      : null;
+    const estRate = goalForm.estimated_annual_rate
+      ? parseFloat(goalForm.estimated_annual_rate.replace(',', '.'))
+      : 10.5;
+
     let success = false;
     if (editingId) {
       success = await updateGoal(editingId, {
@@ -157,7 +187,10 @@ export default function GoalsPage() {
         deadline: goalForm.deadline || null,
         description: goalForm.description || null,
         icon: goalForm.icon,
-        color: goalForm.color
+        color: goalForm.color,
+        target_monthly_deposit: targetMonthly,
+        estimated_annual_rate: estRate,
+        investment_id: goalForm.investment_id || null
       });
     } else {
       success = await addGoal({
@@ -167,7 +200,10 @@ export default function GoalsPage() {
         deadline: goalForm.deadline || undefined,
         description: goalForm.description || undefined,
         icon: goalForm.icon,
-        color: goalForm.color
+        color: goalForm.color,
+        target_monthly_deposit: targetMonthly,
+        estimated_annual_rate: estRate,
+        investment_id: goalForm.investment_id || null
       });
     }
 
@@ -208,7 +244,9 @@ export default function GoalsPage() {
       sync_transaction: movementForm.syncTransaction,
       transaction_category_id: movementForm.syncTransaction ? movementForm.categoryId : undefined,
       transaction_type: movementForm.transactionType,
-      transaction_description: movementForm.customDescription || undefined
+      transaction_description: movementForm.customDescription || undefined,
+      sync_investment: movementForm.syncInvestment,
+      investment_id: movementForm.syncInvestment ? (movementForm.investmentId || selectedGoal.investment_id || undefined) : undefined
     });
 
     setIsSubmitting(false);
@@ -256,15 +294,51 @@ export default function GoalsPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Metas Financeiras</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+            Metas Financeiras
+            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">
+              <Icon name="auto_awesome" size="sm" />
+              Inteligente
+            </span>
+          </h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            Acompanhe seus objetivos, planeje aportes e gerencie resgates
+            Planeje metas com cálculo de taxa em tempo real e integre aos seus investimentos
           </p>
         </div>
-        <Button variant="primary" onClick={() => handleOpenGoalModal()}>
-          <Icon name="add" className="w-4 h-4 mr-2" />
-          Nova Meta
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href="/planejamento">
+            <Button variant="secondary" className="border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+              <Icon name="flight_takeoff" className="w-4 h-4 mr-2" />
+              Prever Gastos & Orçar
+            </Button>
+          </Link>
+          <Button variant="primary" onClick={() => handleOpenGoalModal()}>
+            <Icon name="add" className="w-4 h-4 mr-2" />
+            Nova Meta
+          </Button>
+        </div>
+      </div>
+
+      {/* Banner de Previsão de Gastos Detalhada (TrabeePocket) */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <div className="p-2.5 rounded-xl bg-emerald-500 text-white shrink-0 mt-0.5">
+            <Icon name="calculate" size="md" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
+              Deseja criar metas com muito mais fidelidade e datas realistas?
+            </h4>
+            <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
+              Utilize o novo módulo de <strong>Previsão de Gastos & Planejamento</strong> (estilo TrabeePocket) para orçar despesas de viagem, passagens, hospedagem, transporte, reforma ou veículo item a item, e descobrir a data exata da meta de acordo com o seu aporte mensal!
+            </p>
+          </div>
+        </div>
+        <Link href="/planejamento" className="shrink-0 w-full sm:w-auto">
+          <Button variant="primary" size="sm" className="w-full shadow-xs">
+            Abrir Planejamento →
+          </Button>
+        </Link>
       </div>
 
       {error && (
@@ -281,8 +355,10 @@ export default function GoalsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {goals.map(goal => {
             const progress = calculateProgress(goal.current_amount, goal.target_amount);
+            const monthsLeft = calculateMonthsRemaining(goal.deadline);
+
             return (
-              <GlassCard key={goal.id} className="p-6 flex flex-col h-full justify-between">
+              <GlassCard key={goal.id} className="p-6 flex flex-col h-full justify-between hover:shadow-lg transition-all duration-200">
                 <div>
                   <div className="flex justify-between items-start mb-4">
                     <div
@@ -291,7 +367,14 @@ export default function GoalsPage() {
                     >
                       <Icon name={goal.icon} className="w-6 h-6" />
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleOpenSimulatorModal(goal)}
+                        className="p-1.5 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                        title="Simulador de Taxa & Aportes"
+                      >
+                        <Icon name="auto_awesome" size="sm" />
+                      </button>
                       <button
                         onClick={() => handleOpenHistoryModal(goal)}
                         className="p-1.5 text-gray-400 hover:text-primary dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
@@ -323,13 +406,54 @@ export default function GoalsPage() {
                   {goal.description && (
                     <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 line-clamp-2">{goal.description}</p>
                   )}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-6 flex items-center gap-2">
-                    <Icon name="calendar_month" size="sm" className="text-gray-400 shrink-0" />
-                    <span>Prazo: {formatDate(goal.deadline)}</span>
-                  </p>
+
+                  {/* Vínculo com Ativo de Investimento */}
+                  {goal.investment ? (
+                    <div className="mb-3 p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/40 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Icon name="account_balance_wallet" size="sm" className="text-primary dark:text-blue-400 shrink-0" />
+                        <span className="truncate font-medium text-gray-800 dark:text-gray-200">
+                          {goal.investment.ticker || goal.investment.name}
+                        </span>
+                      </div>
+                      <span className="text-[11px] font-bold text-primary dark:text-blue-400 shrink-0 ml-2">
+                        {formatCurrency(goal.investment.current_balance)}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-4">
+                    <span className="flex items-center gap-1.5">
+                      <Icon name="calendar_month" size="sm" className="text-gray-400 shrink-0" />
+                      {formatDate(goal.deadline)}
+                    </span>
+                    {goal.deadline && monthsLeft > 0 && (
+                      <span className="text-[11px] text-gray-400 font-medium">
+                        {monthsLeft} {monthsLeft === 1 ? 'mês restante' : 'meses restantes'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Detalhes do Aporte Planejado */}
+                  {goal.target_monthly_deposit && goal.target_monthly_deposit > 0 ? (
+                    <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 mb-4 text-xs">
+                      <div className="flex justify-between items-center">
+                        <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                          <Icon name="trending_up" size="sm" className="text-emerald-500" />
+                          Aporte Planejado:
+                        </span>
+                        <strong className="text-gray-900 dark:text-white font-bold">
+                          {formatCurrency(goal.target_monthly_deposit)}/mês
+                        </strong>
+                      </div>
+                      <div className="text-[10px] text-gray-400 text-right mt-0.5">
+                        Rentabilidade est.: {goal.estimated_annual_rate || 10.5}% a.a.
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
-                <div className="mt-auto pt-4">
+                <div className="mt-auto pt-2">
                   <div className="flex justify-between text-sm mb-2">
                     <div>
                       <span className="text-xs text-gray-400 block">Acumulado</span>
@@ -375,7 +499,7 @@ export default function GoalsPage() {
         <div className="col-span-full">
           <EmptyState
             title="Nenhuma meta cadastrada"
-            description="Comece a planejar seu futuro criando sua primeira meta financeira."
+            description="Comece a planejar seu futuro criando sua primeira meta financeira com cálculos inteligentes."
             icon="ads_click"
             actionLabel="Criar Meta"
             onAction={() => handleOpenGoalModal()}
@@ -383,13 +507,13 @@ export default function GoalsPage() {
         </div>
       )}
 
-      {/* Modal - Nova Meta / Editar Meta */}
+      {/* Modal - Nova Meta / Editar Meta (com Simulador Inteligente Integrado) */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => !isSubmitting && setIsModalOpen(false)}
         title={editingId ? 'Editar Meta' : 'Nova Meta'}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
           {formError && (
             <div className="p-3 bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg text-sm">
               {formError}
@@ -398,7 +522,7 @@ export default function GoalsPage() {
 
           <Input
             label="Título da Meta"
-            placeholder="Ex: Reserva de Emergência, Compra de Celular"
+            placeholder="Ex: Reserva de Emergência, Compra de Celular, Viagem"
             value={goalForm.name}
             onChange={(e) => setGoalForm({ ...goalForm, name: e.target.value })}
           />
@@ -440,7 +564,7 @@ export default function GoalsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Input
-              label="Data Limite (Opcional)"
+              label="Data Limite (Prazo)"
               type="date"
               value={goalForm.deadline}
               onChange={(e) => setGoalForm({ ...goalForm, deadline: e.target.value })}
@@ -460,7 +584,43 @@ export default function GoalsPage() {
             options={colorOptions}
           />
 
-          <div className="flex justify-end gap-2 mt-6">
+          {/* SIMULADOR INTELIGENTE DINÂMICO EM TEMPO REAL */}
+          {parseFloat(goalForm.target_amount.replace(',', '.')) > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+              <SmartGoalCalculator
+                targetAmount={parseFloat(goalForm.target_amount.replace(',', '.')) || 0}
+                currentAmount={
+                  editingId && selectedGoal
+                    ? selectedGoal.current_amount
+                    : parseFloat(goalForm.initial_amount.replace(',', '.')) || 0
+                }
+                deadline={goalForm.deadline}
+                initialRate={parseFloat(goalForm.estimated_annual_rate) || 10.5}
+                initialMonthlyDeposit={
+                  goalForm.target_monthly_deposit
+                    ? parseFloat(goalForm.target_monthly_deposit.replace(',', '.'))
+                    : null
+                }
+                selectedInvestmentId={goalForm.investment_id}
+                investments={investments}
+                onSelectInvestment={(id) => setGoalForm(prev => ({ ...prev, investment_id: id || '' }))}
+                onRateChange={(rate) => setGoalForm(prev => ({ ...prev, estimated_annual_rate: rate.toString() }))}
+                onMonthlyDepositChange={(dep) =>
+                  setGoalForm(prev => ({ ...prev, target_monthly_deposit: dep ? dep.toString() : '' }))
+                }
+                onApplyPlan={(plan) => {
+                  setGoalForm(prev => ({
+                    ...prev,
+                    target_monthly_deposit: plan.monthlyDeposit.toString(),
+                    estimated_annual_rate: plan.annualRate.toString(),
+                    investment_id: plan.investmentId || prev.investment_id
+                  }));
+                }}
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-6 pt-2">
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>
               Cancelar
             </Button>
@@ -471,13 +631,53 @@ export default function GoalsPage() {
         </div>
       </Modal>
 
-      {/* Modal - Movimentação (Aporte / Resgate) */}
+      {/* Modal - Simulador Rápido Dedicado */}
+      <Modal
+        isOpen={isSimulatorModalOpen}
+        onClose={() => setIsSimulatorModalOpen(false)}
+        title={selectedGoal ? `Simulador de Investimento: ${selectedGoal.name}` : 'Simulador de Meta'}
+      >
+        <div className="space-y-4">
+          {selectedGoal && (
+            <SmartGoalCalculator
+              targetAmount={selectedGoal.target_amount}
+              currentAmount={selectedGoal.current_amount}
+              deadline={selectedGoal.deadline || undefined}
+              initialRate={selectedGoal.estimated_annual_rate || 10.5}
+              initialMonthlyDeposit={selectedGoal.target_monthly_deposit || null}
+              selectedInvestmentId={selectedGoal.investment_id}
+              investments={investments}
+              onApplyPlan={async (plan) => {
+                await updateGoal(selectedGoal.id, {
+                  target_monthly_deposit: plan.monthlyDeposit,
+                  estimated_annual_rate: plan.annualRate,
+                  investment_id: plan.investmentId || null
+                });
+                setIsSimulatorModalOpen(false);
+              }}
+              onSelectInvestment={async (id) => {
+                await updateGoal(selectedGoal.id, {
+                  investment_id: id || null
+                });
+              }}
+            />
+          )}
+
+          <div className="flex justify-end pt-2">
+            <Button variant="ghost" onClick={() => setIsSimulatorModalOpen(false)}>
+              Fechar
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal - Movimentação (Aporte / Resgate) com Sincronização de Investimento */}
       <Modal
         isOpen={isMovementModalOpen}
         onClose={() => !isSubmitting && setIsMovementModalOpen(false)}
         title={selectedGoal ? `Movimentação: ${selectedGoal.name}` : 'Movimentação da Meta'}
       >
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[80vh] overflow-y-auto pr-1">
           {formError && (
             <div className="p-3 bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg text-sm">
               {formError}
@@ -552,12 +752,51 @@ export default function GoalsPage() {
 
           <Input
             label={movementType === 'aporte' ? 'Observações (Opcional)' : 'Motivo do Resgate / Observações (Opcional)'}
-            placeholder={movementType === 'aporte' ? 'Ex: Aporte mensal, Dinheiro extra' : 'Ex: Pagamento do mecânico, Compras de fim de ano'}
+            placeholder={movementType === 'aporte' ? 'Ex: Aporte mensal, Dinheiro extra' : 'Ex: Pagamento do mecânico, Compras'}
             value={movementForm.notes}
             onChange={(e) => setMovementForm({ ...movementForm, notes: e.target.value })}
           />
 
-          {/* Transaction Sync Section */}
+          {/* SEÇÃO: SINCRONIZAR COM INVESTIMENTOS */}
+          <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={movementForm.syncInvestment}
+                onChange={(e) => setMovementForm({ ...movementForm, syncInvestment: e.target.checked })}
+                className="w-4 h-4 text-primary rounded border-gray-300 dark:border-gray-700 focus:ring-primary"
+              />
+              <span className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                <Icon name="account_balance_wallet" size="sm" className="text-primary" />
+                Sincronizar com a Carteira de Investimentos
+              </span>
+            </label>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400 ml-6 mt-0.5">
+              Registra automaticamente um {movementType === 'aporte' ? 'aporte' : 'resgate'} no ativo selecionado e atualiza o saldo na aba Investimentos.
+            </p>
+
+            {movementForm.syncInvestment && (
+              <div className="mt-3 ml-6 p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/50 space-y-2">
+                <label className="block text-xs font-semibold text-gray-800 dark:text-gray-200">
+                  Selecionar Ativo da Carteira:
+                </label>
+                <select
+                  value={movementForm.investmentId}
+                  onChange={(e) => setMovementForm({ ...movementForm, investmentId: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-xs font-medium text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Selecione um ativo...</option>
+                  {investments.map(inv => (
+                    <option key={inv.id} value={inv.id}>
+                      {inv.ticker ? `[${inv.ticker}] ` : ''}{inv.name} • Saldo: {formatCurrency(inv.current_balance)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Transaction Sync Section (Lançamentos / Caixa da Família) */}
           <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
             <label className="flex items-center gap-2 cursor-pointer select-none">
               <input

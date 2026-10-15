@@ -11,6 +11,16 @@ export type Goal = {
   color: string;
   deadline: string | null;
   status: 'em_andamento' | 'concluida' | 'cancelada';
+  target_monthly_deposit?: number | null;
+  estimated_annual_rate?: number | null;
+  investment_id?: string | null;
+  investment?: {
+    id: string;
+    name: string;
+    ticker?: string | null;
+    current_balance: number;
+    institution?: string | null;
+  } | null;
 };
 
 export type GoalContribution = {
@@ -20,6 +30,7 @@ export type GoalContribution = {
   amount: number;
   date: string;
   notes: string | null;
+  investment_id?: string | null;
   created_at?: string;
   profile?: { id: string; display_name: string; avatar_url?: string | null };
 };
@@ -32,6 +43,14 @@ export type GoalCategory = {
   type: 'receita' | 'despesa' | 'ambos';
 };
 
+export type FamilyInvestment = {
+  id: string;
+  name: string;
+  ticker?: string | null;
+  current_balance: number;
+  institution?: string | null;
+};
+
 export type AddContributionInput = {
   goal_id: string;
   amount: number;
@@ -42,11 +61,14 @@ export type AddContributionInput = {
   transaction_category_id?: string;
   transaction_description?: string;
   transaction_type?: 'despesa' | 'receita';
+  investment_id?: string | null;
+  sync_investment?: boolean;
 };
 
 export function useGoals() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [categories, setCategories] = useState<GoalCategory[]>([]);
+  const [investments, setInvestments] = useState<FamilyInvestment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
@@ -54,11 +76,24 @@ export function useGoals() {
   const fetchGoals = useCallback(async () => {
     const { data, error } = await supabase
       .from('goals')
-      .select('*')
+      .select(`
+        *,
+        investment:investments(id, name, ticker, current_balance, institution)
+      `)
       .order('created_at', { ascending: false });
 
     if (error) throw error;
-    setGoals(data || []);
+    
+    const mapped = (data || []).map((g: any) => ({
+      ...g,
+      target_amount: Number(g.target_amount) || 0,
+      current_amount: Number(g.current_amount) || 0,
+      target_monthly_deposit: g.target_monthly_deposit ? Number(g.target_monthly_deposit) : null,
+      estimated_annual_rate: g.estimated_annual_rate ? Number(g.estimated_annual_rate) : 10.5,
+      investment: Array.isArray(g.investment) ? g.investment[0] : g.investment
+    })) as Goal[];
+
+    setGoals(mapped);
   }, [supabase]);
 
   const fetchCategories = useCallback(async () => {
@@ -71,18 +106,33 @@ export function useGoals() {
     }
   }, [supabase]);
 
+  const fetchInvestments = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('investments')
+      .select('id, name, ticker, current_balance, institution')
+      .order('name');
+    if (!error && data) {
+      setInvestments(
+        data.map((inv: any) => ({
+          ...inv,
+          current_balance: Number(inv.current_balance) || 0
+        }))
+      );
+    }
+  }, [supabase]);
+
   const refreshData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await Promise.all([fetchGoals(), fetchCategories()]);
+      await Promise.all([fetchGoals(), fetchCategories(), fetchInvestments()]);
     } catch (err: any) {
       console.error('Error fetching goals data:', err);
       setError(err.message || 'Erro ao carregar metas');
     } finally {
       setLoading(false);
     }
-  }, [fetchGoals, fetchCategories]);
+  }, [fetchGoals, fetchCategories, fetchInvestments]);
 
   useEffect(() => {
     refreshData();
@@ -96,6 +146,9 @@ export function useGoals() {
     description?: string;
     icon?: string;
     color?: string;
+    target_monthly_deposit?: number | null;
+    estimated_annual_rate?: number | null;
+    investment_id?: string | null;
   }) => {
     setError(null);
     try {
@@ -121,7 +174,10 @@ export function useGoals() {
           icon: input.icon || 'flag',
           color: input.color || '#10b981',
           deadline: input.deadline || null,
-          status: 'em_andamento'
+          status: 'em_andamento',
+          target_monthly_deposit: input.target_monthly_deposit || null,
+          estimated_annual_rate: input.estimated_annual_rate !== undefined ? input.estimated_annual_rate : 10.5,
+          investment_id: input.investment_id || null
         } as any)
         .select('id')
         .single() as any);
@@ -136,10 +192,26 @@ export function useGoals() {
             user_id: user.id,
             amount: input.initial_amount,
             date: new Date().toISOString().split('T')[0],
-            notes: 'Aporte Inicial'
+            notes: 'Aporte Inicial',
+            investment_id: input.investment_id || null
           } as any) as any);
 
         if (contribError) throw contribError;
+
+        // Optionally link entry to investment if selected
+        if (input.investment_id) {
+          await (supabase
+            .from('investment_entries')
+            .insert({
+              investment_id: input.investment_id,
+              user_id: user.id,
+              type: 'aporte',
+              amount: input.initial_amount,
+              currency: 'BRL',
+              date: new Date().toISOString().split('T')[0],
+              notes: `[Meta: ${input.name}] Aporte Inicial`
+            } as any) as any);
+        }
       }
 
       await refreshData();
@@ -166,6 +238,8 @@ export function useGoals() {
         throw new Error(`Saldo insuficiente na meta. Disponível: R$ ${targetGoal.current_amount.toFixed(2)}`);
       }
 
+      const invId = input.investment_id || targetGoal?.investment_id || null;
+
       // 1. Insert into goal_contributions
       const { error: contribError } = await (supabase
         .from('goal_contributions')
@@ -174,12 +248,32 @@ export function useGoals() {
           user_id: user.id,
           amount: contributionAmount,
           date: input.date,
-          notes: input.notes || (isWithdrawal ? 'Resgate / Retirada' : 'Aporte')
+          notes: input.notes || (isWithdrawal ? 'Resgate / Retirada' : 'Aporte'),
+          investment_id: invId
         } as any) as any);
 
       if (contribError) throw contribError;
 
-      // 2. Optionally sync with transactions table
+      // 2. Sync with Investments if requested and an asset is selected
+      if (input.sync_investment && invId) {
+        const { error: invErr } = await (supabase
+          .from('investment_entries')
+          .insert({
+            investment_id: invId,
+            user_id: user.id,
+            type: isWithdrawal ? 'resgate' : 'aporte',
+            amount: rawAmount,
+            currency: 'BRL',
+            date: input.date,
+            notes: `[Meta: ${targetGoal?.name || 'Meta'}] ${input.notes || (isWithdrawal ? 'Resgate' : 'Aporte')}`
+          } as any) as any);
+
+        if (invErr) {
+          console.warn('Erro ao sincronizar aporte no investimento:', invErr);
+        }
+      }
+
+      // 3. Optionally sync with transactions table (Finanças do mês)
       if (input.sync_transaction) {
         const { data: profile } = await supabase
           .from('profiles')
@@ -308,6 +402,7 @@ export function useGoals() {
   return {
     goals,
     categories,
+    investments,
     loading,
     error,
     refreshData,

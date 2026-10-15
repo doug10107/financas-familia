@@ -13,6 +13,7 @@ import { FIIAnalysisData } from '@/app/api/stocks/fii/route';
 
 interface GrahamAnalysisTableProps {
   investments: Investment[];
+  initialTicker?: string;
   onOpenEntryModal?: (inv: Investment) => void;
   onOpenNewInvModal?: (prefilledTicker?: string, prefilledPrice?: number) => void;
 }
@@ -58,6 +59,7 @@ const POPULAR_FII_TICKERS = [
 
 export function GrahamAnalysisTable({
   investments,
+  initialTicker,
   onOpenEntryModal,
   onOpenNewInvModal
 }: GrahamAnalysisTableProps) {

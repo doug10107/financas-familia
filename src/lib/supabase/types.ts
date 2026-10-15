@@ -425,6 +425,139 @@ export interface Database {
           created_at?: string
         }
       }
+      expense_plans: {
+        Row: {
+          id: string
+          family_id: string
+          created_by: string | null
+          title: string
+          description: string | null
+          category_type: string
+          icon: string | null
+          color: string | null
+          status: string
+          currency: string
+          exchange_rate: number
+          include_iof: boolean
+          iof_rate: number
+          contingency_percent: number
+          days_count: number
+          people_count: number
+          monthly_contribution_capacity: number
+          current_saved_amount: number
+          target_date: string | null
+          estimated_completion_date: string | null
+          goal_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          family_id: string
+          created_by?: string | null
+          title: string
+          description?: string | null
+          category_type?: string
+          icon?: string | null
+          color?: string | null
+          status?: string
+          currency?: string
+          exchange_rate?: number
+          include_iof?: boolean
+          iof_rate?: number
+          contingency_percent?: number
+          days_count?: number
+          people_count?: number
+          monthly_contribution_capacity?: number
+          current_saved_amount?: number
+          target_date?: string | null
+          estimated_completion_date?: string | null
+          goal_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          family_id?: string
+          created_by?: string | null
+          title?: string
+          description?: string | null
+          category_type?: string
+          icon?: string | null
+          color?: string | null
+          status?: string
+          currency?: string
+          exchange_rate?: number
+          include_iof?: boolean
+          iof_rate?: number
+          contingency_percent?: number
+          days_count?: number
+          people_count?: number
+          monthly_contribution_capacity?: number
+          current_saved_amount?: number
+          target_date?: string | null
+          estimated_completion_date?: string | null
+          goal_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      expense_plan_items: {
+        Row: {
+          id: string
+          plan_id: string
+          category: string
+          name: string
+          cost_type: string
+          quantity: number
+          unit_cost: number
+          original_currency: string
+          original_amount: number
+          total_brl: number
+          status: string
+          payment_method: string | null
+          notes: string | null
+          position: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          plan_id: string
+          category: string
+          name: string
+          cost_type?: string
+          quantity?: number
+          unit_cost?: number
+          original_currency?: string
+          original_amount?: number
+          total_brl: number
+          status?: string
+          payment_method?: string | null
+          notes?: string | null
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          plan_id?: string
+          category?: string
+          name?: string
+          cost_type?: string
+          quantity?: number
+          unit_cost?: number
+          original_currency?: string
+          original_amount?: number
+          total_brl?: number
+          status?: string
+          payment_method?: string | null
+          notes?: string | null
+          position?: number
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
