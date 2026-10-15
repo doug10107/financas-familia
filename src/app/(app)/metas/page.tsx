@@ -40,6 +40,14 @@ export default function GoalsPage() {
   // Selected goal state
   const [selectedGoal, setSelectedGoal] = useState<Goal | null>(null);
   const [movementType, setMovementType] = useState<'aporte' | 'resgate'>('aporte');
+  const [activeMenuGoalId, setActiveMenuGoalId] = useState<string | null>(null);
+
+  // Close card menu on outside click
+  React.useEffect(() => {
+    const handleGlobalClick = () => setActiveMenuGoalId(null);
+    window.addEventListener('click', handleGlobalClick);
+    return () => window.removeEventListener('click', handleGlobalClick);
+  }, []);
 
   // History state
   const [historyList, setHistoryList] = useState<GoalContribution[]>([]);
@@ -291,202 +299,221 @@ export default function GoalsPage() {
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-7xl mx-auto">
+      {/* Header Limpo & Direto */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
             Metas Financeiras
-            <span className="inline-flex items-center gap-1 text-[11px] font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full border border-primary/20">
-              <Icon name="auto_awesome" size="sm" />
-              Inteligente
-            </span>
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-            Planeje metas com cálculo de taxa em tempo real e integre aos seus investimentos
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
+            Acompanhe o progresso e simule o alcance dos seus objetivos patrimoniais
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2.5">
           <Link href="/planejamento">
-            <Button variant="secondary" className="border border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
-              <Icon name="flight_takeoff" className="w-4 h-4 mr-2" />
-              Prever Gastos & Orçar
+            <Button variant="secondary" size="sm" className="rounded-xl text-xs sm:text-sm">
+              <Icon name="event_note" className="w-4 h-4 mr-1.5 text-gray-500" />
+              Previsão de Gastos
             </Button>
           </Link>
-          <Button variant="primary" onClick={() => handleOpenGoalModal()}>
-            <Icon name="add" className="w-4 h-4 mr-2" />
+          <Button variant="primary" size="sm" onClick={() => handleOpenGoalModal()} className="rounded-xl shadow-xs">
+            <Icon name="add" className="w-4 h-4 mr-1.5" />
             Nova Meta
           </Button>
         </div>
       </div>
 
-      {/* Banner de Previsão de Gastos Detalhada (TrabeePocket) */}
-      <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/10 via-teal-500/10 to-blue-500/10 border border-emerald-500/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="p-2.5 rounded-xl bg-emerald-500 text-white shrink-0 mt-0.5">
-            <Icon name="calculate" size="md" />
-          </div>
-          <div>
-            <h4 className="text-sm font-bold text-gray-900 dark:text-white">
-              Deseja criar metas com muito mais fidelidade e datas realistas?
-            </h4>
-            <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">
-              Utilize o novo módulo de <strong>Previsão de Gastos & Planejamento</strong> (estilo TrabeePocket) para orçar despesas de viagem, passagens, hospedagem, transporte, reforma ou veículo item a item, e descobrir a data exata da meta de acordo com o seu aporte mensal!
-            </p>
-          </div>
-        </div>
-        <Link href="/planejamento" className="shrink-0 w-full sm:w-auto">
-          <Button variant="primary" size="sm" className="w-full shadow-xs">
-            Abrir Planejamento →
-          </Button>
-        </Link>
-      </div>
-
       {error && (
-        <div className="p-3 bg-red-100 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-lg text-sm">
+        <div className="p-3 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 rounded-xl text-sm">
           {error}
         </div>
       )}
 
       {loading ? (
-        <div className="py-12 flex justify-center">
+        <div className="py-16 flex justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : goals.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {goals.map(goal => {
             const progress = calculateProgress(goal.current_amount, goal.target_amount);
             const monthsLeft = calculateMonthsRemaining(goal.deadline);
+            const isMenuOpen = activeMenuGoalId === goal.id;
 
             return (
-              <GlassCard key={goal.id} className="p-6 flex flex-col h-full justify-between hover:shadow-lg transition-all duration-200">
+              <GlassCard 
+                key={goal.id} 
+                className="p-5 flex flex-col justify-between border border-gray-200/70 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700 transition-all rounded-2xl relative shadow-xs"
+              >
                 <div>
-                  <div className="flex justify-between items-start mb-4">
-                    <div
-                      className="p-3 rounded-xl text-white shadow-sm flex items-center justify-center"
-                      style={{ backgroundColor: goal.color }}
-                    >
-                      <Icon name={goal.icon} className="w-6 h-6" />
+                  {/* Cabeçalho do Card: Ícone, Título e Menu 3 Pontinhos */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 rounded-xl text-white shadow-xs flex items-center justify-center shrink-0"
+                        style={{ backgroundColor: goal.color }}
+                      >
+                        <Icon name={goal.icon} className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate text-base leading-tight">
+                          {goal.name}
+                        </h3>
+                        {goal.description ? (
+                          <p className="text-xs text-gray-400 dark:text-gray-500 truncate mt-0.5">
+                            {goal.description}
+                          </p>
+                        ) : null}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => handleOpenSimulatorModal(goal)}
-                        className="p-1.5 text-gray-400 hover:text-amber-500 dark:hover:text-amber-400 transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                        title="Simulador de Taxa & Aportes"
-                      >
-                        <Icon name="auto_awesome" size="sm" />
-                      </button>
-                      <button
-                        onClick={() => handleOpenHistoryModal(goal)}
-                        className="p-1.5 text-gray-400 hover:text-primary dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                        title="Ver Extrato / Histórico da Meta"
-                      >
-                        <Icon name="history" size="sm" />
-                      </button>
-                      <button
-                        onClick={() => handleOpenGoalModal(goal)}
-                        className="p-1.5 text-gray-400 hover:text-primary dark:hover:text-[#adc6ff] transition-colors rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/50"
-                        title="Editar Meta"
-                      >
-                        <Icon name="edit" size="sm" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteGoal(goal.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
-                        title="Excluir Meta"
-                      >
-                        <Icon name="delete" size="sm" />
-                      </button>
-                      <Badge color={progress >= 100 ? 'green' : 'blue'}>
+
+                    {/* Progresso Badge + Menu Dropdown Clean */}
+                    <div className="flex items-center gap-1.5 shrink-0 relative">
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                        progress >= 100 
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' 
+                          : 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300'
+                      }`}>
                         {progress}%
-                      </Badge>
+                      </span>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuGoalId(isMenuOpen ? null : goal.id);
+                        }}
+                        className="p-1 rounded-lg text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                        title="Mais opções"
+                      >
+                        <Icon name="more_vert" size="sm" />
+                      </button>
+
+                      {/* Dropdown de Opções */}
+                      {isMenuOpen && (
+                        <div 
+                          className="absolute right-0 top-8 w-48 bg-white dark:bg-[#1a2332] rounded-xl shadow-lg border border-gray-200 dark:border-gray-800 py-1 z-30 animate-fade-in"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuGoalId(null);
+                              handleOpenSimulatorModal(goal);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+                          >
+                            <Icon name="auto_awesome" size="xs" className="text-amber-500" />
+                            Simular Rendimentos
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuGoalId(null);
+                              handleOpenHistoryModal(goal);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+                          >
+                            <Icon name="history" size="xs" className="text-blue-500" />
+                            Histórico de Aportes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuGoalId(null);
+                              handleOpenGoalModal(goal);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 flex items-center gap-2 transition-colors"
+                          >
+                            <Icon name="edit" size="xs" className="text-gray-500" />
+                            Editar Meta
+                          </button>
+                          <div className="border-t border-gray-100 dark:border-gray-800 my-1" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveMenuGoalId(null);
+                              handleDeleteGoal(goal.id);
+                            }}
+                            className="w-full text-left px-3.5 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 flex items-center gap-2 transition-colors"
+                          >
+                            <Icon name="delete" size="xs" />
+                            Excluir Meta
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{goal.name}</h3>
-                  {goal.description && (
-                    <p className="text-xs text-gray-400 dark:text-gray-500 mb-2 line-clamp-2">{goal.description}</p>
-                  )}
-
-                  {/* Vínculo com Ativo de Investimento */}
-                  {goal.investment ? (
-                    <div className="mb-3 p-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/40 flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <Icon name="account_balance_wallet" size="sm" className="text-primary dark:text-blue-400 shrink-0" />
-                        <span className="truncate font-medium text-gray-800 dark:text-gray-200">
-                          {goal.investment.ticker || goal.investment.name}
-                        </span>
-                      </div>
-                      <span className="text-[11px] font-bold text-primary dark:text-blue-400 shrink-0 ml-2">
-                        {formatCurrency(goal.investment.current_balance)}
-                      </span>
-                    </div>
-                  ) : null}
-
-                  <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-4">
-                    <span className="flex items-center gap-1.5">
-                      <Icon name="calendar_month" size="sm" className="text-gray-400 shrink-0" />
-                      {formatDate(goal.deadline)}
-                    </span>
-                    {goal.deadline && monthsLeft > 0 && (
-                      <span className="text-[11px] text-gray-400 font-medium">
-                        {monthsLeft} {monthsLeft === 1 ? 'mês restante' : 'meses restantes'}
+                  {/* Informações Complementares em Pills Sutis */}
+                  <div className="flex items-center gap-2 flex-wrap mb-4 text-[11px] text-gray-500 dark:text-gray-400">
+                    {goal.deadline && (
+                      <span className="flex items-center gap-1 bg-gray-50 dark:bg-gray-800/60 px-2 py-0.5 rounded-md">
+                        <Icon name="calendar_today" size="xs" className="text-gray-400" />
+                        {formatDate(goal.deadline)}
+                        {monthsLeft > 0 ? ` (${monthsLeft}m)` : ''}
                       </span>
                     )}
-                  </div>
 
-                  {/* Detalhes do Aporte Planejado */}
-                  {goal.target_monthly_deposit && goal.target_monthly_deposit > 0 ? (
-                    <div className="p-2.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 mb-4 text-xs">
-                      <div className="flex justify-between items-center">
-                        <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                          <Icon name="trending_up" size="sm" className="text-emerald-500" />
-                          Aporte Planejado:
-                        </span>
-                        <strong className="text-gray-900 dark:text-white font-bold">
-                          {formatCurrency(goal.target_monthly_deposit)}/mês
-                        </strong>
-                      </div>
-                      <div className="text-[10px] text-gray-400 text-right mt-0.5">
-                        Rentabilidade est.: {goal.estimated_annual_rate || 10.5}% a.a.
-                      </div>
-                    </div>
-                  ) : null}
+                    {goal.target_monthly_deposit && goal.target_monthly_deposit > 0 ? (
+                      <span className="flex items-center gap-1 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md font-medium">
+                        <Icon name="trending_up" size="xs" />
+                        {formatCurrency(goal.target_monthly_deposit)}/mês
+                      </span>
+                    ) : null}
+
+                    {goal.investment ? (
+                      <span className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-md font-medium truncate max-w-[140px]">
+                        <Icon name="account_balance_wallet" size="xs" />
+                        {goal.investment.ticker || goal.investment.name}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
-                <div className="mt-auto pt-2">
-                  <div className="flex justify-between text-sm mb-2">
+                {/* Bloco de Progresso e Valores */}
+                <div className="mt-2">
+                  <div className="flex items-baseline justify-between mb-2">
                     <div>
-                      <span className="text-xs text-gray-400 block">Acumulado</span>
-                      <span className="font-semibold text-gray-900 dark:text-white">{formatCurrency(goal.current_amount)}</span>
+                      <span className="text-[11px] text-gray-400 block font-medium">Acumulado</span>
+                      <span className="text-lg font-bold text-gray-900 dark:text-white">
+                        {formatCurrency(goal.current_amount)}
+                      </span>
                     </div>
                     <div className="text-right">
-                      <span className="text-xs text-gray-400 block">Objetivo</span>
-                      <span className="text-gray-500">{formatCurrency(goal.target_amount)}</span>
+                      <span className="text-[11px] text-gray-400 block font-medium">Objetivo</span>
+                      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">
+                        {formatCurrency(goal.target_amount)}
+                      </span>
                     </div>
                   </div>
-                  <div className="w-full bg-gray-200 dark:bg-gray-700/80 rounded-full h-2.5 mb-5 overflow-hidden">
+
+                  {/* Barra de Progresso Fina e Suave */}
+                  <div className="w-full bg-gray-100 dark:bg-gray-800 rounded-full h-2 mb-4 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
                       style={{ width: `${progress}%`, backgroundColor: goal.color }}
                     />
                   </div>
 
+                  {/* Botões Aporte e Resgatar Minimalistas */}
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => handleOpenMovementModal(goal, 'aporte')}
-                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                      className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                     >
-                      <Icon name="add_circle" size="sm" className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <Icon name="add" size="xs" />
                       <span>Aporte</span>
                     </button>
                     <button
                       type="button"
                       onClick={() => handleOpenMovementModal(goal, 'resgate')}
                       disabled={goal.current_amount <= 0}
-                      className="py-2 px-3 rounded-xl text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40 hover:bg-rose-100 dark:hover:bg-rose-900/50 transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="py-1.5 px-3 rounded-xl text-xs font-semibold bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      <Icon name="remove_circle" size="sm" className="text-rose-600 dark:text-rose-400 shrink-0" />
+                      <Icon name="remove" size="xs" />
                       <span>Resgatar</span>
                     </button>
                   </div>
