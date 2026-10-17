@@ -379,12 +379,19 @@ export function StockDetailDashboard({
     };
   }, [bazinCeiling, bazinMargin, grahamCeiling, grahamMargin, lynchScore, projectedCeiling, projectedMargin, dcfResult, stock, currentPrice]);
 
-  // Portfolio tickers for quick switch (only stocks / 'acao')
+  // Portfolio tickers for quick switch (only stocks / 'Ações')
   const userStockTickers = useMemo(() => {
+    const unitStocks = new Set(['TAEE11', 'SANB11', 'SAPR11', 'KLBN11', 'ALUP11', 'ENGI11', 'BPAC11', 'IGTI11']);
     return Array.from(
       new Set(
         investments
-          .filter((inv) => inv.type === 'acao')
+          .filter((inv) => {
+            const typeName = (inv.investment_type?.name || '').toLowerCase();
+            if (typeName.includes('fii') || typeName.includes('imobili')) return false;
+            if (typeName.includes('aç') || typeName.includes('ac')) return true;
+            const t = (inv.ticker || '').trim().toUpperCase();
+            return /^[A-Z]{4}[3456]$/.test(t) || unitStocks.has(t);
+          })
           .map((inv) => (inv.ticker || '').trim().toUpperCase())
           .filter((t) => /^[A-Z]{4}\d{1,2}$/.test(t))
       )
