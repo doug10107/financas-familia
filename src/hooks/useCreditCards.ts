@@ -138,6 +138,34 @@ export function useCreditCards() {
     }
   };
 
+  const updateInvoiceDueDate = async (cardId: string, month: string, newDueDate: string) => {
+    setError(null);
+    try {
+      const [yearStr, monthStr] = month.split('-');
+      const year = parseInt(yearStr, 10);
+      const monthNum = parseInt(monthStr, 10);
+
+      const startDate = `${yearStr}-${monthStr.padStart(2, '0')}-01`;
+      const lastDay = new Date(year, monthNum, 0).getDate();
+      const endDate = `${yearStr}-${monthStr.padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+      const { error } = await (supabase
+        .from('transactions') as any)
+        .update({ date: newDueDate })
+        .eq('credit_card_id', cardId)
+        .eq('status', 'pendente')
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+      if (error) throw error;
+      return true;
+    } catch (err: any) {
+      console.error('Error updating invoice due date:', err);
+      setError(err.message || 'Erro ao alterar vencimento da fatura');
+      return false;
+    }
+  };
+
   return {
     creditCards,
     loading,
@@ -146,6 +174,7 @@ export function useCreditCards() {
     addCreditCard,
     updateCreditCard,
     deleteCreditCard,
-    payInvoice
+    payInvoice,
+    updateInvoiceDueDate
   };
 }

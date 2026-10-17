@@ -67,26 +67,22 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       isInvoice: false
     }));
 
-  // Credit card invoices due today (when today is the card's due day and has pending items)
-  const currentDay = currentDate.getDate();
-  const currentMonthPrefix = todayString.substring(0, 7);
-  const cardInvoicesDueToday: NotificationBill[] = creditCards
-    .filter(card => Number(card.due_day) === currentDay)
-    .reduce<NotificationBill[]>((acc, card) => {
-      const pendingTxs = transactions.filter(
-        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonthPrefix)
-      );
-      const totalDue = pendingTxs.reduce((sum, t) => sum + Number(t.amount), 0);
-      if (totalDue > 0) {
-        acc.push({
-          id: `fatura-card-${card.id}`,
-          description: `Fatura ${card.name}`,
-          amount: totalDue,
-          isInvoice: true
-        });
-      }
-      return acc;
-    }, []);
+  // Credit card invoices due today (when invoice transactions are due today)
+  const cardInvoicesDueToday: NotificationBill[] = creditCards.reduce<NotificationBill[]>((acc, card) => {
+    const pendingTxsToday = transactions.filter(
+      t => t.credit_card_id === card.id && t.status === 'pendente' && t.date === todayString
+    );
+    const totalDue = pendingTxsToday.reduce((sum, t) => sum + Number(t.amount), 0);
+    if (totalDue > 0) {
+      acc.push({
+        id: `fatura-card-${card.id}`,
+        description: `Fatura ${card.name}`,
+        amount: totalDue,
+        isInvoice: true
+      });
+    }
+    return acc;
+  }, []);
 
   const dueTodayBills: NotificationBill[] = [...directBillsDueToday, ...cardInvoicesDueToday];
   const hasNotifications = dueTodayBills.length > 0;

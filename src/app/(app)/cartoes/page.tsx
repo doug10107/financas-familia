@@ -13,13 +13,20 @@ import { useTransactions } from '@/hooks/useTransactions';
 import { CreditCardEvolutionChart } from '@/components/cartoes/CreditCardEvolutionChart';
 
 export default function CreditCardsPage() {
-  const { creditCards, loading, error, addCreditCard, updateCreditCard, deleteCreditCard, payInvoice } = useCreditCards();
+  const { creditCards, loading, error, addCreditCard, updateCreditCard, deleteCreditCard, payInvoice, updateInvoiceDueDate } = useCreditCards();
   const { transactions, refreshData: refreshTransactions } = useTransactions();
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Modal para ajuste de vencimento da fatura do mês atual
+  const [isDueDateModalOpen, setIsDueDateModalOpen] = useState(false);
+  const [targetCardForDueDate, setTargetCardForDueDate] = useState<CreditCard | null>(null);
+  const [customDueDate, setCustomDueDate] = useState('');
+  const [isSubmittingDueDate, setIsSubmittingDueDate] = useState(false);
+  const [dueDateError, setDueDateError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -106,6 +113,30 @@ export default function CreditCardsPage() {
     }
   };
 
+  const handleOpenDueDateModal = (card: CreditCard, currentDate?: string) => {
+    setTargetCardForDueDate(card);
+    setDueDateError('');
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const defaultDate = currentDate || `${currentMonth}-${String(card.due_day).padStart(2, '0')}`;
+    setCustomDueDate(defaultDate);
+    setIsDueDateModalOpen(true);
+  };
+
+  const handleSaveDueDate = async () => {
+    if (!targetCardForDueDate || !customDueDate) return;
+    setIsSubmittingDueDate(true);
+    setDueDateError('');
+    const currentMonth = new Date().toISOString().substring(0, 7);
+    const success = await updateInvoiceDueDate(targetCardForDueDate.id, currentMonth, customDueDate);
+    setIsSubmittingDueDate(false);
+    if (success) {
+      await refreshTransactions();
+      setIsDueDateModalOpen(false);
+    } else {
+      setDueDateError('Erro ao atualizar data de vencimento da fatura.');
+    }
+  };
+
   const colorOptions = [
     { label: 'Roxo', value: '#8b5cf6' },
     { label: 'Azul', value: '#3b82f6' },
@@ -151,6 +182,8 @@ export default function CreditCardsPage() {
               t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonth)
             );
             const totalDue = pendingTransactions.reduce((acc, t) => acc + Number(t.amount), 0);
+            const currentInvoiceDueDate = pendingTransactions.length > 0 ? pendingTransactions[0].date : '';
+            const isCustomDate = currentInvoiceDueDate && currentInvoiceDueDate.split('-')[2] !== String(card.due_day).padStart(2, '0');
 
             return (
               <div 
@@ -191,8 +224,28 @@ export default function CreditCardsPage() {
                     <p className="font-semibold">Dia {card.closing_day}</p>
                   </div>
                   <div>
-                    <p className="text-xs uppercase tracking-wider text-white/70">Vencimento</p>
-                    <p className="font-semibold">Dia {card.due_day}</p>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-wider text-white/70">Vencimento</p>
+                      {totalDue > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDueDateModal(card, currentInvoiceDueDate)}
+                          className="text-[10px] bg-white/20 hover:bg-white/30 text-white px-1.5 py-0.5 rounded transition-colors flex items-center gap-1 font-medium"
+                          title="Ajustar vencimento desta fatura (ex: fim de semana ou feriado)"
+                        >
+                          <Icon name="event" size="sm" className="text-[11px]" />
+                          Ajustar
+                        </button>
+                      )}
+                    </div>
+                    <p className="font-semibold flex items-baseline gap-1.5 flex-wrap">
+                      <span>Dia {card.due_day}</span>
+                      {isCustomDate && (
+                        <span className="text-[11px] font-normal text-amber-200">
+                          (Este mês: {currentInvoiceDueDate.split('-')[2]}/{currentInvoiceDueDate.split('-')[1]})
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -274,6 +327,49 @@ export default function CreditCardsPage() {
             <Button variant="ghost" onClick={() => setIsModalOpen(false)} disabled={isSubmitting}>Cancelar</Button>
             <Button variant="primary" onClick={handleSubmit} loading={isSubmitting}>
               {editingId ? "Salvar Alterações" : "Salvar Cartão"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal para Ajustar Data da Fatura deste mês */}
+      <Modal
+        isOpen={isDueDateModalOpen}
+        onClose={() => !isSubmittingDueDate && setIsDueDateModalOpen(false)}
+        title={`Ajustar Vencimento da Fatura - ${targetCardForDueDate?.name}`}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            Altere a data de vencimento da fatura deste mês específico (por exemplo, quando cai em fim de semana ou feriado bancário).
+          </p>
+
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-200 text-xs rounded-xl border border-amber-200 dark:border-amber-800 flex items-start gap-2">
+            <Icon name="info" className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>
+              Isso atualizará a data de pagamento de todos os lançamentos desta fatura de uma vez só, corrigindo o alerta no Dashboard sem alterar o dia oficial cadastrado no cartão para os próximos meses.
+            </span>
+          </div>
+
+          {dueDateError && (
+            <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+              {dueDateError}
+            </div>
+          )}
+
+          <Input
+            label="Nova Data de Vencimento"
+            type="date"
+            value={customDueDate}
+            onChange={(e) => setCustomDueDate(e.target.value)}
+            required
+          />
+
+          <div className="flex justify-end gap-2 mt-6">
+            <Button variant="ghost" onClick={() => setIsDueDateModalOpen(false)} disabled={isSubmittingDueDate}>
+              Cancelar
+            </Button>
+            <Button variant="primary" onClick={handleSaveDueDate} loading={isSubmittingDueDate}>
+              Salvar Data da Fatura
             </Button>
           </div>
         </div>
