@@ -1063,11 +1063,21 @@ export function AdvancedStockScreener({
                       {/* Ticker & Name */}
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded font-mono font-extrabold text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+                          <button
+                            type="button"
+                            onClick={() => onNavigateToGraham?.(asset.ticker)}
+                            title={`Abrir Raio-X e Valuations de ${asset.ticker}`}
+                            className="px-2 py-0.5 rounded font-mono font-extrabold text-xs bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900 hover:scale-105 transition-all cursor-pointer"
+                          >
                             {asset.ticker}
-                          </span>
+                          </button>
                           <div>
-                            <p className="font-bold text-gray-900 dark:text-white leading-tight">{asset.name}</p>
+                            <p
+                              onClick={() => onNavigateToGraham?.(asset.ticker)}
+                              className="font-bold text-gray-900 dark:text-white leading-tight hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                            >
+                              {asset.name}
+                            </p>
                             <span className="text-[10px] text-gray-400">{asset.subsector || asset.sector}</span>
                           </div>
                         </div>
@@ -1150,6 +1160,17 @@ export function AdvancedStockScreener({
                       {/* Actions */}
                       <td className="px-3 py-3 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {onNavigateToGraham && (
+                            <button
+                              onClick={() => onNavigateToGraham(asset.ticker)}
+                              className="px-2.5 py-1 text-xs font-bold rounded-lg bg-sky-600 hover:bg-sky-500 text-white shadow-xs transition-colors flex items-center gap-1"
+                              title="Abrir Raio-X Completo e Valuations desta ação"
+                            >
+                              <Icon name="query_stats" size="sm" />
+                              <span>Detalhes</span>
+                            </button>
+                          )}
+
                           <button
                             onClick={() => onOpenNewInvModal?.(asset.ticker, asset.price)}
                             className="px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs transition-colors flex items-center gap-1"
@@ -1158,16 +1179,6 @@ export function AdvancedStockScreener({
                             <Icon name="add_circle" size="sm" />
                             <span>Carteira</span>
                           </button>
-
-                          {onNavigateToGraham && (
-                            <button
-                              onClick={() => onNavigateToGraham(asset.ticker)}
-                              className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 rounded-lg transition-colors"
-                              title="Abrir Análise de Graham / Bazin para este ticker"
-                            >
-                              <Icon name="analytics" size="sm" />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>

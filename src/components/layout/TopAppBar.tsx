@@ -20,6 +20,7 @@ interface TopAppBarProps {
 export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
@@ -115,101 +116,148 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const activeDisplayName = currentMember?.display_name || userName;
   const familyName = family?.family_name || 'Família';
 
+  const primaryNavItems = [
+    { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
+    { href: '/lancamentos', label: 'Lançamentos', icon: 'receipt_long' },
+    { href: '/cartoes', label: 'Cartões', icon: 'credit_card' },
+    { href: '/investimentos', label: 'Investimentos', icon: 'trending_up' },
+    { href: '/metas', label: 'Metas', icon: 'flag' },
+  ];
+
+  const secondaryNavItems = [
+    { href: '/planejamento', label: 'Planejamento', desc: 'Viagens, projetos e orçamentos', icon: 'event_note', color: 'text-purple-500 bg-purple-500/10' },
+    { href: '/beneficios', label: 'VA & VR', desc: 'Cartões de alimentação e refeição', icon: 'restaurant', color: 'text-amber-500 bg-amber-500/10' },
+    { href: '/compras', label: 'Lista de Compras', desc: 'Supermercado e controle de itens', icon: 'shopping_cart', color: 'text-blue-500 bg-blue-500/10' },
+    { href: '/importar', label: 'Importar Dados', desc: 'Faturas e extratos bancários', icon: 'upload_file', color: 'text-emerald-500 bg-emerald-500/10' },
+  ];
+
+  const activeSecondaryItem = secondaryNavItems.find(item => pathname.startsWith(item.href));
+
   return (
     <header 
       className={`sticky top-0 z-40 w-full transition-all duration-300 ${
         isScrolled 
-          ? 'bg-white/70 dark:bg-[#1a2332]/70 backdrop-blur-lg shadow-sm' 
+          ? 'bg-white/85 dark:bg-[#0f172a]/85 backdrop-blur-xl shadow-sm border-b border-gray-200/50 dark:border-slate-800/80' 
           : 'bg-transparent'
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center gap-3">
+        <div className="flex justify-between items-center h-16 gap-4">
+          {/* Left: User Profile & Family Badge (never wraps) */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setIsFamilyModalOpen(true)}
-              className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-lg shadow-sm hover:scale-105 transition-transform"
+              className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-base shadow-sm hover:scale-105 transition-transform shrink-0"
               title="Ver detalhes da Família"
             >
               {activeDisplayName.charAt(0).toUpperCase()}
             </button>
             <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-                  {capitalizedDate}
+              <div className="flex items-center gap-2 whitespace-nowrap">
+                <span className="text-sm font-bold text-gray-900 dark:text-white">
+                  Olá, {activeDisplayName.split(' ')[0]}
                 </span>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.2 rounded font-semibold border border-emerald-500/20">
+                <button
+                  type="button"
+                  onClick={() => setIsFamilyModalOpen(true)}
+                  className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-0.5 rounded-full font-bold border border-emerald-500/25 transition-colors whitespace-nowrap"
+                >
                   {familyName}
-                </span>
+                </button>
               </div>
-              <span className="text-sm font-semibold">
-                Olá, {activeDisplayName.split(' ')[0]}
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+                {capitalizedDate}
               </span>
             </div>
           </div>
           
-          <nav className="hidden md:flex items-center gap-6">
-            <Link 
-              href="/dashboard" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/dashboard') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Dashboard
-            </Link>
-            <Link 
-              href="/lancamentos" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/lancamentos') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Lançamentos
-            </Link>
-            <Link 
-              href="/cartoes" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/cartoes') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Cartões
-            </Link>
-            <Link 
-              href="/metas" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/metas') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Metas
-            </Link>
-            <Link 
-              href="/planejamento" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/planejamento') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Planejamento
-            </Link>
-            <Link 
-              href="/investimentos" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/investimentos') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Investimentos
-            </Link>
-            <Link 
-              href="/beneficios" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/beneficios') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              VA & VR
-            </Link>
-            <Link 
-              href="/compras" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/compras') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Lista Compras
-            </Link>
-            <Link 
-              href="/importar" 
-              className={`text-sm font-medium transition-colors hover:text-[#006c49] dark:hover:text-[#4edea3] ${pathname.startsWith('/importar') ? 'text-[#006c49] dark:text-[#4edea3]' : 'text-gray-600 dark:text-gray-400'}`}
-            >
-              Importar
-            </Link>
+          {/* Center: Clean Pill Navigation Bar */}
+          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-gray-100/90 dark:bg-slate-900/90 border border-gray-200/70 dark:border-slate-800 shadow-inner">
+            {primaryNavItems.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setShowMoreMenu(false)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                    isActive
+                      ? 'bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs'
+                      : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <Icon name={item.icon} className="text-[15px]" />
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+
+            {/* Dropdown "Mais" for Secondary Modules */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMoreMenu(!showMoreMenu);
+                  setShowNotifications(false);
+                }}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  activeSecondaryItem || showMoreMenu
+                    ? 'bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs'
+                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
+                }`}
+              >
+                <Icon name={activeSecondaryItem ? activeSecondaryItem.icon : 'apps'} className="text-[15px]" />
+                <span>{activeSecondaryItem ? activeSecondaryItem.label : 'Mais'}</span>
+                <Icon name={showMoreMenu ? 'expand_less' : 'expand_more'} className="text-[14px] opacity-70" />
+              </button>
+
+              {showMoreMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setShowMoreMenu(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-72 z-20 bg-white dark:bg-[#161f30] rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700/80 p-2 animate-slide-up origin-top-right">
+                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-400 dark:text-slate-400">
+                      Ferramentas & Gestão
+                    </div>
+                    <div className="space-y-1 mt-1">
+                      {secondaryNavItems.map((item) => {
+                        const isSubActive = pathname.startsWith(item.href);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setShowMoreMenu(false)}
+                            className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
+                              isSubActive
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                                : 'hover:bg-gray-50 dark:hover:bg-slate-800/60 text-gray-800 dark:text-slate-200'
+                            }`}
+                          >
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.color}`}>
+                              <Icon name={item.icon} size="sm" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate">{item.label}</p>
+                              <p className="text-[11px] text-gray-400 dark:text-slate-400 truncate">{item.desc}</p>
+                            </div>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </nav>
 
-          <div className="flex items-center gap-2 relative">
+          {/* Right: Action Icons */}
+          <div className="flex items-center gap-1.5 relative shrink-0">
             {/* Family Button */}
             <button 
               onClick={() => setIsFamilyModalOpen(true)}
-              className="p-2 rounded-full hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 transition-colors relative"
+              className="p-2 rounded-xl hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 transition-colors relative"
               title="Minha Família Compartilhada"
             >
               <Icon name="groups" />
@@ -218,7 +266,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             {/* Biometric Security Button */}
             <button 
               onClick={() => setIsSecurityModalOpen(true)}
-              className={`p-2 rounded-full transition-colors ${
+              className={`p-2 rounded-xl transition-colors ${
                 isBioEnabled 
                   ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20' 
                   : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
@@ -231,7 +279,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             {/* Theme Toggle */}
             <button 
               onClick={toggleTheme}
-              className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
+              className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300"
               aria-label="Alternar tema"
             >
               <Icon name={theme === 'dark' ? 'light_mode' : 'dark_mode'} />
@@ -240,8 +288,11 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             {/* Notifications Dropdown */}
             <div className="relative">
               <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 relative"
+                onClick={() => {
+                  setShowNotifications(!showNotifications);
+                  setShowMoreMenu(false);
+                }}
+                className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 relative"
               >
                 <Icon name="notifications" />
                 {hasNotifications && (

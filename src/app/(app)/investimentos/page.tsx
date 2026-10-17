@@ -20,6 +20,7 @@ import { useInvestments, Investment } from '@/hooks/useInvestments';
 import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestmentsModal';
 import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTable';
 import { AdvancedStockScreener } from '@/components/investimentos/AdvancedStockScreener';
+import { StockDetailDashboard } from '@/components/investimentos/StockDetailDashboard';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -54,9 +55,16 @@ export default function InvestmentsPage() {
     batchImportInvestments
   } = useInvestments();
 
-  // Main Section Navigation: 'carteira' | 'screener' | 'analise'
-  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'analise'>('carteira');
+  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise'
+  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise'>('carteira');
   const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
+  const [selectedDetailTicker, setSelectedDetailTicker] = useState<string>('CMIG4');
+
+  const handleOpenStockDetails = (ticker: string) => {
+    setSelectedDetailTicker(ticker.trim().toUpperCase());
+    setActiveMainTab('detalhes');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Modals state
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
@@ -609,6 +617,22 @@ export default function InvestmentsPage() {
 
         <button
           type="button"
+          onClick={() => setActiveMainTab('detalhes')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+            activeMainTab === 'detalhes'
+              ? 'bg-white dark:bg-gray-900 text-sky-600 dark:text-sky-400 shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="query_stats" size="sm" className="text-sky-500" />
+          <span>Detalhes da Ação & Valuations</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold">
+            RAIO-X ✨
+          </span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveMainTab('screener')}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'screener'
@@ -618,9 +642,6 @@ export default function InvestmentsPage() {
         >
           <Icon name="search" size="sm" className="text-blue-500" />
           <span>Busca Avançada / Screener</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-extrabold">
-            NOVO ✨
-          </span>
         </button>
 
         <button
@@ -633,7 +654,7 @@ export default function InvestmentsPage() {
           }`}
         >
           <Icon name="analytics" size="sm" className="text-purple-500" />
-          <span>Análise Fundamentalista (Graham / Bazin / FIIs)</span>
+          <span>Análise da Carteira (Graham / Bazin / FIIs)</span>
         </button>
       </div>
 
@@ -898,14 +919,19 @@ export default function InvestmentsPage() {
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-2">
                           {inv.ticker ? (
-                            <span className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 ${
-                              isUsd 
-                                ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
-                                : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
-                            }`}>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenStockDetails(inv.ticker!)}
+                              title={`Ver Raio-X e Valuations de ${inv.ticker}`}
+                              className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer ${
+                                isUsd 
+                                  ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
+                                  : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900'
+                              }`}
+                            >
                               {isUsd && <span>🇺🇸</span>}
                               {inv.ticker}
-                            </span>
+                            </button>
                           ) : null}
                           <div>
                             <div className="flex items-center gap-1.5 flex-wrap">
@@ -995,6 +1021,16 @@ export default function InvestmentsPage() {
 
                       <td className="px-4 py-4 whitespace-nowrap text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          {inv.ticker && !isUsd && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenStockDetails(inv.ticker!)}
+                              className="px-2 py-1 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-colors rounded-lg flex items-center gap-1 text-xs font-bold shadow-xs"
+                              title="Abrir Detalhes da Ação, Indicadores e Valuations (Bazin, Graham, Peter Lynch)"
+                            >
+                              <Icon name="query_stats" size="sm" /> Raio-X
+                            </button>
+                          )}
                           <button 
                             onClick={() => handleOpenEntryModal(inv)}
                             className="px-2 py-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors rounded-lg flex items-center gap-1 text-xs font-bold shadow-xs"
@@ -1037,18 +1073,24 @@ export default function InvestmentsPage() {
         </div>
       )}
 
-      {/* 2. Busca Avançada / Screener de Ativos (Ações, Stocks & FIIs) */}
-      {activeMainTab === 'screener' && (
-        <AdvancedStockScreener
+      {/* 2. Detalhes da Ação & Valuations (Bazin, Graham, Peter Lynch, Preço Teto Projetivo, Indicadores) */}
+      {activeMainTab === 'detalhes' && (
+        <StockDetailDashboard
+          initialTicker={selectedDetailTicker}
+          investments={investments}
           onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
-          onNavigateToGraham={(ticker) => {
-            setSelectedGrahamTicker(ticker);
-            setActiveMainTab('analise');
-          }}
         />
       )}
 
-      {/* 3. Tabela & Análise Fundamentalista de Graham, Bazin e FIIs */}
+      {/* 3. Busca Avançada / Screener de Ativos (Ações, Stocks & FIIs) */}
+      {activeMainTab === 'screener' && (
+        <AdvancedStockScreener
+          onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
+          onNavigateToGraham={(ticker) => handleOpenStockDetails(ticker)}
+        />
+      )}
+
+      {/* 4. Tabela & Análise Fundamentalista de Graham, Bazin e FIIs */}
       {activeMainTab === 'analise' && (
         <GrahamAnalysisTable
           investments={investments}
