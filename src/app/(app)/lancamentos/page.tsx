@@ -86,6 +86,14 @@ export default function TransactionsPage() {
     return true;
   });
 
+  const totalFilteredIncome = filteredTransactions
+    .filter(t => t.type === 'receita')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const totalFilteredExpense = filteredTransactions
+    .filter(t => t.type === 'despesa')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+  const netFilteredBalance = totalFilteredIncome - totalFilteredExpense;
+
   const handleOpenModal = (transaction?: Transaction, isDuplicate = false) => {
     setFormError('');
     setIsDuplicate(isDuplicate);
@@ -250,6 +258,36 @@ export default function TransactionsPage() {
         </div>
       </div>
 
+      {/* Soft Tonal Balance Overview Bar */}
+      <div className="bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0"></div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">Receitas</span>
+            <span className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 truncate">
+              +{formatCurrency(totalFilteredIncome)}
+            </span>
+          </div>
+        </div>
+        <div className="h-6 w-px bg-gray-200 dark:bg-slate-800"></div>
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0"></div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">Despesas</span>
+            <span className="text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-400 truncate">
+              -{formatCurrency(totalFilteredExpense)}
+            </span>
+          </div>
+        </div>
+        <div className="h-6 w-px bg-gray-200 dark:bg-slate-800"></div>
+        <div className="flex flex-col min-w-0 text-right">
+          <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider truncate">Líquido</span>
+          <span className={`text-xs sm:text-sm font-bold truncate ${netFilteredBalance >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600'}`}>
+            {netFilteredBalance >= 0 ? '+' : ''}{formatCurrency(netFilteredBalance)}
+          </span>
+        </div>
+      </div>
+
       <GlassCard className="p-4 md:p-6">
         <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
           <div className="flex gap-2">
@@ -330,19 +368,95 @@ export default function TransactionsPage() {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           ) : filteredTransactions.length > 0 ? (
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800/50 dark:text-gray-400">
-                <tr>
-                  <th scope="col" className="px-4 py-3 rounded-l-lg">Data</th>
-                  <th scope="col" className="px-4 py-3">Descrição</th>
-                  <th scope="col" className="px-4 py-3">Categoria</th>
-                  <th scope="col" className="px-4 py-3">Status</th>
-                  <th scope="col" className="px-4 py-3 text-right">Valor</th>
-                  <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
+            <div className="space-y-4">
+              {/* Mobile View: Clean cards stream with tonal styling */}
+              <div className="md:hidden space-y-2.5">
                 {filteredTransactions.map((transaction) => (
+                  <div
+                    key={transaction.id}
+                    className="p-3.5 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 shadow-2xs flex items-center justify-between gap-3 hover:border-gray-200 dark:hover:border-slate-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-xs"
+                        style={{
+                          backgroundColor: transaction.category?.color ? `${transaction.category.color}20` : '#f3f4f6',
+                          color: transaction.category?.color || '#6b7280'
+                        }}
+                      >
+                        <Icon name={transaction.category?.icon || (transaction.type === 'receita' ? 'arrow_downward' : 'shopping_bag')} className="text-[20px]" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-gray-900 dark:text-white text-sm truncate">
+                            {transaction.description}
+                          </span>
+                          {transaction.credit_card_id && (
+                            <span className="inline-flex items-center text-[9px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 rounded font-bold uppercase">
+                              Cartão
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                          <span>{formatDate(transaction.date)}</span>
+                          <span>•</span>
+                          <span className="truncate">{transaction.category?.name || 'Sem Categoria'}</span>
+                          {transaction.profile?.display_name && (
+                            <>
+                              <span>•</span>
+                              <span>{transaction.profile.display_name.split(' ')[0]}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0 pl-1">
+                      <span className={`text-sm font-bold tabular-nums ${transaction.type === 'receita' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-900 dark:text-white'}`}>
+                        {transaction.type === 'despesa' ? '-' : '+'} {formatCurrency(transaction.amount)}
+                      </span>
+                      <div className="flex items-center gap-1 mt-1">
+                        <button
+                          onClick={() => handleOpenModal(transaction, true)}
+                          className="p-1 text-gray-400 hover:text-emerald-500 transition-colors rounded-md"
+                          title="Duplicar"
+                        >
+                          <Icon name="content_copy" className="text-[14px]" />
+                        </button>
+                        <button
+                          onClick={() => handleOpenModal(transaction)}
+                          className="p-1 text-gray-400 hover:text-blue-500 transition-colors rounded-md"
+                          title="Editar"
+                        >
+                          <Icon name="edit" className="text-[14px]" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(transaction.id)}
+                          className="p-1 text-gray-400 hover:text-rose-500 transition-colors rounded-md"
+                          title="Excluir"
+                        >
+                          <Icon name="delete" className="text-[14px]" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop View: Full Table */}
+              <table className="hidden md:table w-full text-sm text-left">
+                <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800/50 dark:text-gray-400">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 rounded-l-lg">Data</th>
+                    <th scope="col" className="px-4 py-3">Descrição</th>
+                    <th scope="col" className="px-4 py-3">Categoria</th>
+                    <th scope="col" className="px-4 py-3">Status</th>
+                    <th scope="col" className="px-4 py-3 text-right">Valor</th>
+                    <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredTransactions.map((transaction) => (
                   <tr key={transaction.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-4 whitespace-nowrap text-gray-500 dark:text-gray-400">
                       {formatDate(transaction.date)}
@@ -422,6 +536,7 @@ export default function TransactionsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           ) : (
             <div className="py-12">
               <EmptyState 

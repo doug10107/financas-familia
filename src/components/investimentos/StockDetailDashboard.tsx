@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StockFullDetails } from '@/app/api/stocks/details/route';
 import { Investment } from '@/hooks/useInvestments';
+import { StockComparator } from './StockComparator';
 
 interface StockDetailDashboardProps {
   initialTicker?: string;
@@ -399,11 +400,64 @@ export function StockDetailDashboard({
   }, [investments]);
 
   const [quickFilterMode, setQuickFilterMode] = useState<'carteira' | 'populares'>('carteira');
+  const [viewMode, setViewMode] = useState<'raiox' | 'comparador'>('raiox');
 
   return (
     <div className="space-y-6">
-      {/* BARRA DE BUSCA & SELETOR RÁPIDO DE AÇÕES */}
-      <div className="p-5 rounded-2xl bg-white dark:bg-[#111827]/95 border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-white shadow-sm dark:shadow-2xl transition-colors">
+      {/* SELETOR DE MODO: RAIO-X INDIVIDUAL VS COMPARADOR MULTI-EMPRESAS */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-2 rounded-2xl bg-white dark:bg-[#111827]/95 border border-slate-200 dark:border-slate-800 shadow-xs">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode('raiox')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              viewMode === 'raiox'
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Icon name="biotech" size="sm" />
+            <span>Raio-X Individual</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setViewMode('comparador')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+              viewMode === 'comparador'
+                ? 'bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400 border border-sky-500/40 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+            }`}
+          >
+            <Icon name="compare_arrows" size="sm" />
+            <span>Comparar Indicadores (Multi-Ações) ⚖️</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold">
+              NOVO
+            </span>
+          </button>
+        </div>
+
+        <div className="text-xs text-slate-500 dark:text-slate-400 font-medium px-2 hidden sm:block">
+          {viewMode === 'comparador'
+            ? 'Compare múltiplos ativos lado a lado com análise de valuation e troféu 🏆'
+            : 'Análise fundamentalista profunda por Graham, Bazin, Lynch e Barsi'}
+        </div>
+      </div>
+
+      {viewMode === 'comparador' ? (
+        <StockComparator
+          initialTickers={['SAPR4', 'SBSP3', 'CSMG3']}
+          onSelectTicker={(t) => {
+            setActiveTicker(t);
+            setSearchInput(t);
+            loadTickerDetails(t);
+            setViewMode('raiox');
+          }}
+        />
+      ) : (
+        <>
+          {/* BARRA DE BUSCA & SELETOR RÁPIDO DE AÇÕES */}
+          <div className="p-5 rounded-2xl bg-white dark:bg-[#111827]/95 border border-slate-200 dark:border-slate-800/80 text-slate-900 dark:text-white shadow-sm dark:shadow-2xl transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-black text-lg text-white shadow-md shrink-0">
@@ -1427,6 +1481,8 @@ export function StockDetailDashboard({
           </div>
         </div>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

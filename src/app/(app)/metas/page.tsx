@@ -298,6 +298,11 @@ export default function GoalsPage() {
     label: c.name
   }));
 
+  const totalCurrentGoals = goals.reduce((s, g) => s + Number(g.current_amount || 0), 0);
+  const totalTargetGoals = goals.reduce((s, g) => s + Number(g.target_amount || 0), 0);
+  const overallGoalsProgress = Math.min(100, Math.round((totalCurrentGoals / (totalTargetGoals || 1)) * 100));
+  const remainingGoalsAmount = Math.max(0, totalTargetGoals - totalCurrentGoals);
+
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* Header Limpo & Direto */}
@@ -335,7 +340,50 @@ export default function GoalsPage() {
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
         </div>
       ) : goals.length > 0 ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="space-y-6">
+          {/* Summary Card (Stitch Minimalista Design) */}
+          <div className="w-full bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 rounded-2xl p-6 shadow-xs relative overflow-hidden">
+            <div className="absolute -right-10 -top-10 w-44 h-44 rounded-full bg-emerald-500/10 pointer-events-none blur-2xl" />
+            <div className="flex items-center justify-between mb-2 relative z-10">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio em Metas</span>
+              </div>
+              <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 text-xs font-bold border border-emerald-500/20">
+                <Icon name="groups" className="text-[14px]" />
+                <span>Família</span>
+              </div>
+            </div>
+
+            <div className="mb-4 relative z-10">
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                  {formatCurrency(totalCurrentGoals)}
+                </span>
+              </div>
+              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 mt-1">
+                Meta total combinada: {formatCurrency(totalTargetGoals)} ({overallGoalsProgress}%)
+              </p>
+            </div>
+
+            {/* Smooth Progress Track */}
+            <div className="w-full relative z-10">
+              <div className="w-full h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-700 ease-out"
+                  style={{ width: `${overallGoalsProgress}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-2 text-[11px] font-semibold text-gray-400">
+                <span>R$ 0</span>
+                <span className="text-emerald-600 dark:text-emerald-400">Faltam {formatCurrency(remainingGoalsAmount)}</span>
+                <span>{formatCurrency(totalTargetGoals)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Goals Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {goals.map(goal => {
             const progress = calculateProgress(goal.current_amount, goal.target_amount);
             const monthsLeft = calculateMonthsRemaining(goal.deadline);
@@ -521,6 +569,7 @@ export default function GoalsPage() {
               </GlassCard>
             );
           })}
+          </div>
         </div>
       ) : (
         <div className="col-span-full">

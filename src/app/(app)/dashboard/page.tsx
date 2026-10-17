@@ -47,8 +47,10 @@ export default function DashboardPage() {
   
   const [expenseTab, setExpenseTab] = useState<'all' | 'fixed' | 'variable'>('all');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+  const [isBalanceHidden, setIsBalanceHidden] = useState(false);
 
   const formatCurrency = (value: number) => {
+    if (isBalanceHidden) return '••••••••';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
   };
 
@@ -107,56 +109,131 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Top Key Metrics Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-        <div className="rounded-2xl p-6 bg-gradient-to-br from-blue-600 to-indigo-700 shadow-xl shadow-blue-900/20">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl text-white backdrop-blur-sm">
-              <Icon name="account_balance_wallet" className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-blue-100 font-medium">Saldo Atual</p>
-              <h2 className="text-2xl font-bold text-white">{formatCurrency(dashboardData.totalBalance)}</h2>
-            </div>
-          </div>
-        </div>
+      {/* STITCH MODERN HERO CARD & QUICK ACTIONS */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Hero Card: Saldo Total & Resumo Tonal (8 cols on desktop) */}
+        <div className="lg:col-span-8 p-6 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 shadow-sm relative overflow-hidden flex flex-col justify-between">
+          <div className="absolute -right-12 -top-12 w-44 h-44 rounded-full bg-emerald-500/5 dark:bg-emerald-500/10 pointer-events-none blur-2xl" />
 
-        <div className="rounded-2xl p-6 bg-gradient-to-br from-emerald-500 to-teal-600 shadow-xl shadow-emerald-900/20">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl text-white backdrop-blur-sm">
-              <Icon name="trending_up" className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-emerald-100 font-medium">Receitas (Mês)</p>
-              <h2 className="text-2xl font-bold text-white">{formatCurrency(dashboardData.monthlyIncome)}</h2>
-            </div>
-          </div>
-        </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-500 dark:text-slate-400 flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Patrimônio Líquido / Saldo Consolidado
+              </span>
 
-        <div className="rounded-2xl p-6 bg-gradient-to-br from-rose-500 to-red-600 shadow-xl shadow-red-900/20">
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl text-white backdrop-blur-sm">
-              <Icon name="trending_down" className="w-6 h-6" />
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-extrabold border border-emerald-500/20">
+                  <Icon name="trending_up" className="text-[14px]" />
+                  Fluxo Positivo
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsBalanceHidden(!isBalanceHidden)}
+                  aria-label="Alternar visibilidade do saldo"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <Icon name={isBalanceHidden ? 'visibility_off' : 'visibility'} className="text-[18px]" />
+                </button>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-rose-100 font-medium">Despesas (Mês)</p>
-              <h2 className="text-2xl font-bold text-white">{formatCurrency(dashboardData.monthlyExpense)}</h2>
-            </div>
-          </div>
-        </div>
 
-        <div className={`rounded-2xl p-6 bg-gradient-to-br shadow-xl ${dashboardData.monthlyIncome - dashboardData.monthlyExpense >= 0 ? 'from-cyan-500 to-blue-500 shadow-cyan-900/20' : 'from-orange-500 to-red-500 shadow-orange-900/20'}`}>
-          <div className="flex items-center gap-4">
-            <div className="p-3 bg-white/20 rounded-xl text-white backdrop-blur-sm">
-              <Icon name="account_balance" className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-sm text-white/80 font-medium">Balanço (Mês)</p>
-              <h2 className="text-2xl font-bold text-white">
-                {formatCurrency(dashboardData.monthlyIncome - dashboardData.monthlyExpense)}
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                {formatCurrency(dashboardData.totalBalance)}
               </h2>
             </div>
           </div>
+
+          {/* Tonal Strip: Entradas vs Saídas vs Economia */}
+          <div className="mt-6 pt-4 border-t border-gray-100 dark:border-slate-800/80 grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                <Icon name="arrow_downward" className="text-[16px]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider truncate">Entradas</p>
+                <p className="text-xs sm:text-sm font-bold text-emerald-600 dark:text-emerald-400 truncate">
+                  {formatCurrency(dashboardData.monthlyIncome)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0">
+                <Icon name="arrow_upward" className="text-[16px]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider truncate">Saídas</p>
+                <p className="text-xs sm:text-sm font-bold text-rose-600 dark:text-rose-400 truncate">
+                  {formatCurrency(dashboardData.monthlyExpense)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <Icon name="savings" className="text-[16px]" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider truncate">Economia</p>
+                <p className={`text-xs sm:text-sm font-bold truncate ${dashboardData.monthlyIncome - dashboardData.monthlyExpense >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600'}`}>
+                  {formatCurrency(dashboardData.monthlyIncome - dashboardData.monthlyExpense)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Action Buttons Grid (4 cols on desktop) */}
+        <div className="lg:col-span-4 grid grid-cols-2 gap-3">
+          <button
+            type="button"
+            onClick={() => router.push('/lancamentos?action=new&type=receita')}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 hover:border-emerald-500/50 hover:bg-emerald-50/30 dark:hover:bg-slate-800/80 transition-all active:scale-95 shadow-xs group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Icon name="add" className="text-[22px]" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 dark:text-slate-200">+ Receita</span>
+            <span className="text-[10px] text-gray-400">Entrada rápida</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/lancamentos?action=new&type=despesa')}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 hover:border-rose-500/50 hover:bg-rose-50/30 dark:hover:bg-slate-800/80 transition-all active:scale-95 shadow-xs group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Icon name="remove" className="text-[22px]" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 dark:text-slate-200">- Despesa</span>
+            <span className="text-[10px] text-gray-400">Novo gasto</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/lancamentos?action=new')}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 hover:border-blue-500/50 hover:bg-blue-50/30 dark:hover:bg-slate-800/80 transition-all active:scale-95 shadow-xs group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Icon name="sync_alt" className="text-[22px]" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 dark:text-slate-200">Lançamentos</span>
+            <span className="text-[10px] text-gray-400">Extrato geral</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => router.push('/metas')}
+            className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white dark:bg-[#111827] border border-gray-100 dark:border-slate-800 hover:border-purple-500/50 hover:bg-purple-50/30 dark:hover:bg-slate-800/80 transition-all active:scale-95 shadow-xs group"
+          >
+            <div className="w-11 h-11 rounded-2xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+              <Icon name="track_changes" className="text-[22px]" />
+            </div>
+            <span className="text-xs font-bold text-gray-800 dark:text-slate-200">Metas</span>
+            <span className="text-[10px] text-gray-400">Objetivos ativos</span>
+          </button>
         </div>
       </div>
 

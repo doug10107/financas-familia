@@ -598,11 +598,11 @@ export default function InvestmentsPage() {
       )}
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex flex-wrap items-center gap-2 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl w-fit border border-gray-200 dark:border-gray-700/60 shadow-xs">
+      <div className="flex items-center gap-2 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl w-full sm:w-fit overflow-x-auto no-scrollbar border border-gray-200 dark:border-gray-700/60 shadow-xs">
         <button
           type="button"
           onClick={() => setActiveMainTab('carteira')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'carteira'
               ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -618,23 +618,23 @@ export default function InvestmentsPage() {
         <button
           type="button"
           onClick={() => setActiveMainTab('detalhes')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'detalhes'
               ? 'bg-white dark:bg-gray-900 text-sky-600 dark:text-sky-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Icon name="query_stats" size="sm" className="text-sky-500" />
-          <span>Detalhes da Ação & Valuations</span>
+          <span>Raio-X & Comparador de Ações</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold">
-            RAIO-X ✨
+            RAIO-X & COMPARADOR ✨
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('screener')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'screener'
               ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -647,7 +647,7 @@ export default function InvestmentsPage() {
         <button
           type="button"
           onClick={() => setActiveMainTab('analise')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
             activeMainTab === 'analise'
               ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'

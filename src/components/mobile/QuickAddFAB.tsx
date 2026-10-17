@@ -18,9 +18,9 @@ export function QuickAddFAB() {
     <button
       onClick={handleClick}
       aria-label="Novo Lançamento Rápido"
-      className="md:hidden fixed right-5 bottom-20 z-40 w-14 h-14 rounded-full bg-gradient-to-r from-[#006c49] to-[#10b981] text-white flex items-center justify-center shadow-2xl shadow-emerald-950/50 hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-white/20"
+      className="md:hidden fixed right-4 bottom-22 z-40 w-13 h-13 rounded-full bg-gradient-to-r from-[#006c49] to-[#10b981] text-white flex items-center justify-center shadow-xl shadow-emerald-950/40 hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-white/20 cursor-pointer"
     >
-      <Icon name="add" size="lg" />
+      <Icon name="add" size="md" />
     </button>
   );
 }
