@@ -21,6 +21,7 @@ import { ImportInvestmentsModal } from '@/components/investimentos/ImportInvestm
 import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTable';
 import { AdvancedStockScreener } from '@/components/investimentos/AdvancedStockScreener';
 import { StockDetailDashboard } from '@/components/investimentos/StockDetailDashboard';
+import { TaxCalculatorDashboard } from '@/components/investimentos/TaxCalculatorDashboard';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -55,8 +56,8 @@ export default function InvestmentsPage() {
     batchImportInvestments
   } = useInvestments();
 
-  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise'
-  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise'>('carteira');
+  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir'
+  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir'>('carteira');
   const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
   const [selectedDetailTicker, setSelectedDetailTicker] = useState<string>('CMIG4');
 
@@ -598,18 +599,21 @@ export default function InvestmentsPage() {
       )}
 
       {/* Navigation Sub-Tabs */}
-      <div className="flex items-center gap-2 p-1.5 bg-gray-100/80 dark:bg-gray-800/80 rounded-2xl w-full sm:w-fit overflow-x-auto no-scrollbar border border-gray-200 dark:border-gray-700/60 shadow-xs">
+      <div 
+        className="flex items-center gap-1.5 p-1.5 bg-gray-100/90 dark:bg-gray-800/80 rounded-2xl w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar no-scrollbar border border-gray-200/80 dark:border-gray-700/60 shadow-xs"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         <button
           type="button"
           onClick={() => setActiveMainTab('carteira')}
-          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeMainTab === 'carteira'
               ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Icon name="account_balance_wallet" size="sm" className="text-emerald-500" />
-          <span>Minha Carteira & Posições</span>
+          <span>Minha Carteira</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-extrabold">
             {investments.length}
           </span>
@@ -618,43 +622,59 @@ export default function InvestmentsPage() {
         <button
           type="button"
           onClick={() => setActiveMainTab('detalhes')}
-          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeMainTab === 'detalhes'
               ? 'bg-white dark:bg-gray-900 text-sky-600 dark:text-sky-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Icon name="query_stats" size="sm" className="text-sky-500" />
-          <span>Raio-X & Comparador de Ações</span>
+          <span>Raio-X & Comparador</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold">
-            RAIO-X & COMPARADOR ✨
+            ✨
           </span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('screener')}
-          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeMainTab === 'screener'
               ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Icon name="search" size="sm" className="text-blue-500" />
-          <span>Busca Avançada / Screener</span>
+          <span>Busca / Screener</span>
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('analise')}
-          className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
             activeMainTab === 'analise'
               ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
           <Icon name="analytics" size="sm" className="text-purple-500" />
-          <span>Análise da Carteira (Graham / Bazin / FIIs)</span>
+          <span>Análise (Graham / Bazin / FIIs)</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('ir')}
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeMainTab === 'ir'
+              ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="receipt_long" size="sm" className="text-orange-500" />
+          <span>Calculadora IR & DARF</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-extrabold">
+            íon B3 ⚡
+          </span>
         </button>
       </div>
 
@@ -1098,6 +1118,11 @@ export default function InvestmentsPage() {
           onOpenEntryModal={handleOpenEntryModal}
           onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
         />
+      )}
+
+      {/* 5. Calculadora de IR & DARF (íon Itaú / B3) */}
+      {activeMainTab === 'ir' && (
+        <TaxCalculatorDashboard />
       )}
 
       {/* Modal - Novo / Editar Investimento (com Calculadora Qtd * Preço) */}
