@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/Badge';
 import { StockFullDetails } from '@/app/api/stocks/details/route';
 import { Investment } from '@/hooks/useInvestments';
 import { StockComparator } from './StockComparator';
+import { IndicatorHistoryModal, IndicatorKey } from './IndicatorHistoryModal';
 
 interface StockDetailDashboardProps {
   initialTicker?: string;
@@ -90,6 +91,15 @@ export function StockDetailDashboard({
     rentabilidade: true,
     endividamento: true
   });
+
+  // --- HISTÓRICO DE INDICADORES (INVESTIDOR 10 STYLE) ---
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [activeHistoryIndicator, setActiveHistoryIndicator] = useState<IndicatorKey>('payout');
+
+  const handleOpenIndicatorHistory = (key: IndicatorKey) => {
+    setActiveHistoryIndicator(key);
+    setHistoryModalOpen(true);
+  };
 
   // --- 1. BAZIN INTERACTIVE STATE ---
   const [bazinDpaInput, setBazinDpaInput] = useState('1,52');
@@ -659,18 +669,24 @@ export function StockDetailDashboard({
               value={stock.vpa !== null ? formatCurrencyBR(stock.vpa) : '-'}
               tooltip="Valor Patrimonial por Ação (Patrimônio Líquido dividido pelo total de ações)."
               highlight="white"
+              indicatorKey="vpa"
+              onOpenChart={handleOpenIndicatorHistory}
             />
             <IndicatorCard
               label="LPA"
               value={stock.lpa !== null ? formatCurrencyBR(stock.lpa) : '-'}
               tooltip="Lucro por Ação acumulado nos últimos 12 meses."
               highlight={stock.lpa && stock.lpa > 0 ? 'white' : 'red'}
+              indicatorKey="lpa"
+              onOpenChart={handleOpenIndicatorHistory}
             />
             <IndicatorCard
               label="Payout"
               value={stock.payout !== null ? `${formatDec(stock.payout, 2)}%` : '-'}
               tooltip="Percentual do lucro líquido que a empresa distribui aos acionistas sob forma de dividendos e JCP."
               highlight="white"
+              indicatorKey="payout"
+              onOpenChart={handleOpenIndicatorHistory}
             />
           </div>
 
@@ -1226,12 +1242,16 @@ export function StockDetailDashboard({
                   value={formatDec(stock.pl, 3)}
                   tooltip="Preço / Lucro: Indica em quantos anos o lucro da empresa pagaria o valor investido. No vídeo, busca-se P/L descontado (abaixo de 10~15x)."
                   status={stock.pl && stock.pl > 0 && stock.pl <= 12 ? 'good' : stock.pl && stock.pl < 0 ? 'bad' : 'neutral'}
+                  indicatorKey="pl"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="P/VP"
                   value={formatDec(stock.pvp, 3)}
                   tooltip="Preço / Valor Patrimonial: Indica quanto o mercado paga pelo patrimônio líquido da empresa (1,00 = preço igual ao patrimônio)."
                   status={stock.pvp && stock.pvp > 0 && stock.pvp <= 1.5 ? 'good' : 'neutral'}
+                  indicatorKey="pvp"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="P/EBIT"
@@ -1248,12 +1268,16 @@ export function StockDetailDashboard({
                   value={formatDec(stock.evebit, 3)}
                   tooltip="Enterprise Value / EBIT: Múltiplo preferido de Joel Greenblatt para avaliar quão barata é a operação incluindo a dívida."
                   status={stock.evebit && stock.evebit > 0 && stock.evebit <= 10 ? 'good' : 'neutral'}
+                  indicatorKey="evebit"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="EV/EBITDA"
                   value={formatDec(stock.evebitda, 3)}
                   tooltip="Enterprise Value / EBITDA: Em quantos anos a geração operacional de caixa (EBITDA) paga o valor total da firma."
                   status={stock.evebitda && stock.evebitda > 0 && stock.evebitda <= 8 ? 'good' : 'neutral'}
+                  indicatorKey="evebitda"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
               </div>
             )}
@@ -1280,39 +1304,53 @@ export function StockDetailDashboard({
                   value={stock.roe !== null ? `${formatDec(stock.roe, 3)}%` : '-'}
                   tooltip="Return on Equity (Retorno sobre o Patrimônio Líquido). Acima de 15% demonstra alta rentabilidade para o acionista."
                   status={stock.roe && stock.roe >= 15 ? 'good' : stock.roe && stock.roe < 5 ? 'bad' : 'neutral'}
+                  indicatorKey="roe"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="ROA"
                   value={stock.roa !== null ? `${formatDec(stock.roa, 3)}%` : '-'}
                   tooltip="Return on Assets (Retorno sobre os Ativos Totais). Mede a eficiência da empresa em gerar lucro com tudo o que possui."
                   status={stock.roa && stock.roa >= 6 ? 'good' : 'neutral'}
+                  indicatorKey="roa"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="ROIC"
                   value={stock.roic !== null ? `${formatDec(stock.roic, 3)}%` : '-'}
                   tooltip="Return on Invested Capital (Retorno sobre o Capital Investido). Mede o retorno operacional sobre o capital total alocado (próprio + terceiros)."
                   status={stock.roic && stock.roic >= 12 ? 'good' : 'neutral'}
+                  indicatorKey="roic"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="Margem Líquida"
                   value={stock.margemLiquida !== null ? `${formatDec(stock.margemLiquida, 3)}%` : '-'}
                   tooltip="Percentual de cada R$ 1,00 de receita que vira lucro líquido final no bolso da empresa."
                   status={stock.margemLiquida && stock.margemLiquida >= 12 ? 'good' : 'neutral'}
+                  indicatorKey="margemLiquida"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="Margem EBITDA"
                   value={stock.margemEbitda !== null ? `${formatDec(stock.margemEbitda, 3)}%` : '-'}
                   tooltip="Percentual da receita líquida que se converte em geração operacional de caixa (EBITDA)."
+                  indicatorKey="margemEbitda"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="Margem Bruta"
                   value={stock.margemBruta !== null ? `${formatDec(stock.margemBruta, 3)}%` : '-'}
                   tooltip="Lucro Bruto dividido pela Receita Líquida. Mede a rentabilidade direta após custos de produção/serviço."
+                  indicatorKey="margemBruta"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="Margem EBIT"
                   value={stock.margemEbit !== null ? `${formatDec(stock.margemEbit, 2)}%` : '-'}
                   tooltip="Lucro Operacional (EBIT) dividido pela Receita Líquida."
+                  indicatorKey="margemEbit"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
                 <IndicatorCard
                   label="Cresc. Receita (5a)"
@@ -1366,6 +1404,8 @@ export function StockDetailDashboard({
                         ? 'bad'
                         : 'neutral'
                   }
+                  indicatorKey="dividaLiquidaEbitda"
+                  onOpenChart={handleOpenIndicatorHistory}
                 />
               </div>
             )}
@@ -1483,6 +1523,15 @@ export function StockDetailDashboard({
       ) : null}
         </>
       )}
+      {stock && (
+        <IndicatorHistoryModal
+          isOpen={historyModalOpen}
+          onClose={() => setHistoryModalOpen(false)}
+          ticker={activeTicker}
+          stock={stock}
+          initialIndicator={activeHistoryIndicator}
+        />
+      )}
     </div>
   );
 }
@@ -1492,19 +1541,29 @@ function IndicatorCard({
   value,
   tooltip,
   highlight = 'white',
-  status = 'neutral'
+  status = 'neutral',
+  indicatorKey,
+  onOpenChart
 }: {
   label: string;
   value: string;
   tooltip: string;
   highlight?: 'white' | 'green' | 'red';
   status?: 'good' | 'bad' | 'neutral';
+  indicatorKey?: IndicatorKey;
+  onOpenChart?: (key: IndicatorKey) => void;
 }) {
   const [showTip, setShowTip] = useState(false);
+  const canOpenChart = Boolean(indicatorKey && onOpenChart);
 
   return (
     <div
-      className="relative p-4 rounded-xl bg-white dark:bg-[#1c273b] border border-slate-200 dark:border-slate-800/90 hover:border-sky-300 dark:hover:border-slate-700 shadow-xs dark:shadow-none transition-all flex flex-col justify-between min-h-[88px]"
+      onClick={canOpenChart ? () => onOpenChart?.(indicatorKey!) : undefined}
+      className={`relative p-4 rounded-xl bg-white dark:bg-[#1c273b] border border-slate-200 dark:border-slate-800/90 shadow-xs dark:shadow-none transition-all flex flex-col justify-between min-h-[88px] group ${
+        canOpenChart
+          ? 'cursor-pointer hover:border-amber-400 dark:hover:border-amber-500/80 hover:shadow-md dark:hover:shadow-amber-950/20'
+          : 'hover:border-sky-300 dark:hover:border-slate-700'
+      }`}
       onMouseEnter={() => setShowTip(true)}
       onMouseLeave={() => setShowTip(false)}
     >
@@ -1512,7 +1571,10 @@ function IndicatorCard({
         <span className="text-xs font-bold text-sky-600 dark:text-sky-400 truncate">{label}</span>
         <button
           type="button"
-          onClick={() => setShowTip((v) => !v)}
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowTip((v) => !v);
+          }}
           className="w-4 h-4 rounded-full border border-slate-300 dark:border-slate-500 text-slate-400 hover:text-slate-700 dark:hover:text-white hover:border-slate-500 dark:hover:border-white text-[10px] font-bold flex items-center justify-center shrink-0 cursor-pointer"
           title={tooltip}
         >
@@ -1534,7 +1596,21 @@ function IndicatorCard({
         >
           {value}
         </span>
-        <span className="text-slate-400 dark:text-slate-500 text-xs">📈</span>
+        {canOpenChart ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenChart?.(indicatorKey!);
+            }}
+            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-950/40 border border-transparent hover:border-amber-200 dark:hover:border-amber-700/50 transition-all cursor-pointer"
+            title={`Abrir gráfico histórico de ${label}`}
+          >
+            <span className="text-sm transition-transform group-hover:scale-125">📈</span>
+          </button>
+        ) : (
+          <span className="text-slate-400 dark:text-slate-500 text-xs">📈</span>
+        )}
       </div>
 
       {showTip && (

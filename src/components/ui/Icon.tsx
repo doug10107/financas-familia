@@ -20,8 +20,10 @@ export function Icon({ name, filled = false, className = '', size }: IconProps) 
   if (size) {
     resolvedSizeClass = sizeMap[size] || 'text-[20px] w-5 h-5 min-w-[20px]';
   } else if (!className.includes('text-')) {
-    if (className.includes('w-3') || className.includes('w-3.5') || className.includes('w-4')) {
-      resolvedSizeClass = 'text-[16px]';
+    if (className.includes('w-2') || className.includes('w-2.5')) {
+      resolvedSizeClass = 'text-[12px] leading-none';
+    } else if (className.includes('w-3') || className.includes('w-3.5') || className.includes('w-4')) {
+      resolvedSizeClass = 'text-[14px] leading-none';
     } else if (className.includes('w-5')) {
       resolvedSizeClass = 'text-[20px]';
     } else if (className.includes('w-6')) {

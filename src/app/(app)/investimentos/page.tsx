@@ -22,6 +22,9 @@ import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTa
 import { AdvancedStockScreener } from '@/components/investimentos/AdvancedStockScreener';
 import { StockDetailDashboard } from '@/components/investimentos/StockDetailDashboard';
 import { TaxCalculatorDashboard } from '@/components/investimentos/TaxCalculatorDashboard';
+import { useOptionsStrategies } from '@/hooks/useOptionsStrategies';
+import { OptionsStrategyDashboard } from '@/components/investimentos/OptionsStrategyDashboard';
+import { NewOptionStrategyModal } from '@/components/investimentos/NewOptionStrategyModal';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -56,8 +59,25 @@ export default function InvestmentsPage() {
     batchImportInvestments
   } = useInvestments();
 
-  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir'
-  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir'>('carteira');
+  // Options & Strategies Hook
+  const {
+    strategies: optionsStrategies,
+    isSyncing: isSyncingOptions,
+    autoRefresh: autoRefreshOptions,
+    setAutoRefresh: setAutoRefreshOptions,
+    lastSyncTime: optionsLastSyncTime,
+    notificationPermission: optionsNotificationPermission,
+    requestNotificationPermission: requestOptionsNotifications,
+    syncQuotes: syncOptionsQuotes,
+    addStrategy: addOptionStrategy,
+    updateStrategy: updateOptionStrategy,
+    deleteStrategy: deleteOptionStrategy,
+    closeStrategy: closeOptionStrategy,
+    updateLegPrice: updateOptionLegPrice
+  } = useOptionsStrategies();
+
+  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'
+  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'>('carteira');
   const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
   const [selectedDetailTicker, setSelectedDetailTicker] = useState<string>('CMIG4');
 
@@ -71,6 +91,7 @@ export default function InvestmentsPage() {
   const [isInvModalOpen, setIsInvModalOpen] = useState(false);
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
   const [editingInvId, setEditingInvId] = useState<string | null>(null);
   const [selectedInv, setSelectedInv] = useState<Investment | null>(null);
 
@@ -228,6 +249,10 @@ export default function InvestmentsPage() {
   const totalLiquid = totalCurrent - totalLocked;
 
   // Breakdown by Type
+  const activeOptions = optionsStrategies.filter(s => s.status !== 'closed');
+  const totalOptionsAllocated = activeOptions.reduce((sum, s) => sum + (s.totalEntryCost || (s.entryCostPerUnit * s.quantity)), 0);
+  const totalCurrentWithDerivatives = totalCurrent + totalOptionsAllocated;
+
   const typeAgg: { [key: string]: { name: string; icon: string; color: string; total: number; count: number } } = {};
   investments.forEach(inv => {
     const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
@@ -243,9 +268,19 @@ export default function InvestmentsPage() {
     typeAgg[typeName].count += 1;
   });
 
+  if (totalOptionsAllocated > 0) {
+    typeAgg['Derivativos / Opções'] = {
+      name: 'Derivativos / Opções',
+      icon: 'candlestick_chart',
+      color: '#8b5cf6',
+      total: totalOptionsAllocated,
+      count: activeOptions.length
+    };
+  }
+
   const typeList = Object.values(typeAgg).map(t => ({
     ...t,
-    percentage: totalCurrent > 0 ? Number(((t.total / totalCurrent) * 100).toFixed(1)) : 0
+    percentage: totalCurrentWithDerivatives > 0 ? Number(((t.total / totalCurrentWithDerivatives) * 100).toFixed(1)) : 0
   })).sort((a, b) => b.total - a.total);
 
   const doughnutChartData = {
@@ -545,13 +580,16 @@ export default function InvestmentsPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => syncLiveQuotes()}
-            disabled={isSyncingQuotes || investments.length === 0}
+            onClick={() => {
+              syncLiveQuotes();
+              syncOptionsQuotes();
+            }}
+            disabled={isSyncingQuotes || isSyncingOptions || (investments.length === 0 && optionsStrategies.length === 0)}
             className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40"
             title="Atualizar cotações atuais de mercado na B3 e mercado internacional"
           >
-            <Icon name="refresh" size="sm" className={isSyncingQuotes ? 'animate-spin' : ''} />
-            <span>{isSyncingQuotes ? 'Atualizando...' : 'Cotações em Tempo Real'}</span>
+            <Icon name="refresh" size="sm" className={isSyncingQuotes || isSyncingOptions ? 'animate-spin' : ''} />
+            <span>{isSyncingQuotes || isSyncingOptions ? 'Atualizando...' : 'Cotações em Tempo Real'}</span>
           </Button>
 
           {/* Investidor10 / CSV Import Button */}
@@ -578,6 +616,17 @@ export default function InvestmentsPage() {
               <span>Limpar Carteira</span>
             </Button>
           )}
+
+          {/* New Option / Strategy Button */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsOptionModalOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100"
+          >
+            <Icon name="candlestick_chart" size="sm" className="text-purple-500" />
+            <span>+ Nova Trava / Opção</span>
+          </Button>
 
           {/* New Investment Button */}
           <Button
@@ -674,6 +723,22 @@ export default function InvestmentsPage() {
           <span>Calculadora IR & DARF</span>
           <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-extrabold">
             íon B3 ⚡
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('opcoes')}
+          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+            activeMainTab === 'opcoes'
+              ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <Icon name="candlestick_chart" size="sm" className="text-purple-500" />
+          <span>Opções & Estratégias</span>
+          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-extrabold">
+            {optionsStrategies.filter(s => s.status !== 'closed').length > 0 ? `${optionsStrategies.filter(s => s.status !== 'closed').length} ativas` : 'Novo ⚡'}
           </span>
         </button>
       </div>
@@ -906,19 +971,22 @@ export default function InvestmentsPage() {
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : investments.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-gray-500 uppercase bg-gray-50 dark:bg-gray-800/50 dark:text-gray-400">
+          <div 
+            className="overflow-x-auto no-scrollbar hide-scrollbar"
+            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+          >
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="text-[11px] text-gray-600 dark:text-gray-300 uppercase bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur-md sticky top-0 z-10 font-bold border-b border-gray-200 dark:border-gray-700 shadow-xs">
                 <tr>
-                  <th scope="col" className="px-4 py-3 rounded-l-lg">Ativo / Ticker</th>
-                  <th scope="col" className="px-4 py-3">Tipo & Corretora</th>
-                  <th scope="col" className="px-4 py-3 text-center">Posição (Qtd)</th>
-                  <th scope="col" className="px-4 py-3 text-right">Preço Médio</th>
-                  <th scope="col" className="px-4 py-3 text-right">Cotação Atual</th>
-                  <th scope="col" className="px-4 py-3 text-right">Total Investido</th>
-                  <th scope="col" className="px-4 py-3 text-right">Saldo Atual</th>
-                  <th scope="col" className="px-4 py-3 text-right">Rentabilidade</th>
-                  <th scope="col" className="px-4 py-3 text-center rounded-r-lg">Ações</th>
+                  <th scope="col" className="px-3 py-3 rounded-l-lg">Ativo</th>
+                  <th scope="col" className="px-2.5 py-3">Tipo & Corretora</th>
+                  <th scope="col" className="px-2 py-3 text-center">Qtd</th>
+                  <th scope="col" className="px-2.5 py-3 text-right">Preço Médio</th>
+                  <th scope="col" className="px-2.5 py-3 text-right">Cotação Atual</th>
+                  <th scope="col" className="px-2.5 py-3 text-right">Total Investido</th>
+                  <th scope="col" className="px-2.5 py-3 text-right">Saldo Atual</th>
+                  <th scope="col" className="px-2.5 py-3 text-right">Rentabilidade</th>
+                  <th scope="col" className="px-3 py-3 text-center rounded-r-lg">Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -933,71 +1001,84 @@ export default function InvestmentsPage() {
                   const isPositive = invYield >= 0;
                   const profitAmt = inv.current_balance - inv.total_invested;
                   const hasQty = inv.quantity && inv.quantity > 0;
+                  const isNameIdentical = inv.ticker && inv.name.trim().toUpperCase() === inv.ticker.trim().toUpperCase();
                   
                   return (
                     <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                      <td className="px-4 py-4">
-                        <div className="flex items-center gap-2">
-                          {inv.ticker ? (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenStockDetails(inv.ticker!)}
-                              title={`Ver Raio-X e Valuations de ${inv.ticker}`}
-                              className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer ${
-                                isUsd 
-                                  ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
-                                  : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900'
-                              }`}
-                            >
-                              {isUsd && <span>🇺🇸</span>}
-                              {inv.ticker}
-                            </button>
-                          ) : null}
-                          <div>
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <p className="font-bold text-gray-900 dark:text-white text-sm">{inv.name}</p>
-                              {isUsd && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
-                                  Dólar (USD)
-                                </span>
-                              )}
-                              {inv.plan_type && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                                  {inv.plan_type}
-                                </span>
-                              )}
-                              {inv.tax_regime && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                                  {inv.tax_regime}
-                                </span>
-                              )}
-                            </div>
-                            {inv.due_date && (
-                              <span className="text-[10px] text-gray-400">
-                                {inv.investment_type?.name?.toLowerCase().includes('previd') ? 'Aposentadoria / Resgate: ' : 'Venc: '}
-                                {formatDate(inv.due_date)}
+                      <td className="px-3 py-2.5">
+                        <div className="flex flex-col justify-center">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {inv.ticker ? (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenStockDetails(inv.ticker!)}
+                                title={`Ver Raio-X e Valuations de ${inv.ticker}`}
+                                className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer shrink-0 ${
+                                  isUsd 
+                                    ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
+                                    : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900'
+                                }`}
+                              >
+                                {isUsd && <span>🇺🇸</span>}
+                                {inv.ticker}
+                              </button>
+                            ) : (
+                              <span className="font-bold text-gray-900 dark:text-white text-xs">
+                                {inv.name}
+                              </span>
+                            )}
+
+                            {isUsd && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
+                                USD
+                              </span>
+                            )}
+                            {inv.plan_type && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                                {inv.plan_type}
+                              </span>
+                            )}
+                            {inv.tax_regime && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+                                {inv.tax_regime}
                               </span>
                             )}
                           </div>
+
+                          {inv.ticker && !isNameIdentical && (
+                            <p className="font-medium text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-[150px] mt-0.5" title={inv.name}>
+                              {inv.name}
+                            </p>
+                          )}
+
+                          {inv.due_date && (
+                            <span className="text-[10px] text-gray-400 block mt-0.5">
+                              {inv.investment_type?.name?.toLowerCase().includes('previd') ? 'Aposentadoria: ' : 'Venc: '}
+                              {formatDate(inv.due_date)}
+                            </span>
+                          )}
                         </div>
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td className="px-2.5 py-2.5">
                         <div className="space-y-1">
                           <span 
-                            className="px-2 py-0.5 rounded-full text-[11px] font-semibold text-white shadow-xs inline-flex items-center gap-1"
+                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow-xs inline-flex items-center gap-1.5 whitespace-nowrap"
                             style={{ backgroundColor: isUsd ? '#0ea5e9' : (inv.investment_type?.color || '#0058be') }}
+                            title={isUsd ? 'ETFs Internacionais' : (inv.investment_type?.name || 'Outro')}
                           >
-                            <Icon name={isUsd ? 'public' : (inv.investment_type?.icon || 'account_balance_wallet')} className="w-3 h-3" />
-                            {isUsd ? 'ETFs Internacionais' : (inv.investment_type?.name || 'Outro')}
+                            <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0"></span>
+                            <span>{isUsd ? 'Internacional' : (inv.investment_type?.name || 'Outro')}</span>
                           </span>
-                          <p className="text-[11px] text-gray-400">{inv.institution || (isUsd ? 'Internacional' : '-')}</p>
+                          <p className="text-[10px] text-gray-400 font-medium truncate max-w-[110px]" title={inv.institution || '-'}>
+                            {inv.institution || (isUsd ? 'Internacional' : '-')}
+                          </p>
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 text-center">
+                      <td className="px-2 py-3 text-center">
                         {hasQty ? (
-                          <span className="font-bold text-gray-900 dark:text-white text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded-lg">
+                          <span className="font-bold text-gray-900 dark:text-white text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-md font-mono">
                             {formatQuantity(inv.quantity)}
                           </span>
                         ) : (
@@ -1005,29 +1086,29 @@ export default function InvestmentsPage() {
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap text-xs">
+                      <td className="px-2.5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap text-xs font-mono">
                         {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price, curr) : '-'}
                       </td>
 
-                      <td className="px-4 py-4 text-right font-semibold text-blue-600 dark:text-blue-400 whitespace-nowrap text-xs">
+                      <td className="px-2.5 py-3 text-right font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap text-xs font-mono">
                         {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price, curr) : '-'}
                       </td>
 
-                      <td className="px-4 py-4 text-right whitespace-nowrap text-xs">
+                      <td className="px-2.5 py-3 text-right whitespace-nowrap text-xs font-mono">
                         <p className="font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(inv.total_invested, curr)}</p>
                         {isUsd && (
                           <p className="text-[10px] text-gray-400">≈ {formatCurrency(inv.total_invested * usdRate, 'BRL')}</p>
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-right whitespace-nowrap">
-                        <p className="font-extrabold text-gray-900 dark:text-white">{formatCurrency(inv.current_balance, curr)}</p>
+                      <td className="px-2.5 py-3 text-right whitespace-nowrap font-mono">
+                        <p className="font-extrabold text-gray-900 dark:text-white text-xs">{formatCurrency(inv.current_balance, curr)}</p>
                         {isUsd && (
                           <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">≈ {formatCurrency(inv.current_balance * usdRate, 'BRL')}</p>
                         )}
                       </td>
 
-                      <td className="px-4 py-4 text-right whitespace-nowrap">
+                      <td className="px-2.5 py-3 text-right whitespace-nowrap font-mono">
                         <div className={`font-bold text-xs ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
                           <span>{isPositive ? '+' : ''}{formatCurrency(profitAmt, curr)}</span>
                           <span className="text-[10px] block opacity-80">({isPositive ? '+' : ''}{invYield.toFixed(2)}%)</span>
@@ -1039,35 +1120,35 @@ export default function InvestmentsPage() {
                         </div>
                       </td>
 
-                      <td className="px-4 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                      <td className="px-3 py-3 whitespace-nowrap text-center">
+                        <div className="flex items-center justify-center gap-1">
                           {inv.ticker && !isUsd && (
                             <button
                               type="button"
                               onClick={() => handleOpenStockDetails(inv.ticker!)}
-                              className="px-2 py-1 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-colors rounded-lg flex items-center gap-1 text-xs font-bold shadow-xs"
-                              title="Abrir Detalhes da Ação, Indicadores e Valuations (Bazin, Graham, Peter Lynch)"
+                              className="px-1.5 py-1 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-colors rounded-md flex items-center gap-1 text-[11px] font-bold shadow-xs"
+                              title="Abrir Detalhes da Ação, Indicadores e Valuations"
                             >
                               <Icon name="query_stats" size="sm" /> Raio-X
                             </button>
                           )}
                           <button 
                             onClick={() => handleOpenEntryModal(inv)}
-                            className="px-2 py-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors rounded-lg flex items-center gap-1 text-xs font-bold shadow-xs"
+                            className="px-1.5 py-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors rounded-md flex items-center gap-1 text-[11px] font-bold shadow-xs"
                             title="Comprar mais / Novo aporte"
                           >
                             <Icon name="add_circle" size="sm" /> Aporte
                           </button>
                           <button 
                             onClick={() => handleOpenInvModal(inv)}
-                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors rounded-lg"
+                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors rounded-md"
                             title="Editar Ativo"
                           >
                             <Icon name="edit" size="sm" />
                           </button>
                           <button 
                             onClick={() => handleDeleteInvestment(inv.id, inv.name)}
-                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors rounded-lg"
+                            className="p-1 text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors rounded-md"
                             title="Excluir Ativo"
                           >
                             <Icon name="delete" size="sm" />
@@ -1123,6 +1204,26 @@ export default function InvestmentsPage() {
       {/* 5. Calculadora de IR & DARF (íon Itaú / B3) */}
       {activeMainTab === 'ir' && (
         <TaxCalculatorDashboard />
+      )}
+
+      {/* 6. Opções & Estratégias (Travas de Baixa/Alta B3, Spread & Alertas) */}
+      {activeMainTab === 'opcoes' && (
+        <OptionsStrategyDashboard
+          strategies={optionsStrategies}
+          totalPortfolioValue={totalCurrentWithDerivatives > 0 ? totalCurrentWithDerivatives : 18200}
+          isSyncing={isSyncingOptions}
+          autoRefresh={autoRefreshOptions}
+          lastSyncTime={optionsLastSyncTime}
+          onToggleAutoRefresh={() => setAutoRefreshOptions(!autoRefreshOptions)}
+          onSyncQuotes={syncOptionsQuotes}
+          onOpenNewStrategyModal={() => setIsOptionModalOpen(true)}
+          onUpdateStrategy={updateOptionStrategy}
+          onDeleteStrategy={deleteOptionStrategy}
+          onCloseStrategy={closeOptionStrategy}
+          onUpdateLegPrice={updateOptionLegPrice}
+          notificationPermission={optionsNotificationPermission}
+          onRequestNotifications={requestOptionsNotifications}
+        />
       )}
 
       {/* Modal - Novo / Editar Investimento (com Calculadora Qtd * Preço) */}
@@ -1614,6 +1715,16 @@ export default function InvestmentsPage() {
         types={types}
         onImportAssets={async (assets) => {
           return await batchImportInvestments(assets);
+        }}
+      />
+
+      {/* Modal - Nova Trava / Estratégia de Opções */}
+      <NewOptionStrategyModal
+        isOpen={isOptionModalOpen}
+        onClose={() => setIsOptionModalOpen(false)}
+        onSave={(newStrat) => {
+          addOptionStrategy(newStrat);
+          setActiveMainTab('opcoes');
         }}
       />
     </div>
