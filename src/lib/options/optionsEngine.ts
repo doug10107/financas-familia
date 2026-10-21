@@ -25,6 +25,7 @@ export interface OptionLeg {
   askPrice?: number;
   quantity: number;
   expirationDate: string; // YYYY-MM-DD
+  manualOverride?: boolean;
 }
 
 export interface OptionStrategy {
@@ -218,6 +219,9 @@ export interface StrategyAnalysis {
   currentValue: number;
   pnlTotal: number;
   pnlPercent: number;
+  target50: number;
+  target80: number;
+  stopLoss: number;
   progressPercent: number; // 0 to 100 towards 50% target, or beyond
   dte: { calendarDays: number; businessDays: number; isExpired: boolean };
   statusBadge: {
@@ -245,36 +249,58 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
     (!!buyLeg && !sellLeg);
 
   let currentSpread = 0;
-  let entryCost = strategy.entryCostPerUnit || 0.01;
-  let totalCost = strategy.totalEntryCost || (entryCost * strategy.quantity);
+  let entryCost = 0;
+  let totalCost = 0;
   let currentValue = 0;
   let pnlTotal = 0;
   let pnlPercent = 0;
 
-  if (isShortSingle && sellLeg) {
-    // Operação Vendida de Perna Única (ex: Venda de Put, Venda Coberta)
-    // entryCost é o prêmio recebido por ação (crédito)
-    currentSpread = sellLeg.currentPrice; // Cotação atual da opção no mercado
-    currentValue = Number((sellLeg.currentPrice * strategy.quantity).toFixed(2)); // Custo para recompra/zeragem hoje
-    pnlTotal = Number(((entryCost - sellLeg.currentPrice) * strategy.quantity).toFixed(2));
-    pnlPercent = Number((((entryCost - sellLeg.currentPrice) / (entryCost || 1)) * 100).toFixed(2));
-  } else if (isLongSingle && buyLeg) {
-    // Operação Comprada a Seco (ex: Compra de Call ou Put)
-    currentSpread = buyLeg.currentPrice;
-    currentValue = Number((buyLeg.currentPrice * strategy.quantity).toFixed(2));
-    pnlTotal = Number((currentValue - totalCost).toFixed(2));
-    pnlPercent = Number((((buyLeg.currentPrice - entryCost) / (entryCost || 1)) * 100).toFixed(2));
-  } else if (buyLeg && sellLeg) {
-    // Trava de Spread (Débito): Cotação da ponta comprada - ponta vendida
+  if (buyLeg && sellLeg) {
+    // Trava de Spread: cálculo dinâmico e estrito conforme especificação
+    // 1. Custo Base = Preço Entrada (Comprada) - Preço Entrada (Vendida)
+    entryCost = Number((buyLeg.entryPrice - sellLeg.entryPrice).toFixed(2));
+    totalCost = Number((entryCost * strategy.quantity).toFixed(2));
+
+    // 2. Spread Atual = Cotação Atual (Comprada) - Cotação Atual (Vendida)
     currentSpread = Number((buyLeg.currentPrice - sellLeg.currentPrice).toFixed(2));
     currentValue = Number((currentSpread * strategy.quantity).toFixed(2));
-    pnlTotal = Number((currentValue - totalCost).toFixed(2));
-    pnlPercent = Number((((currentSpread - entryCost) / (entryCost || 1)) * 100).toFixed(2));
+
+    // 3. P&L Aberto (R$) = (Spread Atual - Custo Base) * Quantidade
+    pnlTotal = Number(((currentSpread - entryCost) * strategy.quantity).toFixed(2));
+
+    // 4. P&L Aberto (%) = ((Spread Atual - Custo Base) / Custo Base) * 100
+    pnlPercent = entryCost !== 0
+      ? Number((((currentSpread - entryCost) / Math.abs(entryCost)) * 100).toFixed(2))
+      : 0;
+  } else if (isShortSingle && sellLeg) {
+    // Operação Vendida de Perna Única (ex: Venda de Put, Venda Coberta)
+    entryCost = Number(sellLeg.entryPrice.toFixed(2));
+    totalCost = Number((entryCost * strategy.quantity).toFixed(2));
+    currentSpread = Number(sellLeg.currentPrice.toFixed(2));
+    currentValue = Number((sellLeg.currentPrice * strategy.quantity).toFixed(2));
+    pnlTotal = Number(((entryCost - sellLeg.currentPrice) * strategy.quantity).toFixed(2));
+    pnlPercent = entryCost !== 0
+      ? Number((((entryCost - sellLeg.currentPrice) / Math.abs(entryCost)) * 100).toFixed(2))
+      : 0;
+  } else if (isLongSingle && buyLeg) {
+    // Operação Comprada a Seco (ex: Compra de Call ou Put)
+    entryCost = Number(buyLeg.entryPrice.toFixed(2));
+    totalCost = Number((entryCost * strategy.quantity).toFixed(2));
+    currentSpread = Number(buyLeg.currentPrice.toFixed(2));
+    currentValue = Number((buyLeg.currentPrice * strategy.quantity).toFixed(2));
+    pnlTotal = Number(((buyLeg.currentPrice - entryCost) * strategy.quantity).toFixed(2));
+    pnlPercent = entryCost !== 0
+      ? Number((((buyLeg.currentPrice - entryCost) / Math.abs(entryCost)) * 100).toFixed(2))
+      : 0;
   } else {
+    entryCost = strategy.entryCostPerUnit || 0;
+    totalCost = strategy.totalEntryCost || (entryCost * strategy.quantity);
     currentSpread = buyLeg ? buyLeg.currentPrice : (sellLeg ? sellLeg.currentPrice : 0);
     currentValue = Number((currentSpread * strategy.quantity).toFixed(2));
     pnlTotal = Number((currentValue - totalCost).toFixed(2));
-    pnlPercent = Number((((currentSpread - entryCost) / (entryCost || 1)) * 100).toFixed(2));
+    pnlPercent = entryCost !== 0
+      ? Number((((currentSpread - entryCost) / Math.abs(entryCost)) * 100).toFixed(2))
+      : 0;
   }
 
   // Determine DTE
@@ -284,6 +310,35 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
 
   const dte = calculateDTE(nearestExp);
 
+  // Determine Dynamic Targets & Stop Loss anchored to Custo Base
+  let target50 = 0;
+  let target80 = 0;
+  let stopLoss = 0;
+
+  if (isShortSingle) {
+    // Vendas de Opções: lucro na desvalorização do prêmio (em direção a 0)
+    target50 = strategy.targetProfit50 > 0 && strategy.targetProfit50 < entryCost
+      ? strategy.targetProfit50
+      : Number((entryCost * 0.5).toFixed(2));
+    target80 = strategy.targetProfit80 > 0 && strategy.targetProfit80 < entryCost
+      ? strategy.targetProfit80
+      : Number((entryCost * 0.2).toFixed(2));
+    stopLoss = strategy.stopLossPrice > 0 && strategy.stopLossPrice > entryCost
+      ? strategy.stopLossPrice
+      : Number((entryCost * 1.5).toFixed(2));
+  } else {
+    // Travas a Débito e Compras a Seco: lucro na expansão do spread
+    target50 = strategy.targetProfit50 > 0 && strategy.targetProfit50 > entryCost
+      ? strategy.targetProfit50
+      : Number((entryCost * 1.5).toFixed(2));
+    target80 = strategy.targetProfit80 > 0 && strategy.targetProfit80 > entryCost
+      ? strategy.targetProfit80
+      : Number((entryCost * 1.8).toFixed(2));
+    stopLoss = strategy.stopLossPrice > 0 && strategy.stopLossPrice < entryCost
+      ? strategy.stopLossPrice
+      : Number((entryCost * 0.5).toFixed(2));
+  }
+
   // Status & Recommendations
   let statusBadge: StrategyAnalysis['statusBadge'] = {
     label: 'Operação em Andamento',
@@ -291,11 +346,7 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
   };
 
   if (isShortSingle) {
-    // Para operações vendidas: lucro acontece com a queda do preço da opção (desvalorização em direção a 0)
-    const target50 = strategy.targetProfit50 || (entryCost * 0.5); // recompra a 50%
-    const target80 = strategy.targetProfit80 || (entryCost * 0.2); // recompra a 20%
-    const stopLoss = strategy.stopLossPrice || (entryCost * 1.5); // stop se subir 50% acima do prêmio recebido
-
+    // Operações Vendidas
     if (dte.isExpired) {
       if (sellLeg && strategy.underlyingPrice > 0 && sellLeg.strike > 0) {
         const isITM = sellLeg.type === 'PUT' 
@@ -326,13 +377,13 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
       }
     } else if (pnlPercent >= 80 || (sellLeg && sellLeg.currentPrice <= target80)) {
       statusBadge = {
-        label: '🟢 Super Meta (+80% do Prêmio Retido)!',
+        label: '🟢 Super Meta (+80% Retido)!',
         color: 'emerald',
         actionRecommendation: 'A opção desvalorizou fortemente. Excelente momento para recomprar barato e encerrar o risco!'
       };
     } else if (pnlPercent >= 50 || (sellLeg && sellLeg.currentPrice <= target50)) {
       statusBadge = {
-        label: '🟢 Alvo (+50% do Prêmio no Bolso)!',
+        label: '🟢 Alvo (+50% no Bolso)!',
         color: 'emerald',
         actionRecommendation: 'Recomende recomprar por metade do valor vendido para embolsar o ganho.'
       };
@@ -348,13 +399,21 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
         color: 'amber',
         actionRecommendation: 'A opção está desvalorizando conforme esperado.'
       };
+    } else if (pnlPercent < -20) {
+      statusBadge = {
+        label: '🟡 Oscilação Negativa (-20%)',
+        color: 'amber',
+        actionRecommendation: 'Opção encarecendo contra a posição vendida.'
+      };
+    } else {
+      statusBadge = {
+        label: '🟡 Em Andamento',
+        color: 'amber',
+        actionRecommendation: 'Operação oscilando na faixa neutra.'
+      };
     }
   } else {
-    // Operações a Débito / Travas / Compras a Seco
-    const target50 = strategy.targetProfit50 || (entryCost * 1.5);
-    const target80 = strategy.targetProfit80 || (entryCost * 1.8);
-    const stopLoss = strategy.stopLossPrice || (entryCost * 0.5);
-
+    // Operações a Débito / Travas de Spread
     if (dte.isExpired) {
       statusBadge = {
         label: 'Opção Vencida',
@@ -385,16 +444,26 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
         color: 'amber',
         actionRecommendation: 'Aproximando-se da faixa de realização.'
       };
+    } else if (pnlPercent < -20) {
+      statusBadge = {
+        label: '🟡 Oscilação Negativa (-20%)',
+        color: 'amber',
+        actionRecommendation: 'Acompanhando recuo de spread em direção ao stop.'
+      };
+    } else {
+      statusBadge = {
+        label: '🟡 Em Andamento',
+        color: 'amber',
+        actionRecommendation: 'Aguardando evolução do spread em direção ao alvo.'
+      };
     }
   }
 
   // Calculate progress toward target 50%
-  // 0% = cost, 100% = target50, >100% = above
   let progressPercent = 0;
   if (isShortSingle) {
     progressPercent = (pnlPercent / 50) * 100;
   } else {
-    const target50 = strategy.targetProfit50 || (entryCost * 1.5);
     if (target50 > entryCost) {
       progressPercent = ((currentSpread - entryCost) / (target50 - entryCost)) * 100;
     }
@@ -420,6 +489,9 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
     currentValue,
     pnlTotal,
     pnlPercent,
+    target50,
+    target80,
+    stopLoss,
     progressPercent: Math.max(-100, Math.min(200, progressPercent)),
     dte,
     statusBadge,

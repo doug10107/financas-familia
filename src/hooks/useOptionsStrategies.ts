@@ -45,7 +45,7 @@ const INITIAL_DEFAULT_STRATEGIES: OptionStrategy[] = [
       },
       {
         id: 'leg-2',
-        ticker: 'BOVAW19',
+        ticker: 'BOVAW199',
         type: 'PUT',
         side: 'sell',
         strike: 199.00,
@@ -60,7 +60,7 @@ const INITIAL_DEFAULT_STRATEGIES: OptionStrategy[] = [
   }
 ];
 
-export function useOptionsStrategies() {
+export function useOptionsStrategies(investments: any[] = []) {
   const [strategies, setStrategies] = useState<OptionStrategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -119,7 +119,15 @@ export function useOptionsStrategies() {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          setStrategies(parsed);
+          // Normalize any legacy typo (e.g. BOVAW19 -> BOVAW199)
+          const sanitized = parsed.map((s: OptionStrategy) => ({
+            ...s,
+            legs: (s.legs || []).map(l => ({
+              ...l,
+              ticker: l.ticker === 'BOVAW19' ? 'BOVAW199' : l.ticker
+            }))
+          }));
+          setStrategies(sanitized);
           setLoading(false);
           return;
         }
@@ -146,7 +154,80 @@ export function useOptionsStrategies() {
     }
   }, []);
 
-  // Sync Quotes for all active strategies
+  // 1. SINCRONIZAÇÃO AUTOMÁTICA EM TEMPO REAL COM A LISTA DE ATIVOS
+  useEffect(() => {
+    if (!investments || investments.length === 0 || strategies.length === 0) return;
+
+    // Build price map from Lista de Ativos
+    const assetPriceMap = new Map<string, number>();
+    investments.forEach(inv => {
+      const cleanTicker = (inv.ticker || '').trim().toUpperCase();
+      const cleanName = (inv.name || '').trim().toUpperCase();
+      const price = typeof inv.current_price === 'number' && inv.current_price > 0 
+        ? inv.current_price 
+        : (typeof inv.average_price === 'number' && inv.average_price > 0 ? inv.average_price : 0);
+
+      if (price > 0) {
+        if (cleanTicker) {
+          assetPriceMap.set(cleanTicker, price);
+          assetPriceMap.set(cleanTicker.replace('.SA', ''), price);
+        }
+        if (cleanName) {
+          assetPriceMap.set(cleanName, price);
+          assetPriceMap.set(cleanName.replace('.SA', ''), price);
+        }
+      }
+    });
+
+    let hasChanges = false;
+    const nextStrategies = strategies.map(strat => {
+      let stratChanged = false;
+
+      // Update underlying asset price if available in Lista de Ativos
+      let undPrice = strat.underlyingPrice;
+      const underlyingQuote = assetPriceMap.get(strat.underlyingTicker.toUpperCase().replace('.SA', ''));
+      if (underlyingQuote !== undefined && underlyingQuote > 0 && underlyingQuote !== undPrice) {
+        undPrice = underlyingQuote;
+        stratChanged = true;
+      }
+
+      const nextLegs = strat.legs.map(leg => {
+        // If user manually overrode the price via double-click, preserve the override
+        if (leg.manualOverride) return leg;
+
+        const cleanLegTicker = leg.ticker.trim().toUpperCase().replace('.SA', '');
+        const assetPrice = assetPriceMap.get(cleanLegTicker);
+
+        if (assetPrice !== undefined && assetPrice > 0 && assetPrice !== leg.currentPrice) {
+          stratChanged = true;
+          return {
+            ...leg,
+            currentPrice: assetPrice
+          };
+        }
+        return leg;
+      });
+
+      if (stratChanged) {
+        hasChanges = true;
+        const updatedStrat: OptionStrategy = {
+          ...strat,
+          underlyingPrice: undPrice,
+          legs: nextLegs,
+          updatedAt: new Date().toISOString()
+        };
+        checkStrategyAlerts(updatedStrat);
+        return updatedStrat;
+      }
+      return strat;
+    });
+
+    if (hasChanges) {
+      saveStrategies(nextStrategies);
+    }
+  }, [investments, strategies, saveStrategies, checkStrategyAlerts]);
+
+  // Sync Quotes for all active strategies from API
   const syncQuotes = useCallback(async () => {
     if (strategies.length === 0) return;
 
@@ -185,7 +266,8 @@ export function useOptionsStrategies() {
               if (quote && quote.price > 0) {
                 return {
                   ...leg,
-                  currentPrice: quote.price,
+                  // Do not override user's manual override
+                  currentPrice: leg.manualOverride ? leg.currentPrice : quote.price,
                   bidPrice: quote.bidPrice || leg.bidPrice,
                   askPrice: quote.askPrice || leg.askPrice,
                   strike: leg.strike || quote.strike
@@ -266,13 +348,13 @@ export function useOptionsStrategies() {
     updateStrategy(id, { status: 'closed' });
   }, [updateStrategy]);
 
-  // Fast manual override for a specific leg price (useful for testing or fine-tuning live book)
+  // Manual override for a specific leg price (double click / pencil)
   const updateLegPrice = useCallback((strategyId: string, legTicker: string, newPrice: number) => {
     const nextList = strategies.map(s => {
       if (s.id === strategyId) {
         const updatedLegs = s.legs.map(l => {
           if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
-            return { ...l, currentPrice: newPrice };
+            return { ...l, currentPrice: newPrice, manualOverride: true };
           }
           return l;
         });
@@ -282,6 +364,41 @@ export function useOptionsStrategies() {
     });
     saveStrategies(nextList);
   }, [strategies, saveStrategies]);
+
+  // Reset manual override back to real-time auto quotation
+  const resetLegOverride = useCallback((strategyId: string, legTicker: string) => {
+    let autoPrice: number | undefined;
+    const cleanTicker = legTicker.trim().toUpperCase().replace('.SA', '');
+
+    if (investments && investments.length > 0) {
+      const match = investments.find(inv => {
+        const t = (inv.ticker || '').trim().toUpperCase().replace('.SA', '');
+        const n = (inv.name || '').trim().toUpperCase().replace('.SA', '');
+        return t === cleanTicker || n === cleanTicker;
+      });
+      if (match && typeof match.current_price === 'number' && match.current_price > 0) {
+        autoPrice = match.current_price;
+      }
+    }
+
+    const nextList = strategies.map(s => {
+      if (s.id === strategyId) {
+        const updatedLegs = s.legs.map(l => {
+          if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
+            return {
+              ...l,
+              manualOverride: false,
+              currentPrice: autoPrice !== undefined ? autoPrice : l.currentPrice
+            };
+          }
+          return l;
+        });
+        return { ...s, legs: updatedLegs, updatedAt: new Date().toISOString() };
+      }
+      return s;
+    });
+    saveStrategies(nextList);
+  }, [strategies, investments, saveStrategies]);
 
   return {
     strategies,
@@ -299,6 +416,7 @@ export function useOptionsStrategies() {
     updateStrategy,
     deleteStrategy,
     closeStrategy,
-    updateLegPrice
+    updateLegPrice,
+    resetLegOverride
   };
 }

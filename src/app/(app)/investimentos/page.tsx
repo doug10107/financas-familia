@@ -73,8 +73,9 @@ export default function InvestmentsPage() {
     updateStrategy: updateOptionStrategy,
     deleteStrategy: deleteOptionStrategy,
     closeStrategy: closeOptionStrategy,
-    updateLegPrice: updateOptionLegPrice
-  } = useOptionsStrategies();
+    updateLegPrice: updateOptionLegPrice,
+    resetLegOverride: resetOptionLegOverride
+  } = useOptionsStrategies(investments);
 
   // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'
   const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'>('carteira');
@@ -1210,6 +1211,7 @@ export default function InvestmentsPage() {
       {activeMainTab === 'opcoes' && (
         <OptionsStrategyDashboard
           strategies={optionsStrategies}
+          investments={investments}
           totalPortfolioValue={totalCurrentWithDerivatives > 0 ? totalCurrentWithDerivatives : 18200}
           isSyncing={isSyncingOptions}
           autoRefresh={autoRefreshOptions}
@@ -1221,6 +1223,7 @@ export default function InvestmentsPage() {
           onDeleteStrategy={deleteOptionStrategy}
           onCloseStrategy={closeOptionStrategy}
           onUpdateLegPrice={updateOptionLegPrice}
+          onResetLegOverride={resetOptionLegOverride}
           notificationPermission={optionsNotificationPermission}
           onRequestNotifications={requestOptionsNotifications}
         />

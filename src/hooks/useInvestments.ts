@@ -114,7 +114,7 @@ export function useInvestments() {
   const syncLiveQuotes = useCallback(async (customList?: Investment[]) => {
     const listToSync = customList || investments;
     const tickers = listToSync
-      .map(i => i.ticker || (i.name.match(/^[A-Z]{4}\d{1,2}[A-Z]?$/i) ? i.name : ''))
+      .map(i => i.ticker || (i.name.match(/^[A-Z]{4,5}\d{1,3}[A-Z]?$/i) ? i.name : ''))
       .filter(Boolean);
 
     if (tickers.length === 0) return;

@@ -169,8 +169,8 @@ function formatYahooTicker(raw: string): string {
   if (clean.includes('.')) return clean;
   if (clean.includes('-')) return clean;
 
-  // If it's a Brazilian stock/FII/ETF (e.g. PETR4, MXRF11, BOVA11, VALE3, SMAL11)
-  if (/^[A-Z]{4}\d{1,2}[A-Z]?$/.test(clean)) {
+  // If it's a Brazilian stock/FII/ETF (e.g. PETR4, MXRF11, BOVA11, VALE3, SMAL11) or option (e.g. BOVAW205, BOVAW199)
+  if (/^[A-Z]{4,5}\d{1,3}[A-Z]?$/.test(clean)) {
     return `${clean}.SA`;
   }
 

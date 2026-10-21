@@ -15,6 +15,7 @@ import { formatCurrency } from '@/lib/formatters';
 
 interface OptionsStrategyDashboardProps {
   strategies: OptionStrategy[];
+  investments?: any[];
   totalPortfolioValue: number;
   isSyncing: boolean;
   autoRefresh: boolean;
@@ -26,12 +27,14 @@ interface OptionsStrategyDashboardProps {
   onDeleteStrategy: (id: string) => void;
   onCloseStrategy: (id: string) => void;
   onUpdateLegPrice: (stratId: string, ticker: string, price: number) => void;
+  onResetLegOverride?: (stratId: string, ticker: string) => void;
   notificationPermission: NotificationPermission;
   onRequestNotifications: () => void;
 }
 
 export function OptionsStrategyDashboard({
   strategies,
+  investments = [],
   totalPortfolioValue,
   isSyncing,
   autoRefresh,
@@ -43,6 +46,7 @@ export function OptionsStrategyDashboard({
   onDeleteStrategy,
   onCloseStrategy,
   onUpdateLegPrice,
+  onResetLegOverride,
   notificationPermission,
   onRequestNotifications
 }: OptionsStrategyDashboardProps) {
@@ -79,7 +83,10 @@ export function OptionsStrategyDashboard({
   };
 
   // KPI 1: Capital Alocado
-  const totalAllocated = activeStrategies.reduce((sum, s) => sum + (s.totalEntryCost || (s.entryCostPerUnit * s.quantity)), 0);
+  const totalAllocated = activeStrategies.reduce((sum, s) => {
+    const analysis = analyzeStrategy(s);
+    return sum + analysis.totalEntryCost;
+  }, 0);
   const riskAllocationPercent = totalPortfolioValue > 0 ? (totalAllocated / totalPortfolioValue) * 100 : 0;
 
   // KPI 2: Total Open P&L
@@ -91,7 +98,10 @@ export function OptionsStrategyDashboard({
 
   // KPI 3: Nearest Profit Target
   const nearestTargetValue = activeStrategies.length > 0
-    ? activeStrategies[0].targetProfit50 * activeStrategies[0].quantity
+    ? (() => {
+        const a = analyzeStrategy(activeStrategies[0]);
+        return a.target50 * activeStrategies[0].quantity;
+      })()
     : 0;
 
   // KPI 4: Nearest Expiration / DTE
@@ -497,60 +507,105 @@ export function OptionsStrategyDashboard({
                 <div className="px-5 pb-4">
                   {(() => {
                     const isShort = strat.strategyCategory === 'venda_put' || strat.strategyCategory === 'venda_coberta' || (!buyLeg && !!sellLeg);
+                    const { target50, target80, stopLoss } = analysis;
+                    const cost = analysis.entryCost;
+
+                    // Escala dinâmica min/max para mapeamento proporcional
+                    const minVal = isShort 
+                      ? 0 
+                      : Math.max(0, Math.min(stopLoss * 0.7, cost * 0.3));
+                    const maxVal = isShort 
+                      ? Math.max(stopLoss * 1.25, cost * 1.5, 0.1) 
+                      : Math.max(target80 * 1.25, cost * 2.2, 0.1);
+                    const range = Math.max(0.01, maxVal - minVal);
+
+                    // Posição do cursor / marcador do Spread Atual em % (3% a 97%)
+                    const pinPos = Math.max(3, Math.min(97, ((analysis.currentSpread - minVal) / range) * 100));
+
+                    // Posições relativas das faixas no termômetro
+                    const stopPos = Math.max(4, Math.min(96, ((stopLoss - minVal) / range) * 100));
+                    const costPos = Math.max(4, Math.min(96, ((cost - minVal) / range) * 100));
+                    const t50Pos = Math.max(4, Math.min(96, ((target50 - minVal) / range) * 100));
+                    const t80Pos = Math.max(4, Math.min(96, ((target80 - minVal) / range) * 100));
 
                     return (
                       <div className="p-3 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/60 dark:border-gray-700/40 space-y-2">
                         <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                          <span className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
                             <Icon name="speed" size="sm" className="text-purple-500" /> 
                             {isShort ? 'Termômetro da Venda:' : 'Termômetro da Trava:'}
-                            <span className="text-purple-600 dark:text-purple-400 font-extrabold">
-                              {isShort ? `Cotação da Opção R$ ${analysis.currentSpread.toFixed(2)}` : `Spread R$ ${analysis.currentSpread.toFixed(2)}`}
+                            <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-extrabold font-mono text-xs">
+                              {isShort ? `Cotação R$ ${analysis.currentSpread.toFixed(2)}` : `Spread Atual R$ ${analysis.currentSpread.toFixed(2)}`}
                             </span>
                           </span>
 
-                          <span className="text-[11px] font-semibold text-gray-500">
+                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                            <Icon name="info" size="xs" className="text-gray-400" />
                             {analysis.statusBadge.actionRecommendation || 'Aguardando faixa de saída'}
                           </span>
                         </div>
 
-                        {/* Multi-segment Thermometer Bar */}
-                        <div className="relative w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex">
-                          {isShort ? (
-                            <>
-                              {/* Short Thermometer: Max Profit is when price approaches 0 (Vira Pó) */}
-                              <div className="h-full bg-emerald-600 dark:bg-emerald-400 w-1/4" title="Lucro Máximo (Virando Pó - 100% Prêmio)"></div>
-                              <div className="h-full bg-emerald-400/90 dark:bg-emerald-500/90 w-1/4" title="Alvo de Recompra (+50% a +80% embolsado)"></div>
-                              <div className="h-full bg-amber-400/80 dark:bg-amber-500/80 w-1/4" title="Zona Neutra / Entrada"></div>
-                              <div className="h-full bg-red-400/80 dark:bg-red-500/80 flex-1" title="Zona de Stop Loss (Opção valorizou contra)"></div>
-                            </>
-                          ) : (
-                            <>
-                              {/* Standard Spread Thermometer */}
-                              <div className="h-full bg-red-400/80 dark:bg-red-500/80 w-1/4" title="Zona de Stop Loss"></div>
-                              <div className="h-full bg-amber-400/80 dark:bg-amber-500/80 w-2/5" title="Zona Neutra / Entrada"></div>
-                              <div className="h-full bg-emerald-400/90 dark:bg-emerald-500/90 w-1/4" title="Faixa de Realização de Lucro (50% a 80%)"></div>
-                              <div className="h-full bg-emerald-600 dark:bg-emerald-400 flex-1" title="Lucro Máximo"></div>
-                            </>
-                          )}
+                        {/* Barra do Termômetro com Indicador Dinâmico */}
+                        <div className="relative pt-6 pb-1">
+                          {/* Pin / Cursor indicador da cotação/spread atual */}
+                          <div
+                            className="absolute top-0 flex flex-col items-center pointer-events-none transition-all duration-500 ease-out z-20"
+                            style={{ left: `${pinPos}%`, transform: 'translateX(-50%)' }}
+                          >
+                            <div className={`px-2 py-0.5 rounded text-[10px] font-extrabold shadow-md whitespace-nowrap border flex items-center gap-1 ${
+                              analysis.statusBadge.color === 'emerald'
+                                ? 'bg-emerald-600 text-white border-emerald-400 animate-pulse'
+                                : analysis.statusBadge.color === 'red'
+                                ? 'bg-red-600 text-white border-red-400 animate-pulse'
+                                : 'bg-purple-700 text-white border-purple-400'
+                            }`}>
+                              <span>Spread: R$ {analysis.currentSpread.toFixed(2)}</span>
+                            </div>
+                            <div className={`w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] ${
+                              analysis.statusBadge.color === 'emerald'
+                                ? 'border-t-emerald-600'
+                                : analysis.statusBadge.color === 'red'
+                                ? 'border-t-red-600'
+                                : 'border-t-purple-700'
+                            }`}></div>
+                          </div>
+
+                          {/* Trilho multi-segmento do Termômetro */}
+                          <div className="relative w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex shadow-inner">
+                            {isShort ? (
+                              <>
+                                <div className="h-full bg-emerald-600 dark:bg-emerald-500" style={{ width: `${t80Pos}%` }} title="Lucro Máximo (Virando Pó)"></div>
+                                <div className="h-full bg-emerald-400 dark:bg-emerald-600" style={{ width: `${Math.max(0, t50Pos - t80Pos)}%` }} title="Alvo de Realização (+50% a +80%)"></div>
+                                <div className="h-full bg-amber-400/90 dark:bg-amber-500/90" style={{ width: `${Math.max(0, costPos - t50Pos)}%` }} title="Zona de Entrada / Neutra"></div>
+                                <div className="h-full bg-red-500 dark:bg-red-600 flex-1" title="Zona de Stop Loss"></div>
+                              </>
+                            ) : (
+                              <>
+                                <div className="h-full bg-red-500/90 dark:bg-red-600/90" style={{ width: `${stopPos}%` }} title="Zona de Stop Loss (-50%)"></div>
+                                <div className="h-full bg-amber-400/90 dark:bg-amber-500/90" style={{ width: `${Math.max(0, t50Pos - stopPos)}%` }} title="Zona de Entrada / Neutra"></div>
+                                <div className="h-full bg-emerald-400/90 dark:bg-emerald-500/90" style={{ width: `${Math.max(0, t80Pos - t50Pos)}%` }} title="Faixa de Alvo (+50% a +80%)"></div>
+                                <div className="h-full bg-emerald-600 dark:bg-emerald-400 flex-1" title="Super Meta (+80% ou Mais)"></div>
+                              </>
+                            )}
+                          </div>
                         </div>
 
                         {/* Scale Labels */}
-                        <div className="flex justify-between items-center text-[10px] text-gray-400 font-mono">
+                        <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400 font-mono pt-0.5">
                           {isShort ? (
                             <>
-                              <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">Pó: R$ 0,00 (100% Lucro)</span>
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Alvo 2: R$ {strat.targetProfit80.toFixed(2)} (+80%)</span>
-                              <span className="text-emerald-600 dark:text-emerald-500 font-semibold">Alvo 1: R$ {strat.targetProfit50.toFixed(2)} (+50%)</span>
-                              <span className="text-gray-500">Prêmio: R$ {analysis.entryCost.toFixed(2)}</span>
-                              <span className="text-red-500 font-bold">Stop: R$ {strat.stopLossPrice.toFixed(2)} (-50%)</span>
+                              <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">Pó: R$ 0,00</span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Alvo 2: R$ {target80.toFixed(2)} (+80%)</span>
+                              <span className="text-emerald-600 dark:text-emerald-500 font-semibold">Alvo 1: R$ {target50.toFixed(2)} (+50%)</span>
+                              <span className="text-gray-600 dark:text-gray-300 font-medium">Entrada: R$ {cost.toFixed(2)}</span>
+                              <span className="text-red-500 font-bold">Stop: R$ {stopLoss.toFixed(2)} (-50%)</span>
                             </>
                           ) : (
                             <>
-                              <span className="text-red-500 font-bold">Stop: R$ {strat.stopLossPrice.toFixed(2)} (-50%)</span>
-                              <span className="text-gray-500">Entrada: R$ {analysis.entryCost.toFixed(2)}</span>
-                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Alvo 1: R$ {strat.targetProfit50.toFixed(2)} (+50%)</span>
-                              <span className="text-emerald-700 font-extrabold">Alvo 2: R$ {strat.targetProfit80.toFixed(2)} (+80%)</span>
+                              <span className="text-red-500 font-bold">Stop: R$ {stopLoss.toFixed(2)} (-50%)</span>
+                              <span className="text-gray-600 dark:text-gray-300 font-medium">Entrada: R$ {cost.toFixed(2)}</span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-bold">Alvo 1: R$ {target50.toFixed(2)} (+50%)</span>
+                              <span className="text-emerald-700 dark:text-emerald-300 font-extrabold">Alvo 2: R$ {target80.toFixed(2)} (+80%)</span>
                             </>
                           )}
                         </div>
@@ -567,7 +622,7 @@ export function OptionsStrategyDashboard({
                         <Icon name="view_list" size="sm" /> Pernas Detalhadas da Operação
                       </h5>
                       <span className="text-[11px] text-gray-400">
-                        Clique duas vezes no preço atual para ajuste rápido (override)
+                        Cotação sincronizada em tempo real (2 cliques para override manual)
                       </span>
                     </div>
 
@@ -589,6 +644,13 @@ export function OptionsStrategyDashboard({
                           {strat.legs.map((leg) => {
                             const isBuy = leg.side === 'buy';
                             const isEditing = editingLegPrice?.stratId === strat.id && editingLegPrice?.ticker === leg.ticker;
+                            const cleanLegTicker = leg.ticker.trim().toUpperCase().replace('.SA', '');
+                            const assetMatch = investments?.find(inv => {
+                              const t = (inv.ticker || '').trim().toUpperCase().replace('.SA', '');
+                              const n = (inv.name || '').trim().toUpperCase().replace('.SA', '');
+                              return t === cleanLegTicker || n === cleanLegTicker;
+                            });
+                            const isSyncedWithAssets = !!assetMatch && typeof assetMatch.current_price === 'number' && assetMatch.current_price > 0;
 
                             return (
                               <tr key={leg.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
@@ -620,24 +682,74 @@ export function OptionsStrategyDashboard({
                                         type="text"
                                         value={editingLegPrice.price}
                                         onChange={(e) => setEditingLegPrice({ ...editingLegPrice, price: e.target.value })}
-                                        className="w-16 px-1.5 py-0.5 text-xs border rounded bg-white dark:bg-gray-800"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveLegPrice(strat.id, leg.ticker);
+                                          if (e.key === 'Escape') setEditingLegPrice(null);
+                                        }}
+                                        className="w-16 px-1.5 py-0.5 text-xs border rounded bg-white dark:bg-gray-800 font-mono font-bold"
                                         autoFocus
                                       />
                                       <button
+                                        type="button"
                                         onClick={() => handleSaveLegPrice(strat.id, leg.ticker)}
                                         className="p-1 text-emerald-600 hover:text-emerald-700"
+                                        title="Salvar override"
                                       >
                                         <Icon name="check" size="sm" />
                                       </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingLegPrice(null)}
+                                        className="p-1 text-gray-400 hover:text-gray-600"
+                                        title="Cancelar"
+                                      >
+                                        <Icon name="close" size="sm" />
+                                      </button>
                                     </div>
                                   ) : (
-                                    <span
-                                      onDoubleClick={() => setEditingLegPrice({ stratId: strat.id, ticker: leg.ticker, price: String(leg.currentPrice) })}
-                                      className="cursor-pointer hover:underline text-purple-600 dark:text-purple-400"
-                                      title="Dois cliques para editar cotação manualmente"
-                                    >
-                                      R$ {leg.currentPrice.toFixed(2)} ✎
-                                    </span>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span
+                                        onDoubleClick={() => setEditingLegPrice({ stratId: strat.id, ticker: leg.ticker, price: String(leg.currentPrice) })}
+                                        className="cursor-pointer hover:underline text-purple-600 dark:text-purple-400 font-extrabold"
+                                        title="Dois cliques para editar cotação manualmente (override)"
+                                      >
+                                        R$ {leg.currentPrice.toFixed(2)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => setEditingLegPrice({ stratId: strat.id, ticker: leg.ticker, price: String(leg.currentPrice) })}
+                                        className="text-gray-400 hover:text-purple-600 transition-colors p-0.5"
+                                        title="Editar cotação manualmente (override)"
+                                      >
+                                        <Icon name="edit" size="sm" />
+                                      </button>
+
+                                      {leg.manualOverride ? (
+                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 font-semibold" title="Valor fixado manualmente pelo usuário">
+                                          Manual
+                                          {onResetLegOverride && (
+                                            <button
+                                              type="button"
+                                              onClick={() => onResetLegOverride(strat.id, leg.ticker)}
+                                              className="text-amber-700 hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100 font-bold ml-0.5 hover:underline"
+                                              title="Voltar para sincronização automática da Lista de Ativos"
+                                            >
+                                              ↺ Auto
+                                            </button>
+                                          )}
+                                        </span>
+                                      ) : isSyncedWithAssets ? (
+                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-semibold" title="Sincronizado automaticamente com a Lista de Ativos">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                          Lista de Ativos
+                                        </span>
+                                      ) : (
+                                        <span className="inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 font-semibold" title="Cotação em tempo real B3">
+                                          <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                                          B3 Ao Vivo
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </td>
                                 <td className="p-2.5 font-mono text-[11px] text-gray-400">

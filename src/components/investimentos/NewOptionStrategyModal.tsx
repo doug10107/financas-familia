@@ -42,7 +42,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
   const [leg1Exp, setLeg1Exp] = useState('2026-11-20');
   const [isSearchingLeg1, setIsSearchingLeg1] = useState(false);
 
-  const [leg2Ticker, setLeg2Ticker] = useState('BOVAW19');
+  const [leg2Ticker, setLeg2Ticker] = useState('BOVAW199');
   const [leg2Type, setLeg2Type] = useState<'CALL' | 'PUT'>('PUT');
   const [leg2Side, setLeg2Side] = useState<'buy' | 'sell'>('sell');
   const [leg2Strike, setLeg2Strike] = useState('199.00');
