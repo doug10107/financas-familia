@@ -9,68 +9,18 @@ import { createClient } from '@/lib/supabase/client';
 
 const STORAGE_KEY = 'financas_options_strategies';
 
-// Default initial strategy for testing (matches user's real-life example)
-const INITIAL_DEFAULT_STRATEGIES: OptionStrategy[] = [
-  {
-    id: 'strat-bova-trava-baixa-1',
-    name: 'Trava de Baixa - BOVA11 (205 x 199)',
-    underlyingTicker: 'BOVA11',
-    underlyingPrice: 121.45,
-    strategyCategory: 'trava_baixa',
-    quantity: 100,
-    entryCostPerUnit: 2.13,
-    totalEntryCost: 213.00,
-    entryDate: '2026-10-15',
-    targetProfit50: 3.20,
-    targetProfit80: 3.83,
-    stopLossPrice: 1.06,
-    maxProfitPerUnit: 3.87,
-    status: 'active',
-    notes: 'Operação de trava de baixa visando queda ou lateralização do índice.',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    legs: [
-      {
-        id: 'leg-1',
-        ticker: 'BOVAW205',
-        type: 'PUT',
-        side: 'buy',
-        strike: 205.00,
-        entryPrice: 2.21,
-        currentPrice: 3.28,
-        bidPrice: 3.25,
-        askPrice: 3.30,
-        quantity: 100,
-        expirationDate: '2026-11-20'
-      },
-      {
-        id: 'leg-2',
-        ticker: 'BOVAW199',
-        type: 'PUT',
-        side: 'sell',
-        strike: 199.00,
-        entryPrice: 0.08,
-        currentPrice: 0.08,
-        bidPrice: 0.07,
-        askPrice: 0.09,
-        quantity: 100,
-        expirationDate: '2026-11-20'
-      }
-    ]
-  }
-];
-
 export function useOptionsStrategies(investments: any[] = []) {
   const [strategies, setStrategies] = useState<OptionStrategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30); // 30 seconds
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default');
 
   const supabase = createClient();
   const alertSentMap = useRef<Record<string, boolean>>({});
+  const initialSyncDone = useRef(false);
 
   // Request browser notification permission
   const requestNotificationPermission = useCallback(async () => {
@@ -116,18 +66,17 @@ export function useOptionsStrategies(investments: any[] = []) {
 
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
+      if (stored !== null) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Normalize any legacy typo (e.g. BOVAW19 -> BOVAW199)
-          const sanitized = parsed.map((s: OptionStrategy) => ({
-            ...s,
-            legs: (s.legs || []).map(l => ({
-              ...l,
-              ticker: l.ticker === 'BOVAW19' ? 'BOVAW199' : l.ticker
-            }))
-          }));
-          setStrategies(sanitized);
+        if (Array.isArray(parsed)) {
+          // Remove legacy hardcoded example ('strat-bova-trava-baixa-1') so it stays deleted on F5
+          const filtered = parsed.filter((s: OptionStrategy) => s && s.id !== 'strat-bova-trava-baixa-1');
+          if (filtered.length !== parsed.length) {
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
+            } catch {}
+          }
+          setStrategies(filtered);
           setLoading(false);
           return;
         }
@@ -136,11 +85,7 @@ export function useOptionsStrategies(investments: any[] = []) {
       console.warn('Erro ao carregar estratégias de opções do localStorage:', e);
     }
 
-    // Default seed
-    setStrategies(INITIAL_DEFAULT_STRATEGIES);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(INITIAL_DEFAULT_STRATEGIES));
-    } catch {}
+    setStrategies([]);
     setLoading(false);
   }, []);
 
@@ -263,14 +208,14 @@ export function useOptionsStrategies(investments: any[] = []) {
 
             const updatedLegs = strat.legs.map(leg => {
               const quote = quotes[leg.ticker];
-              if (quote && quote.price > 0) {
+              if (quote) {
                 return {
                   ...leg,
                   // Do not override user's manual override
-                  currentPrice: leg.manualOverride ? leg.currentPrice : quote.price,
+                  currentPrice: leg.manualOverride ? leg.currentPrice : (quote.price > 0 ? quote.price : leg.currentPrice),
                   bidPrice: quote.bidPrice || leg.bidPrice,
                   askPrice: quote.askPrice || leg.askPrice,
-                  strike: leg.strike || quote.strike
+                  strike: quote.strike > 0 ? quote.strike : leg.strike
                 };
               }
               return leg;
@@ -299,6 +244,14 @@ export function useOptionsStrategies(investments: any[] = []) {
       setIsSyncing(false);
     }
   }, [strategies, saveStrategies, checkStrategyAlerts]);
+
+  // Initial quote sync when strategies finish loading
+  useEffect(() => {
+    if (!loading && strategies.length > 0 && !initialSyncDone.current) {
+      initialSyncDone.current = true;
+      syncQuotes();
+    }
+  }, [loading, strategies.length, syncQuotes]);
 
   // Auto-refresh interval effect
   useEffect(() => {

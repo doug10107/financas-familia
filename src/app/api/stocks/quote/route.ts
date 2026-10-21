@@ -177,6 +177,58 @@ function formatYahooTicker(raw: string): string {
   return clean;
 }
 
+const B3_ROOT_MAP: Record<string, string> = {
+  'BOVA': 'BOVA11',
+  'SMAL': 'SMAL11',
+  'IVVB': 'IVVB11',
+  'HASH': 'HASH11',
+  'PETR': 'PETR4',
+  'VALE': 'VALE3',
+  'ITUB': 'ITUB4',
+  'BBDC': 'BBDC4',
+  'BBAS': 'BBAS3'
+};
+
+async function fetchB3DirectQuote(rawTicker: string) {
+  try {
+    const clean = rawTicker.trim().toUpperCase().replace('.SA', '');
+    const symbol = B3_ROOT_MAP[clean] || clean;
+    if (!/^[A-Z]{4,5}\d{1,3}[A-Z]?$/.test(symbol)) return null;
+
+    const res = await fetch(`https://cotacao.b3.com.br/mds/api/v1/InstrumentQuotation/${encodeURIComponent(symbol)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      },
+      cache: 'no-store'
+    });
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const scty = data?.Trad?.[0]?.scty;
+    const qtn = scty?.SctyQtn;
+    const curPrc = Number(qtn?.curPrc || qtn?.avrgPric || qtn?.opngPric || 0);
+    if (!scty || curPrc <= 0) return null;
+
+    const prcFlcn = Number(qtn?.prcFlcn || 0);
+    const prevClose = prcFlcn !== 0 && prcFlcn > -100 ? curPrc / (1 + prcFlcn / 100) : curPrc;
+    const change = curPrc - prevClose;
+
+    return {
+      symbol,
+      name: (scty.desc || symbol).replace(/\s+/g, ' ').trim(),
+      price: Number(curPrc.toFixed(2)),
+      priceBrl: Number(curPrc.toFixed(2)),
+      previousClose: Number(prevClose.toFixed(2)),
+      change: Number(change.toFixed(2)),
+      changePercent: Number(prcFlcn.toFixed(2)),
+      currency: 'BRL',
+      lastUpdated: new Date().toISOString()
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const ticker = searchParams.get('ticker');
@@ -251,6 +303,12 @@ export async function GET(req: NextRequest) {
         if (cryptoQuote) {
           return NextResponse.json({ ...cryptoQuote, usdRate }, { headers });
         }
+      }
+
+      // 1.5 Try Official B3 Real-Time API first for Brazilian assets & options
+      const b3Direct = await fetchB3DirectQuote(cleanTicker);
+      if (b3Direct) {
+        return NextResponse.json({ ...b3Direct, usdRate }, { headers });
       }
 
       // 2. Try B3 Stocks / FIIs / US Stocks & ETFs via Yahoo Finance
@@ -339,6 +397,14 @@ export async function POST(req: NextRequest) {
               quotes[cryptoQuote.symbol] = { ...cryptoQuote, usdRate };
               return;
             }
+          }
+
+          // Try Official B3 Real-Time API for Brazilian stocks/ETFs/options
+          const b3Direct = await fetchB3DirectQuote(cleanTicker);
+          if (b3Direct) {
+            quotes[cleanTicker] = { ...b3Direct, usdRate };
+            quotes[b3Direct.symbol] = { ...b3Direct, usdRate };
+            return;
           }
 
           // Stock / FII / US ETF

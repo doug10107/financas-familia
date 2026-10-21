@@ -61,9 +61,11 @@ const PUT_LETTERS: Record<string, number> = {
 };
 
 // Common Brazilian Underlying Tickers
-const UNDERLYING_MAP: Record<string, string> = {
+export const UNDERLYING_MAP: Record<string, string> = {
   'BOVA': 'BOVA11',
   'SMAL': 'SMAL11',
+  'IVVB': 'IVVB11',
+  'HASH': 'HASH11',
   'PETR': 'PETR4',
   'VALE': 'VALE3',
   'ITUB': 'ITUB4',
@@ -88,8 +90,29 @@ const UNDERLYING_MAP: Record<string, string> = {
   'RAIZ': 'RAIZ4',
   'HAPV': 'HAPV3',
   'LREN': 'LREN3',
-  'B3SA': 'B3SA3'
+  'B3SA': 'B3SA3',
+  'CMIG': 'CMIG4',
+  'ITSA': 'ITSA4',
+  'SANB': 'SANB11',
+  'BPAC': 'BPAC11',
+  'KLBN': 'KLBN11',
+  'TAEE': 'TAEE11',
+  'EMBR': 'EMBR3'
 };
+
+export function normalizeUnderlyingTicker(raw: string): string {
+  const clean = raw.trim().toUpperCase().replace('.SA', '');
+  if (!clean) return 'BOVA11';
+  if (UNDERLYING_MAP[clean]) return UNDERLYING_MAP[clean];
+  return clean;
+}
+
+export function extractStrikeFromB3Desc(desc?: string): number {
+  if (!desc) return 0;
+  const match = desc.match(/(\d+(?:[.,]\d+)?)\s*$/);
+  if (!match) return 0;
+  return parseFloat(match[1].replace(',', '.')) || 0;
+}
 
 // Calculates the third Friday of a given year and month (official B3 expiration rule)
 export function getB3ThirdFriday(year: number, month: number): string {
@@ -101,6 +124,15 @@ export function getB3ThirdFriday(year: number, month: number): string {
     if (date.getDay() === 5) { // 5 = Friday
       fridayCount++;
       if (fridayCount === 3) {
+        // Check fixed Brazilian national holidays that fall on the 3rd Friday (e.g. Nov 20, Nov 15, Apr 21, May 1)
+        const day = date.getDate();
+        if (
+          (month === 11 && (day === 20 || day === 15)) ||
+          (month === 4 && day === 21) ||
+          (month === 5 && day === 1)
+        ) {
+          date.setDate(day - 1); // Anticipate to Thursday per B3 rules
+        }
         const y = date.getFullYear();
         const m = String(date.getMonth() + 1).padStart(2, '0');
         const d = String(date.getDate()).padStart(2, '0');

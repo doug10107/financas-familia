@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -9,7 +9,8 @@ import {
   OptionStrategy, 
   OptionLeg, 
   StrategyCategory, 
-  parseB3OptionTicker 
+  parseB3OptionTicker,
+  normalizeUnderlyingTicker
 } from '@/lib/options/optionsEngine';
 
 interface NewOptionStrategyModalProps {
@@ -22,42 +23,47 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
   const [strategyCategory, setStrategyCategory] = useState<StrategyCategory>('trava_baixa');
   const [name, setName] = useState('');
   const [underlyingTicker, setUnderlyingTicker] = useState('BOVA11');
-  const [underlyingPrice, setUnderlyingPrice] = useState('121.45');
+  const [underlyingPrice, setUnderlyingPrice] = useState('');
+  const [isSearchingUnderlying, setIsSearchingUnderlying] = useState(false);
+
   const [quantity, setQuantity] = useState('100');
-  const [entryCostPerUnit, setEntryCostPerUnit] = useState('2.13');
+  const [entryCostPerUnit, setEntryCostPerUnit] = useState('');
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
 
   // Targets
-  const [target50, setTarget50] = useState('3.20');
-  const [target80, setTarget80] = useState('3.83');
-  const [stopLoss, setStopLoss] = useState('1.06');
+  const [target50, setTarget50] = useState('');
+  const [target80, setTarget80] = useState('');
+  const [stopLoss, setStopLoss] = useState('');
 
   // Legs
-  const [leg1Ticker, setLeg1Ticker] = useState('BOVAW205');
+  const [leg1Ticker, setLeg1Ticker] = useState('');
   const [leg1Type, setLeg1Type] = useState<'CALL' | 'PUT'>('PUT');
   const [leg1Side, setLeg1Side] = useState<'buy' | 'sell'>('buy');
-  const [leg1Strike, setLeg1Strike] = useState('205.00');
-  const [leg1Price, setLeg1Price] = useState('2.21');
-  const [leg1Exp, setLeg1Exp] = useState('2026-11-20');
+  const [leg1Strike, setLeg1Strike] = useState('');
+  const [leg1Price, setLeg1Price] = useState('');
+  const [leg1Exp, setLeg1Exp] = useState('2026-11-19');
   const [isSearchingLeg1, setIsSearchingLeg1] = useState(false);
 
-  const [leg2Ticker, setLeg2Ticker] = useState('BOVAW199');
+  const [leg2Ticker, setLeg2Ticker] = useState('');
   const [leg2Type, setLeg2Type] = useState<'CALL' | 'PUT'>('PUT');
   const [leg2Side, setLeg2Side] = useState<'buy' | 'sell'>('sell');
-  const [leg2Strike, setLeg2Strike] = useState('199.00');
-  const [leg2Price, setLeg2Price] = useState('0.08');
-  const [leg2Exp, setLeg2Exp] = useState('2026-11-20');
+  const [leg2Strike, setLeg2Strike] = useState('');
+  const [leg2Price, setLeg2Price] = useState('');
+  const [leg2Exp, setLeg2Exp] = useState('2026-11-19');
   const [isSearchingLeg2, setIsSearchingLeg2] = useState(false);
 
   const [error, setError] = useState('');
+
+  const lastFetchedLeg1 = useRef('');
+  const lastFetchedLeg2 = useRef('');
 
   const isShortSingle = strategyCategory === 'venda_put' || strategyCategory === 'venda_coberta';
   const isLongSingle = strategyCategory === 'compra_seco' || strategyCategory === 'compra_seco_call' || strategyCategory === 'compra_seco_put';
   const isSpread = !isShortSingle && !isLongSingle;
 
   // Auto calculate targets when cost changes
-  const handleCostChange = (val: string, categoryOverride?: StrategyCategory) => {
+  const handleCostChange = useCallback((val: string, categoryOverride?: StrategyCategory) => {
     setEntryCostPerUnit(val);
     const cost = parseFloat(val.replace(',', '.')) || 0;
     const cat = categoryOverride || strategyCategory;
@@ -65,9 +71,9 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
     if (cost > 0) {
       if (cat === 'venda_put' || cat === 'venda_coberta') {
         // Operações vendidas: ganho ocorre com o prêmio desvalorizando (recompra mais barata)
-        setTarget50((cost * 0.50).toFixed(2)); // Recompra por 50% do prêmio (+50% retido)
-        setTarget80((cost * 0.20).toFixed(2)); // Recompra por 20% do prêmio (+80% retido)
-        setStopLoss((cost * 1.50).toFixed(2)); // Stop se a opção subir 50% acima da venda
+        setTarget50((cost * 0.50).toFixed(2));
+        setTarget80((cost * 0.20).toFixed(2));
+        setStopLoss((cost * 1.50).toFixed(2));
       } else {
         // Operações compradas ou travas a débito: ganho ocorre com valorização do spread
         setTarget50((cost * 1.50).toFixed(2));
@@ -75,7 +81,95 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
         setStopLoss((cost * 0.50).toFixed(2));
       }
     }
-  };
+  }, [strategyCategory]);
+
+  const autoSuggestSingleLegName = useCallback((cat: StrategyCategory, root: string, strike: string) => {
+    const asset = root || 'ATIVO';
+    const k = strike || 'STRIKE';
+    if (cat === 'venda_put') {
+      setName(`Venda de Put - ${asset} (K ${k})`);
+    } else if (cat === 'venda_coberta') {
+      setName(`Venda Coberta - ${asset} (K ${k})`);
+    } else if (cat === 'compra_seco') {
+      setName(`Compra a Seco - ${asset} (K ${k})`);
+    }
+  }, []);
+
+  const autoSuggestSpreadAndName = useCallback((
+    overrides?: {
+      cat?: StrategyCategory;
+      p1Str?: string;
+      p2Str?: string;
+      k1Str?: string;
+      k2Str?: string;
+      rootStr?: string;
+      forceCostUpdate?: boolean;
+    }
+  ) => {
+    const p1 = parseFloat((overrides?.p1Str ?? leg1Price).replace(',', '.')) || 0;
+    const p2 = parseFloat((overrides?.p2Str ?? leg2Price).replace(',', '.')) || 0;
+    const spread = Math.abs(p1 - p2);
+    const cat = overrides?.cat || strategyCategory;
+
+    if (spread > 0 && (overrides?.forceCostUpdate || !entryCostPerUnit || entryCostPerUnit === '0' || p1 > 0 || p2 > 0)) {
+      handleCostChange(spread.toFixed(2), cat);
+    }
+
+    if (!name || name.startsWith('Trava') || name.startsWith('Venda') || name.startsWith('Compra')) {
+      const root = overrides?.rootStr || underlyingTicker || 'ATIVO';
+      const k1 = overrides?.k1Str ?? (leg1Strike || 'K1');
+      const k2 = overrides?.k2Str ?? (leg2Strike || 'K2');
+      const label = cat === 'trava_baixa' ? 'Trava de Baixa' : 'Trava de Alta';
+      setName(`${label} - ${root} (${k1} x ${k2})`);
+    }
+  }, [leg1Price, leg2Price, leg1Strike, leg2Strike, underlyingTicker, strategyCategory, entryCostPerUnit, name, handleCostChange]);
+
+  // Fetch live quote for Underlying Asset (e.g. BOVA11, PETR4, VALE3)
+  const fetchUnderlyingQuote = useCallback(async (rawTicker: string, shouldNormalizeInput = false) => {
+    const clean = rawTicker.trim().toUpperCase().replace('.SA', '');
+    if (!clean || clean.length < 4) return;
+
+    const normalized = shouldNormalizeInput ? normalizeUnderlyingTicker(clean) : (clean.length === 4 ? normalizeUnderlyingTicker(clean) : clean);
+    if (shouldNormalizeInput && normalized !== rawTicker) {
+      setUnderlyingTicker(normalized);
+    }
+
+    setIsSearchingUnderlying(true);
+    try {
+      const res = await fetch(`/api/stocks/options?ticker=${encodeURIComponent(normalized)}`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        const livePrice = data.underlyingPrice || data.price;
+        if (livePrice && livePrice > 0) {
+          setUnderlyingPrice(Number(livePrice).toFixed(2));
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar cotação do ativo-objeto:', e);
+    } finally {
+      setIsSearchingUnderlying(false);
+    }
+  }, []);
+
+  // When modal opens, immediately fetch live quote for current underlyingTicker
+  useEffect(() => {
+    if (isOpen && underlyingTicker) {
+      fetchUnderlyingQuote(underlyingTicker, true);
+    }
+  }, [isOpen]);
+
+  // Debounced auto-fetch when user types underlyingTicker
+  useEffect(() => {
+    if (!isOpen) return;
+    const clean = underlyingTicker.trim().toUpperCase();
+    if (clean.length < 4) return;
+
+    const timer = setTimeout(() => {
+      fetchUnderlyingQuote(clean, false);
+    }, 450);
+
+    return () => clearTimeout(timer);
+  }, [underlyingTicker, isOpen, fetchUnderlyingQuote]);
 
   // Switch category defaults
   const handleCategoryChange = (cat: StrategyCategory) => {
@@ -112,125 +206,177 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
       // Travas / Spreads
       setLeg1Side('buy');
       setLeg2Side('sell');
-      autoSuggestSpreadAndName(cat);
+      autoSuggestSpreadAndName({ cat, forceCostUpdate: true });
     }
   };
 
-  const autoSuggestSingleLegName = (cat: StrategyCategory, root: string, strike: string) => {
-    const asset = root || 'ATIVO';
-    if (cat === 'venda_put') {
-      setName(`Venda de Put - ${asset} (K ${strike})`);
-    } else if (cat === 'venda_coberta') {
-      setName(`Venda Coberta - ${asset} (K ${strike})`);
-    } else if (cat === 'compra_seco') {
-      setName(`Compra a Seco - ${asset} (K ${strike})`);
-    }
-  };
-
-  // Intelligent parser for Leg 1
-  const handleLeg1TickerBlur = async () => {
-    const clean = leg1Ticker.trim().toUpperCase();
-    if (!clean) return;
+  // Fetch and populate Leg 1 (Ponta Comprada) from B3 API
+  const fetchLeg1Data = useCallback(async (rawTicker: string) => {
+    const clean = rawTicker.trim().toUpperCase();
+    if (!clean || clean.length < 5) return;
 
     setIsSearchingLeg1(true);
+    let nextPrice = leg1Price;
+    let nextStrike = leg1Strike;
+    let nextUnd = underlyingTicker;
+
     try {
       const parsed = parseB3OptionTicker(clean);
       if (parsed.isValid) {
         setLeg1Type(parsed.type);
-        if (parsed.estimatedStrike > 0) setLeg1Strike(parsed.estimatedStrike.toFixed(2));
         if (parsed.expirationDate) setLeg1Exp(parsed.expirationDate);
-        if (!underlyingTicker || underlyingTicker === 'BOVA11') {
+        if (parsed.underlyingTicker) {
+          nextUnd = parsed.underlyingTicker;
           setUnderlyingTicker(parsed.underlyingTicker);
         }
       }
 
-      // Fetch live quote from API
-      const res = await fetch(`/api/stocks/options?ticker=${encodeURIComponent(clean)}`);
+      const res = await fetch(`/api/stocks/options?ticker=${encodeURIComponent(clean)}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        if (data.price > 0) {
-          setLeg1Price(data.price.toFixed(2));
-          if (isLongSingle) {
-            handleCostChange(data.price.toFixed(2));
-          }
+        if (data.type === 'CALL' || data.type === 'PUT') {
+          setLeg1Type(data.type);
+        }
+        if (data.expirationDate) {
+          setLeg1Exp(data.expirationDate);
+        }
+        if (data.underlyingTicker) {
+          nextUnd = data.underlyingTicker;
+          setUnderlyingTicker(data.underlyingTicker);
+        }
+        if (data.underlyingPrice && data.underlyingPrice > 0) {
+          setUnderlyingPrice(Number(data.underlyingPrice).toFixed(2));
         }
         if (data.strike > 0) {
-          setLeg1Strike(data.strike.toFixed(2));
+          nextStrike = Number(data.strike).toFixed(2);
+          setLeg1Strike(nextStrike);
+        } else if (parsed.estimatedStrike > 0 && !leg1Strike) {
+          nextStrike = parsed.estimatedStrike.toFixed(2);
+          setLeg1Strike(nextStrike);
         }
+        if (data.price > 0) {
+          nextPrice = Number(data.price).toFixed(2);
+          setLeg1Price(nextPrice);
+          if (isLongSingle) {
+            handleCostChange(nextPrice);
+          }
+        }
+        lastFetchedLeg1.current = clean;
       }
     } catch (e) {
       console.warn('Erro ao buscar ticker da perna 1:', e);
     } finally {
       setIsSearchingLeg1(false);
       if (isSpread) {
-        autoSuggestSpreadAndName();
+        autoSuggestSpreadAndName({
+          p1Str: nextPrice,
+          k1Str: nextStrike,
+          rootStr: nextUnd,
+          forceCostUpdate: true
+        });
       } else if (isLongSingle) {
-        autoSuggestSingleLegName(strategyCategory, underlyingTicker, leg1Strike);
+        autoSuggestSingleLegName(strategyCategory, nextUnd, nextStrike);
       }
     }
-  };
+  }, [leg1Price, leg1Strike, underlyingTicker, isLongSingle, isSpread, strategyCategory, handleCostChange, autoSuggestSpreadAndName, autoSuggestSingleLegName]);
 
-  // Intelligent parser for Leg 2
-  const handleLeg2TickerBlur = async () => {
-    const clean = leg2Ticker.trim().toUpperCase();
-    if (!clean) return;
+  // Fetch and populate Leg 2 (Ponta Vendida) from B3 API
+  const fetchLeg2Data = useCallback(async (rawTicker: string) => {
+    const clean = rawTicker.trim().toUpperCase();
+    if (!clean || clean.length < 5) return;
 
     setIsSearchingLeg2(true);
+    let nextPrice = leg2Price;
+    let nextStrike = leg2Strike;
+    let nextUnd = underlyingTicker;
+
     try {
       const parsed = parseB3OptionTicker(clean);
       if (parsed.isValid) {
         setLeg2Type(parsed.type);
-        if (parsed.estimatedStrike > 0) setLeg2Strike(parsed.estimatedStrike.toFixed(2));
         if (parsed.expirationDate) setLeg2Exp(parsed.expirationDate);
-        if (isShortSingle && (!underlyingTicker || underlyingTicker === 'BOVA11')) {
+        if (parsed.underlyingTicker) {
+          nextUnd = parsed.underlyingTicker;
           setUnderlyingTicker(parsed.underlyingTicker);
         }
       }
 
-      // Fetch live quote from API
-      const res = await fetch(`/api/stocks/options?ticker=${encodeURIComponent(clean)}`);
+      const res = await fetch(`/api/stocks/options?ticker=${encodeURIComponent(clean)}`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
-        if (data.price > 0) {
-          setLeg2Price(data.price.toFixed(2));
-          if (isShortSingle) {
-            handleCostChange(data.price.toFixed(2));
-          }
+        if (data.type === 'CALL' || data.type === 'PUT') {
+          setLeg2Type(data.type);
+        }
+        if (data.expirationDate) {
+          setLeg2Exp(data.expirationDate);
+        }
+        if (data.underlyingTicker) {
+          nextUnd = data.underlyingTicker;
+          setUnderlyingTicker(data.underlyingTicker);
+        }
+        if (data.underlyingPrice && data.underlyingPrice > 0) {
+          setUnderlyingPrice(Number(data.underlyingPrice).toFixed(2));
         }
         if (data.strike > 0) {
-          setLeg2Strike(data.strike.toFixed(2));
+          nextStrike = Number(data.strike).toFixed(2);
+          setLeg2Strike(nextStrike);
+        } else if (parsed.estimatedStrike > 0 && !leg2Strike) {
+          nextStrike = parsed.estimatedStrike.toFixed(2);
+          setLeg2Strike(nextStrike);
         }
+        if (data.price > 0) {
+          nextPrice = Number(data.price).toFixed(2);
+          setLeg2Price(nextPrice);
+          if (isShortSingle) {
+            handleCostChange(nextPrice);
+          }
+        }
+        lastFetchedLeg2.current = clean;
       }
     } catch (e) {
       console.warn('Erro ao buscar ticker da perna 2:', e);
     } finally {
       setIsSearchingLeg2(false);
       if (isSpread) {
-        autoSuggestSpreadAndName();
+        autoSuggestSpreadAndName({
+          p2Str: nextPrice,
+          k2Str: nextStrike,
+          rootStr: nextUnd,
+          forceCostUpdate: true
+        });
       } else if (isShortSingle) {
-        autoSuggestSingleLegName(strategyCategory, underlyingTicker, leg2Strike);
+        autoSuggestSingleLegName(strategyCategory, nextUnd, nextStrike);
       }
     }
-  };
+  }, [leg2Price, leg2Strike, underlyingTicker, isShortSingle, isSpread, strategyCategory, handleCostChange, autoSuggestSpreadAndName, autoSuggestSingleLegName]);
 
-  const autoSuggestSpreadAndName = (currentCat?: StrategyCategory) => {
-    const p1 = parseFloat(leg1Price.replace(',', '.')) || 0;
-    const p2 = parseFloat(leg2Price.replace(',', '.')) || 0;
-    const spread = Math.abs(p1 - p2);
+  // Auto-fetch Leg 1 when user finishes typing a valid B3 option ticker (e.g. BOVAW13, BOVAW205)
+  useEffect(() => {
+    if (!isOpen || isShortSingle) return;
+    const clean = leg1Ticker.trim().toUpperCase();
+    if (clean.length < 6 || clean === lastFetchedLeg1.current) return;
+    const parsed = parseB3OptionTicker(clean);
+    if (!parsed.isValid) return;
 
-    if (spread > 0 && (!entryCostPerUnit || entryCostPerUnit === '0')) {
-      handleCostChange(spread.toFixed(2), currentCat);
-    }
+    const timer = setTimeout(() => {
+      fetchLeg1Data(clean);
+    }, 550);
+    return () => clearTimeout(timer);
+  }, [leg1Ticker, isOpen, isShortSingle, fetchLeg1Data]);
 
-    if (!name || name.startsWith('Trava') || name.startsWith('VENDA') || name.startsWith('COMPRA')) {
-      const root = underlyingTicker || 'ATIVO';
-      const k1 = leg1Strike || 'K1';
-      const k2 = leg2Strike || 'K2';
-      const cat = currentCat || strategyCategory;
-      const label = cat === 'trava_baixa' ? 'Trava de Baixa' : 'Trava de Alta';
-      setName(`${label} - ${root} (${k1} x ${k2})`);
-    }
-  };
+  // Auto-fetch Leg 2 when user finishes typing a valid B3 option ticker (e.g. BOVAW19, BOVAW199)
+  useEffect(() => {
+    if (!isOpen || isLongSingle) return;
+    const clean = leg2Ticker.trim().toUpperCase();
+    if (clean.length < 6 || clean === lastFetchedLeg2.current) return;
+    const parsed = parseB3OptionTicker(clean);
+    if (!parsed.isValid) return;
+
+    const timer = setTimeout(() => {
+      fetchLeg2Data(clean);
+    }, 550);
+    return () => clearTimeout(timer);
+  }, [leg2Ticker, isOpen, isLongSingle, fetchLeg2Data]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -243,7 +389,6 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
     const legs: OptionLeg[] = [];
 
     if (isShortSingle) {
-      // Venda de Put ou Venda Coberta: Apenas Ponta 2 (Vendida) é registrada
       if (!leg2Ticker.trim()) {
         setError('Por favor, informe o ticker da opção vendida (Ponta 2).');
         return;
@@ -260,7 +405,6 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
         expirationDate: leg2Exp
       });
     } else if (isLongSingle) {
-      // Compra a Seco: Apenas Ponta 1 (Comprada) é registrada
       if (!leg1Ticker.trim()) {
         setError('Por favor, informe o ticker da opção comprada (Ponta 1).');
         return;
@@ -277,7 +421,6 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
         expirationDate: leg1Exp
       });
     } else {
-      // Operações com 2 pontas (Travas / Personalizada)
       if (!leg1Ticker.trim()) {
         setError('Por favor, informe a ponta comprada (Ponta 1) da trava.');
         return;
@@ -313,11 +456,9 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
       ? (strategyCategory === 'venda_put' ? 'Venda de Put' : 'Venda Coberta') 
       : (isLongSingle ? 'Compra a Seco' : strategyCategory.toUpperCase());
 
-    const finalName = name.trim() || `${defaultPrefix} - ${underlyingTicker}`;
+    const normalizedUnd = normalizeUnderlyingTicker(underlyingTicker || 'BOVA11');
+    const finalName = name.trim() || `${defaultPrefix} - ${normalizedUnd}`;
 
-    // Max profit calculation:
-    // For short single: 100% of received premium
-    // For spread: difference of strikes - cost
     let calculatedMaxProfit = cost;
     if (isSpread && legs.length >= 2) {
       const strikeDiff = Math.abs(legs[0].strike - legs[1].strike);
@@ -326,7 +467,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
 
     onSave({
       name: finalName,
-      underlyingTicker: underlyingTicker.trim().toUpperCase() || 'BOVA11',
+      underlyingTicker: normalizedUnd,
       underlyingPrice: undPrice,
       strategyCategory,
       legs,
@@ -346,7 +487,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Estratégia / Operação de Opções">
+    <Modal isOpen={isOpen} onClose={onClose} title="Cadastrar Estratégia / Operação de Opções" size="xl">
       <form onSubmit={handleSubmit} className="space-y-5 text-sm">
         {error && (
           <div className="p-3 bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 rounded-xl text-xs font-semibold">
@@ -355,15 +496,15 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
         )}
 
         {/* Strategy Category & Underlying Asset */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+          <div className="sm:col-span-6">
             <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
               Tipo de Operação / Estrutura
             </label>
             <select
               value={strategyCategory}
               onChange={(e) => handleCategoryChange(e.target.value as StrategyCategory)}
-              className="w-full px-3 py-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-purple-500"
+              className="w-full px-3 py-2.5 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-xl text-sm font-medium focus:ring-2 focus:ring-purple-500"
             >
               <optgroup label="Trava / Spreads (2 Pontas)">
                 <option value="trava_baixa">Trava de Baixa (Bear Put/Call Spread)</option>
@@ -380,25 +521,49 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
-              Ativo-Objeto (Ação / ETF)
-            </label>
-            <div className="flex gap-2">
-              <Input
-                value={underlyingTicker}
-                onChange={(e) => setUnderlyingTicker(e.target.value.toUpperCase())}
-                placeholder="ex: BOVA11, PETR4, VALE3"
-                className="uppercase font-bold"
-                required
-              />
-              <Input
-                value={underlyingPrice}
-                onChange={(e) => setUnderlyingPrice(e.target.value)}
-                placeholder="Cotação R$"
-                className="w-28 text-xs font-mono"
-                title="Cotação da ação"
-              />
+          <div className="sm:col-span-6">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
+                Ativo-Objeto & Cotação Atual (B3)
+              </label>
+              {isSearchingUnderlying ? (
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 animate-pulse font-semibold">
+                  Atualizando B3...
+                </span>
+              ) : underlyingPrice ? (
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                  ● B3 Ao Vivo
+                </span>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-12 gap-2">
+              <div className="col-span-6">
+                <Input
+                  value={underlyingTicker}
+                  onChange={(e) => setUnderlyingTicker(e.target.value.toUpperCase())}
+                  onBlur={() => fetchUnderlyingQuote(underlyingTicker, true)}
+                  placeholder="ex: BOVA11, PETR4"
+                  className="uppercase font-bold text-sm px-3"
+                  required
+                />
+              </div>
+              <div className="col-span-6 flex items-center gap-1">
+                <Input
+                  value={underlyingPrice}
+                  onChange={(e) => setUnderlyingPrice(e.target.value)}
+                  placeholder="Cotação R$"
+                  className="text-sm font-mono font-bold text-emerald-600 dark:text-emerald-400 px-3"
+                  title="Cotação atual do ativo-objeto na B3"
+                />
+                <button
+                  type="button"
+                  onClick={() => fetchUnderlyingQuote(underlyingTicker, true)}
+                  className="p-2.5 rounded-xl border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 transition-colors shrink-0"
+                  title="Buscar cotação atual na B3"
+                >
+                  <Icon name="sync" size="sm" className={isSearchingUnderlying ? 'animate-spin text-purple-600' : ''} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -411,7 +576,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="ex: Venda de Put - PETR4 (K 36.50) ou Trava de Baixa BOVA11"
+            placeholder="ex: Trava de Baixa - BOVA11 (206.00 x 199.00)"
             required
           />
         </div>
@@ -436,7 +601,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
           </div>
 
           {/* Leg 1: Comprada (Long) */}
-          <div className={`p-3 rounded-xl border transition-all ${
+          <div className={`p-3.5 rounded-xl border transition-all ${
             isShortSingle 
               ? 'bg-gray-100/60 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800 opacity-40 cursor-not-allowed' 
               : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700/60 space-y-2'
@@ -448,19 +613,21 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               {isShortSingle ? (
                 <span className="text-[10px] text-gray-400 italic">Desativada para {strategyCategory === 'venda_put' ? 'Venda de Put' : 'Venda Coberta'}</span>
               ) : isSearchingLeg1 ? (
-                <span className="text-[10px] text-gray-400 animate-pulse">Buscando cotação na B3...</span>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 animate-pulse font-semibold">Buscando cotação e strike real na B3...</span>
+              ) : leg1Price ? (
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">● Cotação B3 Sincronizada</span>
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
               <div>
                 <label className="text-[10px] text-gray-500 font-semibold">Ticker Opção</label>
                 <Input
                   value={leg1Ticker}
                   onChange={(e) => setLeg1Ticker(e.target.value.toUpperCase())}
-                  onBlur={handleLeg1TickerBlur}
-                  placeholder="ex: BOVAW205"
-                  className="text-xs font-mono font-bold uppercase"
+                  onBlur={() => fetchLeg1Data(leg1Ticker)}
+                  placeholder="ex: BOVAW13"
+                  className="text-xs font-mono font-bold uppercase px-2.5"
                   disabled={isShortSingle}
                   required={!isShortSingle}
                 />
@@ -481,24 +648,27 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
                 </div>
                 <Input
                   value={leg1Strike}
-                  onChange={(e) => setLeg1Strike(e.target.value)}
-                  placeholder="205.00"
-                  className="text-xs font-mono"
+                  onChange={(e) => {
+                    setLeg1Strike(e.target.value);
+                    if (isSpread) autoSuggestSpreadAndName({ k1Str: e.target.value });
+                  }}
+                  placeholder="206.00"
+                  className="text-xs font-mono px-2.5"
                   disabled={isShortSingle}
                 />
               </div>
 
               <div>
-                <label className="text-[10px] text-gray-500 font-semibold">Preço Pago (R$)</label>
+                <label className="text-[10px] text-gray-500 font-semibold">Preço Pago / Atual (R$)</label>
                 <Input
                   value={leg1Price}
                   onChange={(e) => {
                     setLeg1Price(e.target.value);
                     if (isLongSingle) handleCostChange(e.target.value);
-                    else autoSuggestSpreadAndName();
+                    else autoSuggestSpreadAndName({ p1Str: e.target.value, forceCostUpdate: true });
                   }}
-                  placeholder="2.21"
-                  className="text-xs font-mono font-bold text-emerald-600"
+                  placeholder="10.34"
+                  className="text-xs font-mono font-bold text-emerald-600 px-2.5"
                   disabled={isShortSingle}
                 />
               </div>
@@ -509,7 +679,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
                   type="date"
                   value={leg1Exp}
                   onChange={(e) => setLeg1Exp(e.target.value)}
-                  className="text-xs"
+                  className="text-xs px-2.5"
                   disabled={isShortSingle}
                 />
               </div>
@@ -517,7 +687,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
           </div>
 
           {/* Leg 2: Vendida (Short) */}
-          <div className={`p-3 rounded-xl border transition-all ${
+          <div className={`p-3.5 rounded-xl border transition-all ${
             isLongSingle 
               ? 'bg-gray-100/60 dark:bg-gray-900/30 border-gray-200 dark:border-gray-800 opacity-40 cursor-not-allowed' 
               : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700/60 space-y-2'
@@ -529,19 +699,21 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               {isLongSingle ? (
                 <span className="text-[10px] text-gray-400 italic">Desativada para Compra a Seco</span>
               ) : isSearchingLeg2 ? (
-                <span className="text-[10px] text-gray-400 animate-pulse">Buscando cotação na B3...</span>
+                <span className="text-[10px] text-purple-600 dark:text-purple-400 animate-pulse font-semibold">Buscando cotação e strike real na B3...</span>
+              ) : leg2Price ? (
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold">● Cotação B3 Sincronizada</span>
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
               <div>
                 <label className="text-[10px] text-gray-500 font-semibold">Ticker Opção</label>
                 <Input
                   value={leg2Ticker}
                   onChange={(e) => setLeg2Ticker(e.target.value.toUpperCase())}
-                  onBlur={handleLeg2TickerBlur}
+                  onBlur={() => fetchLeg2Data(leg2Ticker)}
                   placeholder={strategyCategory === 'venda_put' ? 'ex: PETRV360' : 'ex: BOVAW19'}
-                  className="text-xs font-mono font-bold uppercase"
+                  className="text-xs font-mono font-bold uppercase px-2.5"
                   disabled={isLongSingle}
                   required={isShortSingle}
                 />
@@ -562,26 +734,29 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
                 </div>
                 <Input
                   value={leg2Strike}
-                  onChange={(e) => setLeg2Strike(e.target.value)}
-                  placeholder="36.00"
-                  className="text-xs font-mono"
+                  onChange={(e) => {
+                    setLeg2Strike(e.target.value);
+                    if (isSpread) autoSuggestSpreadAndName({ k2Str: e.target.value });
+                  }}
+                  placeholder="199.00"
+                  className="text-xs font-mono px-2.5"
                   disabled={isLongSingle}
                 />
               </div>
 
               <div>
                 <label className="text-[10px] text-gray-500 font-semibold">
-                  {isShortSingle ? 'Prêmio Recebido (R$)' : 'Preço Recebido (R$)'}
+                  {isShortSingle ? 'Prêmio Recebido (R$)' : 'Preço Recebido / Atual (R$)'}
                 </label>
                 <Input
                   value={leg2Price}
                   onChange={(e) => {
                     setLeg2Price(e.target.value);
                     if (isShortSingle) handleCostChange(e.target.value);
-                    else autoSuggestSpreadAndName();
+                    else autoSuggestSpreadAndName({ p2Str: e.target.value, forceCostUpdate: true });
                   }}
-                  placeholder="1.20"
-                  className="text-xs font-mono font-bold text-blue-600"
+                  placeholder="7.56"
+                  className="text-xs font-mono font-bold text-blue-600 px-2.5"
                   disabled={isLongSingle}
                 />
               </div>
@@ -592,7 +767,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
                   type="date"
                   value={leg2Exp}
                   onChange={(e) => setLeg2Exp(e.target.value)}
-                  className="text-xs"
+                  className="text-xs px-2.5"
                   disabled={isLongSingle}
                 />
               </div>
@@ -622,7 +797,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
             <Input
               value={entryCostPerUnit}
               onChange={(e) => handleCostChange(e.target.value)}
-              placeholder="ex: 1.20"
+              placeholder="ex: 2.78"
               className={`font-bold ${isShortSingle ? 'text-blue-600 dark:text-blue-400' : 'text-purple-600 dark:text-purple-400'}`}
               required
             />
@@ -668,7 +843,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               <Input
                 value={target50}
                 onChange={(e) => setTarget50(e.target.value)}
-                placeholder="0.60"
+                placeholder="0.00"
                 className="text-xs font-mono font-bold text-emerald-600"
               />
               <span className="text-[10px] text-gray-500 mt-0.5 block">
@@ -683,7 +858,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               <Input
                 value={target80}
                 onChange={(e) => setTarget80(e.target.value)}
-                placeholder="0.24"
+                placeholder="0.00"
                 className="text-xs font-mono font-bold text-emerald-600"
               />
               <span className="text-[10px] text-gray-500 mt-0.5 block">
@@ -698,7 +873,7 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               <Input
                 value={stopLoss}
                 onChange={(e) => setStopLoss(e.target.value)}
-                placeholder="1.80"
+                placeholder="0.00"
                 className="text-xs font-mono font-bold text-red-500"
               />
               <span className="text-[10px] text-gray-500 mt-0.5 block">
