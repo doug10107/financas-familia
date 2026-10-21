@@ -263,6 +263,11 @@ export interface StrategyAnalysis {
   };
   distanceToShortStrikePercent?: number;
   distanceToLongStrikePercent?: number;
+  collateralTotal: number; // Valor total de garantia exigida (ex: Strike * Qtd na Venda de Put)
+  collateralNet: number; // Garantia líquida descontando o prêmio recebido
+  breakevenPrice: number; // Preço médio / ponto de equilíbrio no exercício
+  collateralLabel: string;
+  collateralSubtext: string;
 }
 
 export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
@@ -514,6 +519,65 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
     }
   }
 
+  // Cálculo de Garantia / Margem da Operação
+  let collateralTotal = 0;
+  let collateralNet = 0;
+  let breakevenPrice = 0;
+  let collateralLabel = 'Garantia da Operação';
+  let collateralSubtext = '';
+
+  if (isShortSingle && sellLeg) {
+    if (sellLeg.type === 'PUT') {
+      // Venda de Put: Garantia Total = Strike * Quantidade
+      collateralTotal = Number((sellLeg.strike * strategy.quantity).toFixed(2));
+      breakevenPrice = Number(Math.max(0, sellLeg.strike - entryCost).toFixed(2));
+      collateralNet = Number((breakevenPrice * strategy.quantity).toFixed(2));
+      collateralLabel = 'Garantia Total (Strike)';
+      collateralSubtext = `Líq. c/ prêmio: R$ ${collateralNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (PM R$ ${breakevenPrice.toFixed(2)})`;
+    } else {
+      // Venda Coberta de Call: Garantia em ações (Strike * Qtd ou Custódia)
+      collateralTotal = Number((sellLeg.strike * strategy.quantity).toFixed(2));
+      breakevenPrice = Number((sellLeg.strike + entryCost).toFixed(2));
+      collateralNet = Number(((strategy.underlyingPrice > 0 ? strategy.underlyingPrice : sellLeg.strike) * strategy.quantity).toFixed(2));
+      collateralLabel = 'Garantia (Coberta)';
+      collateralSubtext = `${strategy.quantity} ações ${strategy.underlyingTicker} (Entrega R$ ${collateralTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+    }
+  } else if (buyLeg && sellLeg) {
+    // Travas (2 pontas): Ponta comprada trava o risco da ponta vendida
+    const strikeDiff = Math.abs(buyLeg.strike - sellLeg.strike);
+    const maxSpreadNotional = Number((strikeDiff * strategy.quantity).toFixed(2));
+    const isDebitProtected =
+      (buyLeg.type === 'PUT' && sellLeg.type === 'PUT' && buyLeg.strike >= sellLeg.strike) ||
+      (buyLeg.type === 'CALL' && sellLeg.type === 'CALL' && buyLeg.strike <= sellLeg.strike);
+
+    if (isDebitProtected) {
+      collateralTotal = totalCost;
+      collateralNet = totalCost;
+      breakevenPrice = buyLeg.type === 'PUT'
+        ? Number((buyLeg.strike - entryCost).toFixed(2))
+        : Number((buyLeg.strike + entryCost).toFixed(2));
+      collateralLabel = 'Garantia / Risco Máx.';
+      collateralSubtext = `Trava coberta (Spread Máx: R$ ${maxSpreadNotional.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`;
+    } else {
+      // Trava a Crédito: Margem máxima é a diferença entre os strikes * quantidade
+      collateralTotal = maxSpreadNotional;
+      collateralNet = Number(Math.max(0, maxSpreadNotional - totalCost).toFixed(2));
+      breakevenPrice = sellLeg.type === 'PUT'
+        ? Number((sellLeg.strike - entryCost).toFixed(2))
+        : Number((sellLeg.strike + entryCost).toFixed(2));
+      collateralLabel = 'Garantia Exigida (B3)';
+      collateralSubtext = `Risco líq.: R$ ${collateralNet.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+  } else if (isLongSingle && buyLeg) {
+    collateralTotal = totalCost;
+    collateralNet = totalCost;
+    breakevenPrice = buyLeg.type === 'PUT'
+      ? Number((buyLeg.strike - entryCost).toFixed(2))
+      : Number((buyLeg.strike + entryCost).toFixed(2));
+    collateralLabel = 'Garantia / Risco Máx.';
+    collateralSubtext = 'Isento de margem (Compra a Seco)';
+  }
+
   return {
     currentSpread,
     entryCost,
@@ -528,6 +592,11 @@ export function analyzeStrategy(strategy: OptionStrategy): StrategyAnalysis {
     dte,
     statusBadge,
     distanceToShortStrikePercent,
-    distanceToLongStrikePercent
+    distanceToLongStrikePercent,
+    collateralTotal,
+    collateralNet,
+    breakevenPrice,
+    collateralLabel,
+    collateralSubtext
   };
 }

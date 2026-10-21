@@ -822,14 +822,19 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
               <Icon name="flag" size="sm" /> 
               {isShortSingle ? 'Alvos de Recompra & Lucro Máximo (100% Prêmio)' : 'Alvos Automáticos de Saída & Stop Loss'}
             </span>
-            <div className="text-[11px] font-semibold">
+            <div className="text-[11px] font-semibold flex flex-wrap items-center gap-2">
               {isShortSingle ? (
-                <span className="text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-md">
-                  Lucro Máximo (Virar Pó): R$ {((parseFloat(entryCostPerUnit.replace(',', '.')) || 0) * (parseInt(quantity, 10) || 100)).toFixed(2)} (100%)
-                </span>
+                <>
+                  <span className="text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/40 px-2.5 py-0.5 rounded-md font-bold">
+                    🛡️ Garantia Total (Strike × Qtd): R$ {((parseFloat(leg2Strike.replace(',', '.')) || 0) * (parseInt(quantity, 10) || 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/40 px-2.5 py-0.5 rounded-md font-bold">
+                    💰 Prêmio Total: R$ {((parseFloat(entryCostPerUnit.replace(',', '.')) || 0) * (parseInt(quantity, 10) || 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (100%)
+                  </span>
+                </>
               ) : (
-                <span className="text-purple-600 dark:text-purple-400">
-                  Total Investido: R$ {((parseFloat(entryCostPerUnit.replace(',', '.')) || 0) * (parseInt(quantity, 10) || 100)).toFixed(2)}
+                <span className="text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-900/40 px-2.5 py-0.5 rounded-md font-bold">
+                  🛡️ Garantia / Total Investido: R$ {((parseFloat(entryCostPerUnit.replace(',', '.')) || 0) * (parseInt(quantity, 10) || 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
             </div>

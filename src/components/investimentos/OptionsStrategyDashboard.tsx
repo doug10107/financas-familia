@@ -82,12 +82,21 @@ export function OptionsStrategyDashboard({
     setStrategyToEdit(null);
   };
 
-  // KPI 1: Capital Alocado
+  // KPI 1: Capital Alocado & Garantia Total Exigida
   const totalAllocated = activeStrategies.reduce((sum, s) => {
     const analysis = analyzeStrategy(s);
     return sum + analysis.totalEntryCost;
   }, 0);
+  const totalCollateral = activeStrategies.reduce((sum, s) => {
+    const analysis = analyzeStrategy(s);
+    return sum + analysis.collateralTotal;
+  }, 0);
+  const totalCollateralNet = activeStrategies.reduce((sum, s) => {
+    const analysis = analyzeStrategy(s);
+    return sum + analysis.collateralNet;
+  }, 0);
   const riskAllocationPercent = totalPortfolioValue > 0 ? (totalAllocated / totalPortfolioValue) * 100 : 0;
+  const collateralAllocationPercent = totalPortfolioValue > 0 ? (totalCollateral / totalPortfolioValue) * 100 : 0;
 
   // KPI 2: Total Open P&L
   const totalOpenPnL = activeStrategies.reduce((sum, s) => {
@@ -206,21 +215,25 @@ export function OptionsStrategyDashboard({
 
       {/* 2. Top 4 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1: Capital Alocado */}
+        {/* Card 1: Garantia Total & Capital Alocado */}
         <GlassCard className="p-5 flex flex-col justify-between space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Alocado em Travas</span>
+            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Garantia Total da Operação</span>
             <div className="p-2 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl">
-              <Icon name="lock" className="w-5 h-5" />
+              <Icon name="shield" className="w-5 h-5" />
             </div>
           </div>
           <div>
             <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">
-              {formatCurrency(totalAllocated)}
+              {formatCurrency(totalCollateral)}
             </h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-blue-600 dark:text-blue-400">
+                Líq: {formatCurrency(totalCollateralNet)}
+              </span>
+              <span>•</span>
               <span className="font-semibold text-purple-600 dark:text-purple-400">
-                {riskAllocationPercent.toFixed(2)}% do patrimônio total
+                Prêmios/Custo: {formatCurrency(totalAllocated)}
               </span>
             </p>
           </div>
@@ -299,9 +312,21 @@ export function OptionsStrategyDashboard({
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-5">
+            <div className="text-right px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-200/60 dark:border-blue-800/50">
+              <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 block">
+                🛡️ Garantia Total Exigida (Strike × Qtd):
+              </span>
+              <p className="text-sm font-extrabold text-blue-700 dark:text-blue-300">
+                {formatCurrency(totalCollateral)}{' '}
+                <span className="text-xs font-medium opacity-80">
+                  ({collateralAllocationPercent.toFixed(1)}% do patrimônio)
+                </span>
+              </p>
+            </div>
+
             <div className="text-right">
-              <span className="text-xs text-gray-500">Alocação Atual:</span>
+              <span className="text-xs text-gray-500">Prêmios / Custo Base:</span>
               <p className={`text-sm font-extrabold ${riskAllocationPercent <= 3 ? 'text-emerald-600' : 'text-red-500'}`}>
                 {riskAllocationPercent.toFixed(2)}% ({formatCurrency(totalAllocated)})
               </p>
@@ -464,7 +489,23 @@ export function OptionsStrategyDashboard({
                     const isLong = strat.strategyCategory === 'compra_seco' || (!!buyLeg && !sellLeg);
 
                     return (
-                      <div className="flex flex-wrap items-center gap-6 justify-between lg:justify-end">
+                      <div className="flex flex-wrap items-center gap-5 justify-between lg:justify-end">
+                        {/* Garantia Total da Operação */}
+                        <div className="text-left lg:text-right px-3 py-1.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60">
+                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wide flex items-center lg:justify-end gap-1">
+                            <Icon name="shield" size="xs" />
+                            {analysis.collateralLabel}
+                          </span>
+                          <span className="text-sm font-extrabold text-blue-700 dark:text-blue-300 block">
+                            {formatCurrency(analysis.collateralTotal)}
+                          </span>
+                          {analysis.collateralSubtext && (
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium block">
+                              {analysis.collateralSubtext}
+                            </span>
+                          )}
+                        </div>
+
                         <div className="text-left lg:text-right">
                           <span className="text-[11px] text-gray-400 font-semibold block">
                             {isShort ? 'Prêmio Recebido' : 'Custo Base'}
@@ -616,7 +657,71 @@ export function OptionsStrategyDashboard({
 
                 {/* Expanded Section with Leg Details & Actions */}
                 {isExpanded && (
-                  <div className="px-5 pb-5 pt-2 border-t border-gray-200/80 dark:border-gray-700/80 space-y-4 bg-white/40 dark:bg-gray-900/40">
+                  <div className="px-5 pb-5 pt-3 border-t border-gray-200/80 dark:border-gray-700/80 space-y-4 bg-white/40 dark:bg-gray-900/40">
+                    {/* Resumo de Garantia & Ponto de Equilíbrio (Breakeven) */}
+                    {(() => {
+                      const isShort = strat.strategyCategory === 'venda_put' || strat.strategyCategory === 'venda_coberta' || (!buyLeg && !!sellLeg);
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40">
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                              <Icon name="shield" size="xs" />
+                              {isShort ? 'Garantia Total (Strike × Qtd)' : 'Garantia / Exposição da Operação'}
+                            </span>
+                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
+                              {formatCurrency(analysis.collateralTotal)}
+                            </p>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {isShort && sellLeg
+                                ? `${strat.quantity}x R$ ${sellLeg.strike.toFixed(2)} no exercício`
+                                : analysis.collateralSubtext}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                              <Icon name="payments" size="xs" />
+                              {isShort ? 'Prêmio Total Recebido' : 'Custo Total de Montagem'}
+                            </span>
+                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
+                              {formatCurrency(analysis.totalEntryCost)}
+                            </p>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              R$ {analysis.entryCost.toFixed(2)} por opção ({strat.quantity} un)
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                              <Icon name="account_balance_wallet" size="xs" />
+                              {isShort ? 'Garantia Líquida (c/ Prêmio)' : 'Valor Atual da Posição'}
+                            </span>
+                            <p className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300 mt-0.5">
+                              {formatCurrency(isShort ? analysis.collateralNet : analysis.currentValue)}
+                            </p>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {isShort ? 'Desembolso real se exercido' : `Cotação atual: R$ ${analysis.currentSpread.toFixed(2)}/un`}
+                            </span>
+                          </div>
+
+                          <div>
+                            <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                              <Icon name="balance" size="xs" />
+                              Preço Médio / Breakeven
+                            </span>
+                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
+                              R$ {analysis.breakevenPrice.toFixed(2)}
+                            </p>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
+                              {analysis.distanceToShortStrikePercent !== undefined
+                                ? `Distância do Strike: ${analysis.distanceToShortStrikePercent > 0 ? '+' : ''}${analysis.distanceToShortStrikePercent.toFixed(1)}%`
+                                : 'Ponto de equilíbrio no vencimento'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
                     <div className="flex items-center justify-between">
                       <h5 className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
                         <Icon name="view_list" size="sm" /> Pernas Detalhadas da Operação
