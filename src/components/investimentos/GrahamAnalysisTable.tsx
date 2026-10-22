@@ -326,58 +326,49 @@ export function GrahamAnalysisTable({
 
   return (
     <div className="space-y-4">
-      <GlassCard className="p-5 md:p-6 space-y-5 border-l-4 border-l-emerald-500 shadow-md">
+      <GlassCard className="p-4 sm:p-5 space-y-4">
         {/* Header with Title & Main Method Tabs */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-2 border-b border-gray-100 dark:border-gray-800">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                <Icon name="analytics" className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-lg font-extrabold text-gray-900 dark:text-white flex items-center gap-2">
-                  Central de Avaliação & Preço Justo (B3)
-                </h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Métodos consagrados de valuation: Graham, Décio Bazin (Média 5 anos) e Análise de FIIs (P/VP e Yield).
-                </p>
-              </div>
-            </div>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              Valuation & Preço Justo
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Graham, Décio Bazin (dividendos) e Fundos Imobiliários
+            </p>
           </div>
 
           {/* View Switcher (Portfolio vs Simulator) */}
           <div className="flex items-center gap-2">
-            <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl">
+            <div className="flex bg-gray-100/80 dark:bg-gray-800/60 p-1 rounded-xl">
               <button
                 type="button"
                 onClick={() => setActiveView('portfolio')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeView === 'portfolio'
-                    ? 'bg-white dark:bg-gray-700 text-emerald-600 dark:text-emerald-400 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
               >
-                <Icon name="inventory_2" size="sm" />
-                <span>Minha Carteira</span>
+                Minha Carteira
               </button>
 
               <button
                 type="button"
                 onClick={() => setActiveView('simulator')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   activeView === 'simulator'
-                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+                    ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                    : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
                 }`}
               >
-                <Icon name="search" size="sm" />
-                <span>Simulador / Buscar Ativo</span>
+                Simulador
               </button>
             </div>
 
             {activeView === 'portfolio' && (
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 onClick={() => {
                   if (activeMethod === 'graham') fetchPortfolioGrahamData();
@@ -385,8 +376,8 @@ export function GrahamAnalysisTable({
                   else fetchPortfolioFiiData();
                 }}
                 disabled={isLoadingGraham || isLoadingBazin || isLoadingFii}
-                className="text-xs flex items-center gap-1"
-                title="Recalcular indicadores da carteira"
+                className="text-xs text-gray-600 dark:text-gray-300"
+                title="Recalcular indicadores"
               >
                 <Icon name="refresh" size="sm" className={(isLoadingGraham || isLoadingBazin || isLoadingFii) ? 'animate-spin' : ''} />
                 <span>Recalcular</span>
@@ -396,80 +387,59 @@ export function GrahamAnalysisTable({
         </div>
 
         {/* 3 Valuation Method Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 p-1 bg-gray-100 dark:bg-gray-800/80 rounded-2xl">
+        <div className="flex items-center gap-1 p-1 bg-gray-100/80 dark:bg-gray-800/60 rounded-xl overflow-x-auto hide-scrollbar">
           {/* Method 1: Graham */}
           <button
             type="button"
             onClick={() => setActiveMethod('graham')}
-            className={`p-3 rounded-xl text-left transition-all relative ${
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
               activeMethod === 'graham'
-                ? 'bg-white dark:bg-gray-700 shadow-sm ring-2 ring-emerald-500/50'
-                : 'hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-400'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-xs flex items-center gap-1.5 text-gray-900 dark:text-white">
-                <span>🏛️</span> 1. Preço Justo de Graham
+            <span>Graham (Ações)</span>
+            {grahamOppsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-semibold">
+                {grahamOppsCount}
               </span>
-              {grahamOppsCount > 0 && (
-                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] rounded-full font-extrabold">
-                  {grahamOppsCount} {grahamOppsCount === 1 ? 'Oportunidade' : 'Oportunidades'}
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
-              Fórmula: √(22,5 × LPA × VPA) para Ações
-            </p>
+            )}
           </button>
 
-          {/* Method 2: Décio Bazin (Historical Dividends: 1, 3 or 5 years) */}
+          {/* Method 2: Décio Bazin */}
           <button
             type="button"
             onClick={() => setActiveMethod('bazin')}
-            className={`p-3 rounded-xl text-left transition-all relative ${
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
               activeMethod === 'bazin'
-                ? 'bg-white dark:bg-gray-700 shadow-sm ring-2 ring-blue-500/50'
-                : 'hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-400'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-xs flex items-center gap-1.5 text-gray-900 dark:text-white">
-                <span>💰</span> 2. Décio Bazin / Barsi (5 Anos)
+            <span>Décio Bazin (Dividendos)</span>
+            {bazinOppsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-semibold">
+                {bazinOppsCount}
               </span>
-              {bazinOppsCount > 0 && (
-                <span className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 text-[10px] rounded-full font-extrabold">
-                  {bazinOppsCount} Abaixo do Teto
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
-              Preço Teto por Dividendos (Média de 5 anos com Yield {bazinTargetYield}%)
-            </p>
+            )}
           </button>
 
-          {/* Method 3: FIIs (P/VP + Yield) */}
+          {/* Method 3: FIIs */}
           <button
             type="button"
             onClick={() => setActiveMethod('fii')}
-            className={`p-3 rounded-xl text-left transition-all relative ${
+            className={`px-3 py-2 rounded-lg text-xs font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
               activeMethod === 'fii'
-                ? 'bg-white dark:bg-gray-700 shadow-sm ring-2 ring-purple-500/50'
-                : 'hover:bg-white/50 dark:hover:bg-gray-700/50 text-gray-600 dark:text-gray-400'
+                ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-xs font-semibold'
+                : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-xs flex items-center gap-1.5 text-gray-900 dark:text-white">
-                <span>🏢</span> 3. Análise de FIIs (Imobiliário)
+            <span>FIIs (Imobiliário)</span>
+            {fiiOppsCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 text-[10px] font-semibold">
+                {fiiOppsCount}
               </span>
-              {fiiOppsCount > 0 && (
-                <span className="px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 text-[10px] rounded-full font-extrabold">
-                  {fiiOppsCount} Desconto no VP
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
-              Métricas exclusivas: P/VP, VP/Cota, DY 12m e Preço Teto
-            </p>
+            )}
           </button>
         </div>
 
@@ -477,55 +447,21 @@ export function GrahamAnalysisTable({
         {/* METHOD 1: GRAHAM FORMULA (STOCKS ONLY) */}
         {/* ========================================================================= */}
         {activeMethod === 'graham' && (
-          <div className="space-y-4 animate-fadeIn">
-            {/* Informative notice about FIIs exclusion */}
-            <div className="bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
-              <div className="flex items-start gap-2 text-amber-900 dark:text-amber-200">
-                <Icon name="info" className="w-4 h-4 mt-0.5 text-amber-600 dark:text-amber-400 shrink-0" />
-                <span>
-                  <strong>Por que FIIs não entram em Graham?</strong> A fórmula de Graham <code className="bg-white/60 dark:bg-black/40 px-1 py-0.5 rounded font-mono">√(22,5 × LPA × VPA)</code> foi criada para empresas industriais e comerciais que retêm lucros. Como FIIs distribuem 95% do caixa e negociam próximos ao VP (P/VP ≈ 1,00), use as abas <strong>Décio Bazin (Dividendos)</strong> ou <strong>Análise de FIIs</strong> acima.
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveMethod('fii')}
-                className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[11px] shrink-0 transition-colors"
-              >
-                Ver Métricas para FIIs →
-              </button>
-            </div>
-
-            {/* Criteria summary */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <div className="bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 dark:text-emerald-300">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
-                  <span>🟢 ÓTIMO PREÇO (Margem ≥ 20%)</span>
-                </div>
-                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">
-                  Cotação atual com <strong>20% ou mais de desconto</strong> sobre o Preço Justo de Graham.
-                </p>
-              </div>
-
-              <div className="bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 rounded-xl p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-300">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
-                  <span>🟡 PREÇO JUSTO (Valor Intrínseco)</span>
-                </div>
-                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">
-                  Cotação negociando <strong>entre o Ótimo Preço e o Preço Teto de Graham</strong>.
-                </p>
-              </div>
-
-              <div className="bg-red-50/70 dark:bg-red-950/30 border border-red-200 dark:border-red-800/40 rounded-xl p-3 space-y-1">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-red-700 dark:text-red-300">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-                  <span>🔴 PREÇO ACIMA (Sobreavaliado)</span>
-                </div>
-                <p className="text-[11px] text-gray-600 dark:text-gray-300 leading-snug">
-                  Cotação <strong>acima do Preço Justo</strong> (P/L × P/VP &gt; 22,5). Aguardar correção.
-                </p>
-              </div>
+          <div className="space-y-3 animate-fadeIn">
+            {/* Criteria inline legend */}
+            <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400 py-1">
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                Ótimo Preço (Margem ≥ 20%)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                Preço Justo
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                Sobreavaliado
+              </span>
             </div>
 
             {/* Graham: Minha Carteira View */}
@@ -795,73 +731,59 @@ export function GrahamAnalysisTable({
         {activeMethod === 'bazin' && (
           <div className="space-y-4 animate-fadeIn">
             {/* Controls Bar: Period selector & Target Yield */}
-            <div className="bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800/40 rounded-xl p-4 space-y-3">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                  <h4 className="font-extrabold text-blue-900 dark:text-blue-200 text-sm flex items-center gap-1.5">
-                    <Icon name="payments" className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    Parâmetros do Método Décio Bazin & Luiz Barsi
-                  </h4>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-                    Preço Teto = <code className="bg-white/80 dark:bg-black/50 px-1 py-0.5 rounded font-mono font-bold">Dividendo Médio Anual ÷ Yield Alvo</code>. A média de 5 anos evita distorções de dividendos não recorrentes!
-                  </p>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium text-gray-700 dark:text-gray-300">Período de proventos:</span>
+                <div className="flex bg-gray-100/80 dark:bg-gray-800 p-0.5 rounded-lg border border-gray-200/60 dark:border-gray-700">
+                  <button
+                    type="button"
+                    onClick={() => setBazinPeriod('5y')}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      bazinPeriod === '5y'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400'
+                    }`}
+                  >
+                    5 Anos (Bazin)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBazinPeriod('3y')}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      bazinPeriod === '3y'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400'
+                    }`}
+                  >
+                    3 Anos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBazinPeriod('1y')}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      bazinPeriod === '1y'
+                        ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-2xs font-semibold'
+                        : 'text-gray-500 hover:text-gray-900 dark:text-gray-400'
+                    }`}
+                  >
+                    12 Meses
+                  </button>
                 </div>
+              </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  {/* Period Pills */}
-                  <div className="flex bg-white dark:bg-gray-800 p-1 rounded-xl border border-blue-200 dark:border-blue-800 shadow-2xs">
-                    <button
-                      type="button"
-                      onClick={() => setBazinPeriod('5y')}
-                      className={`px-3 py-1 text-xs font-extrabold rounded-lg transition-all ${
-                        bazinPeriod === '5y'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600'
-                      }`}
-                      title="Média recomendada por Décio Bazin (5 anos)"
-                    >
-                      ⭐ Média 5 Anos (Bazin)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBazinPeriod('3y')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                        bazinPeriod === '3y'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600'
-                      }`}
-                    >
-                      Média 3 Anos
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBazinPeriod('1y')}
-                      className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all ${
-                        bazinPeriod === '1y'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-gray-600 dark:text-gray-300 hover:text-blue-600'
-                      }`}
-                    >
-                      Últimos 12 Meses
-                    </button>
-                  </div>
-
-                  {/* Target Yield Selector */}
-                  <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 shadow-2xs">
-                    <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Yield Alvo:</span>
-                    <select
-                      value={bazinTargetYield}
-                      onChange={(e) => setBazinTargetYield(parseFloat(e.target.value) || 6)}
-                      className="text-xs font-extrabold bg-transparent text-blue-600 dark:text-blue-400 focus:outline-none cursor-pointer"
-                    >
-                      <option value={6}>6% a.a. (Padrão Ações Bazin)</option>
-                      <option value={7}>7% a.a.</option>
-                      <option value={8}>8% a.a. (Moderado)</option>
-                      <option value={10}>10% a.a. (FIIs / Alto Rendimento)</option>
-                      <option value={12}>12% a.a.</option>
-                    </select>
-                  </div>
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">Yield Alvo:</span>
+                <select
+                  value={bazinTargetYield}
+                  onChange={(e) => setBazinTargetYield(parseFloat(e.target.value) || 6)}
+                  className="px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer"
+                >
+                  <option value={6}>6% a.a. (Padrão)</option>
+                  <option value={7}>7% a.a.</option>
+                  <option value={8}>8% a.a.</option>
+                  <option value={10}>10% a.a.</option>
+                  <option value={12}>12% a.a.</option>
+                </select>
               </div>
             </div>
 
@@ -891,11 +813,11 @@ export function GrahamAnalysisTable({
                             Div. Médio Anual ({bazinPeriod === '5y' ? '5 Anos' : bazinPeriod === '3y' ? '3 Anos' : '12 Meses'})
                           </th>
                           <th scope="col" className="px-3 py-3 text-right" title="Dividend Yield anualizado atual">DY Atual</th>
-                          <th scope="col" className="px-3 py-3 text-right bg-blue-50/50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-300 font-bold" title="Preço Teto de Bazin para garantir o Yield Alvo">
-                            🎯 Preço Teto (Yield {bazinTargetYield}%)
+                          <th scope="col" className="px-3 py-3 text-right text-blue-700 dark:text-blue-300 font-medium" title="Preço Teto de Bazin para garantir o Yield Alvo">
+                            Preço Teto ({bazinTargetYield}%)
                           </th>
-                          <th scope="col" className="px-3 py-3 text-right bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-300 font-bold" title="Preço com 20% de margem sobre o teto">
-                            🟢 Ótimo Preço
+                          <th scope="col" className="px-3 py-3 text-right text-emerald-700 dark:text-emerald-300 font-medium" title="Preço com 20% de margem sobre o teto">
+                            Ótimo Preço
                           </th>
                           <th scope="col" className="px-3 py-3 text-center">Margem / Desconto</th>
                           <th scope="col" className="px-3 py-3 text-center">Diagnóstico Bazin</th>
@@ -1153,49 +1075,37 @@ export function GrahamAnalysisTable({
         {/* ========================================================================= */}
         {activeMethod === 'fii' && (
           <div className="space-y-4 animate-fadeIn">
-            {/* FII Guidance Banner */}
-            <div className="bg-purple-50/70 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800/40 rounded-xl p-4 space-y-2">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                <div>
-                  <h4 className="font-extrabold text-purple-900 dark:text-purple-200 text-sm flex items-center gap-1.5">
-                    <Icon name="apartment" className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                    Como Avaliar Fundos Imobiliários (FIIs) Corretamente
-                  </h4>
-                  <p className="text-xs text-purple-700 dark:text-purple-300 mt-0.5">
-                    FIIs são avaliados principalmente pela relação <strong>P/VP (Preço / Valor Patrimonial)</strong> e pelo <strong>Dividend Yield recorrente</strong>.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1.5 bg-white dark:bg-gray-800 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 shadow-2xs">
-                  <span className="text-xs font-bold text-gray-700 dark:text-gray-300">Yield Alvo FII:</span>
-                  <select
-                    value={fiiTargetYield}
-                    onChange={(e) => setFiiTargetYield(parseFloat(e.target.value) || 8.5)}
-                    className="text-xs font-extrabold bg-transparent text-purple-600 dark:text-purple-400 focus:outline-none cursor-pointer"
-                  >
-                    <option value={8}>8.0% a.a.</option>
-                    <option value={8.5}>8.5% a.a. (Recomendado FII)</option>
-                    <option value={9}>9.0% a.a.</option>
-                    <option value={10}>10.0% a.a.</option>
-                    <option value={11}>11.0% a.a.</option>
-                  </select>
-                </div>
+            {/* FII Guidance Controls */}
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 p-3 bg-gray-50/50 dark:bg-gray-800/30 rounded-xl border border-gray-100 dark:border-gray-800 text-xs">
+              <div className="flex flex-wrap items-center gap-3 text-gray-500 dark:text-gray-400">
+                <span className="font-medium text-gray-700 dark:text-gray-300">Referência P/VP:</span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Desconto (&lt; 1,00)
+                </span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                  Justo (1,00 a 1,05)
+                </span>
+                <span className="flex items-center gap-1 font-medium">
+                  <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                  Ágio (&gt; 1,05)
+                </span>
               </div>
 
-              {/* P/VP Criteria Bar */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1 text-[11px]">
-                <div className="p-2 bg-emerald-100/60 dark:bg-emerald-950/40 rounded-lg text-emerald-800 dark:text-emerald-300">
-                  <strong>🟢 P/VP &lt; 0,90:</strong> Forte Desconto (&gt;10% abaixo do patrimônio).
-                </div>
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg text-emerald-700 dark:text-emerald-300">
-                  <strong>🟢 0,90 a 0,99:</strong> Desconto Atrativo no valor patrimonial.
-                </div>
-                <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-lg text-amber-800 dark:text-amber-300">
-                  <strong>🟡 1,00 a 1,05:</strong> Preço Justo / Equilibrado com o VP.
-                </div>
-                <div className="p-2 bg-red-50 dark:bg-red-950/30 rounded-lg text-red-800 dark:text-red-300">
-                  <strong>🔴 P/VP &gt; 1,05:</strong> Negociando com Ágio (Caro).
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="text-gray-500">Yield Alvo:</span>
+                <select
+                  value={fiiTargetYield}
+                  onChange={(e) => setFiiTargetYield(parseFloat(e.target.value) || 8.5)}
+                  className="px-2 py-1 rounded-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer"
+                >
+                  <option value={8}>8.0% a.a.</option>
+                  <option value={8.5}>8.5% a.a. (Padrão FII)</option>
+                  <option value={9}>9.0% a.a.</option>
+                  <option value={10}>10.0% a.a.</option>
+                  <option value={11}>11.0% a.a.</option>
+                </select>
               </div>
             </div>
 
@@ -1226,11 +1136,11 @@ export function GrahamAnalysisTable({
                           <th scope="col" className="px-3 py-3 text-center font-bold" title="Preço sobre Valor Patrimonial">P/VP</th>
                           <th scope="col" className="px-3 py-3 text-right text-purple-600 dark:text-purple-400 font-bold" title="Dividend Yield últimos 12 meses">DY 12M</th>
                           <th scope="col" className="px-3 py-3 text-right text-gray-600 dark:text-gray-300" title="Rendimento médio mensal por cota">Rend. Médio Mês</th>
-                          <th scope="col" className="px-3 py-3 text-right bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 font-bold">
-                            🎯 Preço Teto (Yield {fiiTargetYield}%)
+                          <th scope="col" className="px-3 py-3 text-right text-purple-700 dark:text-purple-300 font-medium">
+                            Preço Teto ({fiiTargetYield}%)
                           </th>
-                          <th scope="col" className="px-3 py-3 text-center">Diagnóstico Patrimonial</th>
-                          <th scope="col" className="px-3 py-3 text-center">Ações</th>
+                          <th scope="col" className="px-3 py-3 text-center font-medium">Diagnóstico</th>
+                          <th scope="col" className="px-3 py-3 text-center font-medium">Ações</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -1273,11 +1183,11 @@ export function GrahamAnalysisTable({
                               {/* P/VP with color coded badge */}
                               <td className="px-3 py-3.5 text-center whitespace-nowrap">
                                 {fData?.pvp !== null && fData?.pvp !== undefined ? (
-                                  <span className={`px-2.5 py-1 rounded-lg font-mono font-black text-xs ${
-                                    fData.pvp < 0.90 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' :
+                                  <span className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                                    fData.pvp < 0.90 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300' :
                                     fData.pvp < 1.00 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' :
-                                    fData.pvp <= 1.05 ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' :
-                                    'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300'
+                                    fData.pvp <= 1.05 ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300' :
+                                    'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'
                                   }`}>
                                     {fData.pvp.toFixed(2)}
                                   </span>
@@ -1286,7 +1196,7 @@ export function GrahamAnalysisTable({
                                 )}
                               </td>
 
-                              <td className="px-3 py-3.5 text-right text-purple-600 dark:text-purple-400 font-black font-mono">
+                              <td className="px-3 py-3.5 text-right text-purple-600 dark:text-purple-400 font-bold font-mono">
                                 {fData?.dy12m !== null && fData?.dy12m !== undefined ? `${fData.dy12m.toFixed(1)}%` : '-'}
                               </td>
 
@@ -1294,15 +1204,15 @@ export function GrahamAnalysisTable({
                                 {fData?.avgMonthlyDividend ? formatCurrency(fData.avgMonthlyDividend) : '-'}
                               </td>
 
-                              <td className="px-3 py-3.5 text-right font-black text-purple-700 dark:text-purple-300 bg-purple-50/30 dark:bg-purple-950/10 whitespace-nowrap">
+                              <td className="px-3 py-3.5 text-right font-mono font-medium text-purple-700 dark:text-purple-300 whitespace-nowrap">
                                 {fData?.ceilingPrice ? formatCurrency(fData.ceilingPrice) : '-'}
                               </td>
 
                               <td className="px-3 py-3.5 text-center whitespace-nowrap">
-                                {fData?.pvpStatus === 'FORTE_DESCONTO' && <Badge color="green" className="text-[10px] font-bold">🟢 Forte Desconto</Badge>}
-                                {fData?.pvpStatus === 'DESCONTO' && <Badge color="green" className="text-[10px] font-bold">🟢 Desconto no VP</Badge>}
-                                {fData?.pvpStatus === 'JUSTO' && <Badge color="yellow" className="text-[10px] font-bold">🟡 Preço Justo (≈1,00)</Badge>}
-                                {fData?.pvpStatus === 'AGIO' && <Badge color="red" className="text-[10px] font-bold">🔴 Negociando com Ágio</Badge>}
+                                {fData?.pvpStatus === 'FORTE_DESCONTO' && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Forte Desconto</span>}
+                                {fData?.pvpStatus === 'DESCONTO' && <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Desconto no VP</span>}
+                                {fData?.pvpStatus === 'JUSTO' && <span className="text-xs font-medium text-amber-600 dark:text-amber-400">Preço Justo</span>}
+                                {fData?.pvpStatus === 'AGIO' && <span className="text-xs font-medium text-rose-500">Ágio</span>}
                                 {!fData && <span className="text-[10px] text-gray-400">{isLoadingFii ? 'Calculando...' : 'Sem dados'}</span>}
                               </td>
 
