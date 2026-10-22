@@ -9,6 +9,66 @@ import { createClient } from '@/lib/supabase/client';
 
 const STORAGE_KEY = 'financas_options_strategies';
 
+function mapDbToStrategy(row: any): OptionStrategy {
+  let legs: OptionLeg[] = [];
+  if (Array.isArray(row.legs)) {
+    legs = row.legs;
+  } else if (typeof row.legs === 'string') {
+    try {
+      legs = JSON.parse(row.legs);
+    } catch {
+      legs = [];
+    }
+  }
+
+  return {
+    id: String(row.id),
+    name: row.name || 'Estratégia de Opções',
+    underlyingTicker: (row.underlying_ticker || row.underlyingTicker || '').toUpperCase(),
+    underlyingPrice: Number(row.underlying_price ?? row.underlyingPrice ?? 0),
+    strategyCategory: (row.strategy_category || row.strategyCategory || 'personalizada') as StrategyCategory,
+    legs,
+    quantity: Number(row.quantity ?? 100),
+    entryCostPerUnit: Number(row.entry_cost_per_unit ?? row.entryCostPerUnit ?? 0),
+    totalEntryCost: Number(row.total_entry_cost ?? row.totalEntryCost ?? 0),
+    entryDate: row.entry_date || row.entryDate || new Date().toISOString().split('T')[0],
+    targetProfit50: Number(row.target_profit_50 ?? row.targetProfit50 ?? 0),
+    targetProfit80: Number(row.target_profit_80 ?? row.targetProfit80 ?? 0),
+    stopLossPrice: Number(row.stop_loss_price ?? row.stopLossPrice ?? 0),
+    maxProfitPerUnit: row.max_profit_per_unit != null 
+      ? Number(row.max_profit_per_unit) 
+      : (row.maxProfitPerUnit != null ? Number(row.maxProfitPerUnit) : undefined),
+    status: (row.status || 'active') as any,
+    notes: row.notes || undefined,
+    createdAt: row.created_at || row.createdAt || new Date().toISOString(),
+    updatedAt: row.updated_at || row.updatedAt || new Date().toISOString()
+  };
+}
+
+function mapStrategyToDb(strat: OptionStrategy, familyId: string, userId?: string | null) {
+  return {
+    id: strat.id,
+    family_id: familyId,
+    user_id: userId || null,
+    name: strat.name,
+    underlying_ticker: (strat.underlyingTicker || '').toUpperCase(),
+    underlying_price: strat.underlyingPrice || 0,
+    strategy_category: strat.strategyCategory || 'personalizada',
+    legs: strat.legs as any,
+    quantity: strat.quantity || 100,
+    entry_cost_per_unit: strat.entryCostPerUnit || 0,
+    total_entry_cost: strat.totalEntryCost || 0,
+    entry_date: strat.entryDate || new Date().toISOString().split('T')[0],
+    target_profit_50: strat.targetProfit50 || 0,
+    target_profit_80: strat.targetProfit80 || 0,
+    stop_loss_price: strat.stopLossPrice || 0,
+    max_profit_per_unit: strat.maxProfitPerUnit != null ? strat.maxProfitPerUnit : null,
+    status: strat.status || 'active',
+    notes: strat.notes || null,
+    updated_at: new Date().toISOString()
+  };
+}
+
 export function useOptionsStrategies(investments: any[] = []) {
   const [strategies, setStrategies] = useState<OptionStrategy[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,6 +81,30 @@ export function useOptionsStrategies(investments: any[] = []) {
   const supabase = createClient();
   const alertSentMap = useRef<Record<string, boolean>>({});
   const initialSyncDone = useRef(false);
+  const authRef = useRef<{ userId: string; familyId: string } | null>(null);
+
+  // Helper to fetch user & family ID
+  const getFamilyAndUser = useCallback(async () => {
+    if (authRef.current) return authRef.current;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const { data: profile } = await (supabase
+        .from('profiles')
+        .select('family_id')
+        .eq('id', user.id)
+        .single() as any);
+
+      if (profile?.family_id) {
+        authRef.current = { userId: user.id, familyId: profile.family_id };
+        return authRef.current;
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }, [supabase]);
 
   // Request browser notification permission
   const requestNotificationPermission = useCallback(async () => {
@@ -58,46 +142,84 @@ export function useOptionsStrategies(investments: any[] = []) {
     }
   }, []);
 
-  // Load strategies from storage
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationPermission(Notification.permission);
+  // Update local storage cache helper
+  const saveToLocalStorage = useCallback((updated: OptionStrategy[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {
+      console.warn('Erro ao salvar no localStorage:', e);
     }
+  }, []);
 
+  // Fetch strategies (Supabase cloud first with auto-migration from localStorage fallback)
+  const fetchStrategies = useCallback(async () => {
+    setLoading(true);
+
+    // 1. Instant local cache load
+    let localList: OptionStrategy[] = [];
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored !== null) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          // Remove legacy hardcoded example ('strat-bova-trava-baixa-1') so it stays deleted on F5
-          const filtered = parsed.filter((s: OptionStrategy) => s && s.id !== 'strat-bova-trava-baixa-1');
-          if (filtered.length !== parsed.length) {
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-            } catch {}
-          }
-          setStrategies(filtered);
-          setLoading(false);
-          return;
+          // Remove legacy hardcoded example if present
+          localList = parsed.filter((s: OptionStrategy) => s && s.id !== 'strat-bova-trava-baixa-1');
+          setStrategies(localList);
         }
       }
     } catch (e) {
-      console.warn('Erro ao carregar estratégias de opções do localStorage:', e);
+      console.warn('Erro ao ler localStorage de opções:', e);
     }
 
-    setStrategies([]);
-    setLoading(false);
-  }, []);
+    // 2. Query Supabase cloud
+    try {
+      const auth = await getFamilyAndUser();
+      if (auth?.familyId) {
+        const { data: dbData, error: dbError } = await (supabase as any)
+          .from('options_strategies')
+          .select('*')
+          .eq('family_id', auth.familyId)
+          .order('created_at', { ascending: false });
 
-  // Save to localStorage when state updates
+        if (!dbError && Array.isArray(dbData)) {
+          if (dbData.length > 0) {
+            const mappedList = dbData.map(mapDbToStrategy);
+            setStrategies(mappedList);
+            saveToLocalStorage(mappedList);
+            setLoading(false);
+            return;
+          } else if (localList.length > 0) {
+            // Supabase tá vazio mas este dispositivo (PC) já tinha estratégias cadastradas no localStorage.
+            // Sobe para a nuvem automaticamente para ficar disponível no celular e em outros dispositivos!
+            console.info('[useOptionsStrategies] Sincronizando estratégias locais para o Supabase...');
+            const inserts = localList.map(s => mapStrategyToDb(s, auth.familyId, auth.userId));
+            await (supabase as any).from('options_strategies').insert(inserts);
+          }
+        } else if (dbError) {
+          // Se a tabela ainda não foi criada no Supabase (código 42P01), usa o cache local sem quebrar
+          console.warn('[useOptionsStrategies] Tabela de opções não disponível no Supabase:', dbError.message);
+        }
+      }
+    } catch (err) {
+      console.warn('[useOptionsStrategies] Erro ao sincronizar com Supabase:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [getFamilyAndUser, supabase, saveToLocalStorage]);
+
+  // Initial load
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
+    fetchStrategies();
+  }, [fetchStrategies]);
+
+  // Helper to persist list both locally and to Supabase
   const saveStrategies = useCallback((updated: OptionStrategy[]) => {
     setStrategies(updated);
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {
-      console.error('Erro ao salvar estratégias:', e);
-    }
-  }, []);
+    saveToLocalStorage(updated);
+  }, [saveToLocalStorage]);
 
   // 1. SINCRONIZAÇÃO AUTOMÁTICA EM TEMPO REAL COM A LISTA DE ATIVOS
   useEffect(() => {
@@ -137,7 +259,6 @@ export function useOptionsStrategies(investments: any[] = []) {
       }
 
       const nextLegs = strat.legs.map(leg => {
-        // If user manually overrode the price via double-click, preserve the override
         if (leg.manualOverride) return leg;
 
         const cleanLegTicker = leg.ticker.trim().toUpperCase().replace('.SA', '');
@@ -178,7 +299,6 @@ export function useOptionsStrategies(investments: any[] = []) {
 
     setIsSyncing(true);
     try {
-      // Gather all tickers (options and underlying assets)
       const tickersToFetch = new Set<string>();
       strategies.forEach(s => {
         if (s.underlyingTicker) tickersToFetch.add(s.underlyingTicker);
@@ -189,7 +309,6 @@ export function useOptionsStrategies(investments: any[] = []) {
 
       const tickerArray = Array.from(tickersToFetch);
 
-      // 1. Fetch Option & Stock Quotes
       const res = await fetch('/api/stocks/options', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -211,7 +330,6 @@ export function useOptionsStrategies(investments: any[] = []) {
               if (quote) {
                 return {
                   ...leg,
-                  // Do not override user's manual override
                   currentPrice: leg.manualOverride ? leg.currentPrice : (quote.price > 0 ? quote.price : leg.currentPrice),
                   bidPrice: quote.bidPrice || leg.bidPrice,
                   askPrice: quote.askPrice || leg.askPrice,
@@ -228,9 +346,7 @@ export function useOptionsStrategies(investments: any[] = []) {
               updatedAt: new Date().toISOString()
             };
 
-            // Check alerts
             checkStrategyAlerts(updatedStrat);
-
             return updatedStrat;
           });
 
@@ -264,8 +380,8 @@ export function useOptionsStrategies(investments: any[] = []) {
     return () => clearInterval(intervalId);
   }, [autoRefresh, refreshInterval, syncQuotes]);
 
-  // CRUD Actions
-  const addStrategy = useCallback((newStrat: Omit<OptionStrategy, 'id' | 'createdAt' | 'updatedAt'>) => {
+  // CRUD Actions - With dual-sync to Supabase & localStorage
+  const addStrategy = useCallback(async (newStrat: Omit<OptionStrategy, 'id' | 'createdAt' | 'updatedAt'>) => {
     const created: OptionStrategy = {
       ...newStrat,
       id: `strat-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
@@ -275,27 +391,72 @@ export function useOptionsStrategies(investments: any[] = []) {
 
     const nextList = [created, ...strategies];
     saveStrategies(nextList);
-    return created;
-  }, [strategies, saveStrategies]);
 
-  const updateStrategy = useCallback((id: string, updates: Partial<OptionStrategy>) => {
+    // Save to Supabase
+    try {
+      const auth = await getFamilyAndUser();
+      if (auth?.familyId) {
+        await (supabase as any)
+          .from('options_strategies')
+          .insert(mapStrategyToDb(created, auth.familyId, auth.userId));
+      }
+    } catch (err) {
+      console.warn('[useOptionsStrategies] Erro ao salvar estratégia no Supabase:', err);
+    }
+
+    return created;
+  }, [strategies, saveStrategies, getFamilyAndUser, supabase]);
+
+  const updateStrategy = useCallback(async (id: string, updates: Partial<OptionStrategy>) => {
+    let updatedStrat: OptionStrategy | null = null;
     const nextList = strategies.map(s => {
       if (s.id === id) {
-        return {
+        updatedStrat = {
           ...s,
           ...updates,
           updatedAt: new Date().toISOString()
         };
+        return updatedStrat;
       }
       return s;
     });
-    saveStrategies(nextList);
-  }, [strategies, saveStrategies]);
 
-  const deleteStrategy = useCallback((id: string) => {
+    saveStrategies(nextList);
+
+    // Update in Supabase
+    if (updatedStrat) {
+      try {
+        const auth = await getFamilyAndUser();
+        if (auth?.familyId) {
+          const dbPayload = mapStrategyToDb(updatedStrat, auth.familyId, auth.userId);
+          await (supabase as any)
+            .from('options_strategies')
+            .update(dbPayload)
+            .eq('id', id);
+        }
+      } catch (err) {
+        console.warn('[useOptionsStrategies] Erro ao atualizar no Supabase:', err);
+      }
+    }
+  }, [strategies, saveStrategies, getFamilyAndUser, supabase]);
+
+  const deleteStrategy = useCallback(async (id: string) => {
     const nextList = strategies.filter(s => s.id !== id);
     saveStrategies(nextList);
-  }, [strategies, saveStrategies]);
+
+    // Delete in Supabase
+    try {
+      const auth = await getFamilyAndUser();
+      if (auth?.familyId) {
+        await (supabase as any)
+          .from('options_strategies')
+          .delete()
+          .eq('id', id);
+      }
+    } catch (err) {
+      console.warn('[useOptionsStrategies] Erro ao excluir no Supabase:', err);
+    }
+  }, [strategies, saveStrategies, getFamilyAndUser, supabase]);
 
   const closeStrategy = useCallback((id: string) => {
     updateStrategy(id, { status: 'closed' });
@@ -303,23 +464,24 @@ export function useOptionsStrategies(investments: any[] = []) {
 
   // Manual override for a specific leg price (double click / pencil)
   const updateLegPrice = useCallback((strategyId: string, legTicker: string, newPrice: number) => {
-    const nextList = strategies.map(s => {
-      if (s.id === strategyId) {
-        const updatedLegs = s.legs.map(l => {
-          if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
-            return { ...l, currentPrice: newPrice, manualOverride: true };
-          }
-          return l;
-        });
-        return { ...s, legs: updatedLegs, updatedAt: new Date().toISOString() };
+    const strat = strategies.find(s => s.id === strategyId);
+    if (!strat) return;
+
+    const updatedLegs = strat.legs.map(l => {
+      if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
+        return { ...l, currentPrice: newPrice, manualOverride: true };
       }
-      return s;
+      return l;
     });
-    saveStrategies(nextList);
-  }, [strategies, saveStrategies]);
+
+    updateStrategy(strategyId, { legs: updatedLegs });
+  }, [strategies, updateStrategy]);
 
   // Reset manual override back to real-time auto quotation
   const resetLegOverride = useCallback((strategyId: string, legTicker: string) => {
+    const strat = strategies.find(s => s.id === strategyId);
+    if (!strat) return;
+
     let autoPrice: number | undefined;
     const cleanTicker = legTicker.trim().toUpperCase().replace('.SA', '');
 
@@ -334,24 +496,19 @@ export function useOptionsStrategies(investments: any[] = []) {
       }
     }
 
-    const nextList = strategies.map(s => {
-      if (s.id === strategyId) {
-        const updatedLegs = s.legs.map(l => {
-          if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
-            return {
-              ...l,
-              manualOverride: false,
-              currentPrice: autoPrice !== undefined ? autoPrice : l.currentPrice
-            };
-          }
-          return l;
-        });
-        return { ...s, legs: updatedLegs, updatedAt: new Date().toISOString() };
+    const updatedLegs = strat.legs.map(l => {
+      if (l.ticker.toUpperCase() === legTicker.toUpperCase()) {
+        return {
+          ...l,
+          manualOverride: false,
+          currentPrice: autoPrice !== undefined ? autoPrice : l.currentPrice
+        };
       }
-      return s;
+      return l;
     });
-    saveStrategies(nextList);
-  }, [strategies, investments, saveStrategies]);
+
+    updateStrategy(strategyId, { legs: updatedLegs });
+  }, [strategies, investments, updateStrategy]);
 
   return {
     strategies,
@@ -370,6 +527,7 @@ export function useOptionsStrategies(investments: any[] = []) {
     deleteStrategy,
     closeStrategy,
     updateLegPrice,
-    resetLegOverride
+    resetLegOverride,
+    refreshStrategies: fetchStrategies
   };
 }

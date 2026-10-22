@@ -687,7 +687,8 @@ export default function InvestmentsPage() {
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          Raio-X & Comparador
+          <span className="hidden sm:inline">Raio-X & Comparador</span>
+          <span className="sm:hidden">Raio-X</span>
         </button>
 
         <button
@@ -723,7 +724,8 @@ export default function InvestmentsPage() {
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          Calculadora IR
+          <span className="hidden sm:inline">Calculadora IR</span>
+          <span className="sm:hidden">IR</span>
         </button>
 
         <button
@@ -731,7 +733,7 @@ export default function InvestmentsPage() {
           onClick={() => setActiveMainTab('opcoes')}
           className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
             activeMainTab === 'opcoes'
-              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
+              ? 'bg-white dark:bg-gray-900 text-purple-700 dark:text-purple-300 shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >

@@ -558,6 +558,74 @@ export interface Database {
           updated_at?: string
         }
       }
+      options_strategies: {
+        Row: {
+          id: string
+          family_id: string
+          user_id: string | null
+          name: string
+          underlying_ticker: string
+          underlying_price: number
+          strategy_category: string
+          legs: Json
+          quantity: number
+          entry_cost_per_unit: number
+          total_entry_cost: number
+          entry_date: string
+          target_profit_50: number
+          target_profit_80: number
+          stop_loss_price: number
+          max_profit_per_unit: number | null
+          status: string
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          family_id: string
+          user_id?: string | null
+          name: string
+          underlying_ticker: string
+          underlying_price?: number
+          strategy_category?: string
+          legs?: Json
+          quantity?: number
+          entry_cost_per_unit?: number
+          total_entry_cost?: number
+          entry_date?: string
+          target_profit_50?: number
+          target_profit_80?: number
+          stop_loss_price?: number
+          max_profit_per_unit?: number | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          family_id?: string
+          user_id?: string | null
+          name?: string
+          underlying_ticker?: string
+          underlying_price?: number
+          strategy_category?: string
+          legs?: Json
+          quantity?: number
+          entry_cost_per_unit?: number
+          total_entry_cost?: number
+          entry_date?: string
+          target_profit_50?: number
+          target_profit_80?: number
+          stop_loss_price?: number
+          max_profit_per_unit?: number | null
+          status?: string
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
