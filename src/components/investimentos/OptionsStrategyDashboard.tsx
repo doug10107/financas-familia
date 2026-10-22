@@ -19,6 +19,8 @@ interface OptionsStrategyDashboardProps {
   investments?: any[];
   totalPortfolioValue: number;
   isSyncing: boolean;
+  isSupabaseTableMissing?: boolean;
+  onImportStrategies?: (strats: OptionStrategy[]) => void;
   autoRefresh: boolean;
   lastSyncTime: Date | null;
   onToggleAutoRefresh: () => void;
@@ -33,11 +35,76 @@ interface OptionsStrategyDashboardProps {
   onRequestNotifications: () => void;
 }
 
+const MIGRATION_SQL = `-- Migration 024: Estruturas para Estratégias de Opções B3 Sincronizadas
+CREATE TABLE IF NOT EXISTS public.options_strategies (
+    id TEXT PRIMARY KEY,
+    family_id UUID NOT NULL REFERENCES public.families(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    name TEXT NOT NULL,
+    underlying_ticker VARCHAR(20) NOT NULL,
+    underlying_price NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    strategy_category VARCHAR(50) NOT NULL DEFAULT 'personalizada',
+    legs JSONB NOT NULL DEFAULT '[]'::jsonb,
+    quantity NUMERIC(14, 4) NOT NULL DEFAULT 100,
+    entry_cost_per_unit NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    total_entry_cost NUMERIC(14, 2) NOT NULL DEFAULT 0,
+    entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    target_profit_50 NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    target_profit_80 NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    stop_loss_price NUMERIC(14, 4) NOT NULL DEFAULT 0,
+    max_profit_per_unit NUMERIC(14, 4),
+    underlying_dy_5y NUMERIC(10, 2),
+    status VARCHAR(30) NOT NULL DEFAULT 'active',
+    notes TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_options_strategies_family ON public.options_strategies(family_id);
+CREATE INDEX IF NOT EXISTS idx_options_strategies_status ON public.options_strategies(status);
+
+ALTER TABLE public.options_strategies ENABLE ROW LEVEL SECURITY;
+
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'options_strategies' AND policyname = 'Família visualiza opções') THEN
+        CREATE POLICY "Família visualiza opções"
+            ON public.options_strategies FOR SELECT
+            USING (family_id = public.get_my_family_id());
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'options_strategies' AND policyname = 'Família cria opções') THEN
+        CREATE POLICY "Família cria opções"
+            ON public.options_strategies FOR INSERT
+            WITH CHECK (family_id = public.get_my_family_id());
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'options_strategies' AND policyname = 'Família atualiza opções') THEN
+        CREATE POLICY "Família atualiza opções"
+            ON public.options_strategies FOR UPDATE
+            USING (family_id = public.get_my_family_id());
+    END IF;
+
+    IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'options_strategies' AND policyname = 'Família remove opções') THEN
+        CREATE POLICY "Família remove opções"
+            ON public.options_strategies FOR DELETE
+            USING (family_id = public.get_my_family_id());
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS set_options_strategies_updated_at ON public.options_strategies;
+CREATE TRIGGER set_options_strategies_updated_at
+    BEFORE UPDATE ON public.options_strategies
+    FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+`;
+
 export function OptionsStrategyDashboard({
   strategies,
   investments = [],
   totalPortfolioValue,
   isSyncing,
+  isSupabaseTableMissing = false,
+  onImportStrategies,
   autoRefresh,
   lastSyncTime,
   onToggleAutoRefresh,
@@ -53,6 +120,10 @@ export function OptionsStrategyDashboard({
 }: OptionsStrategyDashboardProps) {
   const [expandedId, setExpandedId] = useState<string | null>(strategies[0]?.id || null);
   const [editingLegPrice, setEditingLegPrice] = useState<{ stratId: string; ticker: string; price: string } | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [backupModalOpen, setBackupModalOpen] = useState(false);
+  const [backupJsonInput, setBackupJsonInput] = useState('');
+  const [copiedBackup, setCopiedBackup] = useState(false);
   const [editingNameId, setEditingNameId] = useState<string | null>(null);
   const [editingNameValue, setEditingNameValue] = useState<string>('');
   const [strategyToEdit, setStrategyToEdit] = useState<OptionStrategy | null>(null);
@@ -137,6 +208,39 @@ export function OptionsStrategyDashboard({
     setEditingLegPrice(null);
   };
 
+  const handleCopyMigrationSql = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(MIGRATION_SQL);
+      setCopiedSql(true);
+      setTimeout(() => setCopiedSql(false), 3000);
+    }
+  };
+
+  const handleExportJson = () => {
+    const jsonStr = JSON.stringify(strategies, null, 2);
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(jsonStr);
+      setCopiedBackup(true);
+      setTimeout(() => setCopiedBackup(false), 3000);
+    }
+  };
+
+  const handleImportJson = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const parsed = JSON.parse(backupJsonInput.trim());
+      if (Array.isArray(parsed) && onImportStrategies) {
+        onImportStrategies(parsed);
+        setBackupModalOpen(false);
+        setBackupJsonInput('');
+      } else {
+        alert('Formato inválido. Certifique-se de colar a lista de opções correta.');
+      }
+    } catch {
+      alert('Erro ao processar JSON. Verifique o texto colado.');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* 1. Header Toolbar with Realtime Feed Status & Actions */}
@@ -168,6 +272,18 @@ export function OptionsStrategyDashboard({
               <span>Alertas</span>
             </Button>
           )}
+
+          {/* Sync / Transfer Helper Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setBackupModalOpen(true)}
+            className="text-xs text-gray-600 dark:text-gray-300"
+            title="Transferir operações entre dispositivos ou fazer backup"
+          >
+            <Icon name="swap_horiz" size="sm" />
+            <span>Transferir</span>
+          </Button>
 
           <button
             type="button"
@@ -205,6 +321,36 @@ export function OptionsStrategyDashboard({
           </Button>
         </div>
       </div>
+
+      {/* Cloud Sync Warning Banner (When Supabase table has not been created yet) */}
+      {isSupabaseTableMissing && (
+        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs space-y-2.5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <Icon name="cloud_off" size="sm" className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-sm text-amber-900 dark:text-amber-300">
+                  Sincronização com o Celular Pendente
+                </h4>
+                <p className="mt-1 opacity-90 leading-relaxed text-slate-700 dark:text-slate-300">
+                  Suas operações estão salvas neste computador. Para sincronizar e <strong>aparecer automaticamente no seu celular</strong>, execute o script SQL da migration 024 no SQL Editor do seu Supabase.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleCopyMigrationSql}
+                className="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold transition-all shadow-xs flex items-center gap-1.5 active:scale-95"
+              >
+                <Icon name={copiedSql ? 'check' : 'content_copy'} size="xs" />
+                <span>{copiedSql ? 'SQL Copiado!' : 'Copiar Script SQL'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Top 4 KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -839,6 +985,61 @@ export function OptionsStrategyDashboard({
               </Button>
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Modal para Backup / Transferência Manual Instantânea */}
+      {backupModalOpen && (
+        <Modal
+          isOpen={true}
+          onClose={() => setBackupModalOpen(false)}
+          title="Transferência / Backup de Opções"
+        >
+          <div className="space-y-4 text-xs">
+            <p className="text-gray-600 dark:text-gray-300 leading-relaxed">
+              Você pode transferir suas operações gravadas deste aparelho para o outro (ex: via WhatsApp, e-mail ou bloco de notas) para tê-las instantaneamente em qualquer dispositivo:
+            </p>
+
+            <div className="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl space-y-2 border border-gray-100 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-gray-800 dark:text-gray-200">
+                  1. Copiar deste aparelho ({strategies.length} operações)
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-xs"
+                >
+                  <Icon name={copiedBackup ? 'check' : 'content_copy'} size="xs" />
+                  <span>{copiedBackup ? 'Copiado!' : 'Copiar Operações'}</span>
+                </button>
+              </div>
+            </div>
+
+            <form onSubmit={handleImportJson} className="p-3 bg-gray-50 dark:bg-gray-800/80 rounded-xl space-y-2 border border-gray-100 dark:border-gray-700">
+              <span className="font-semibold text-gray-800 dark:text-gray-200 block">
+                2. Importar neste aparelho
+              </span>
+              <textarea
+                value={backupJsonInput}
+                onChange={(e) => setBackupJsonInput(e.target.value)}
+                placeholder="Cole aqui o texto copiado do outro dispositivo..."
+                rows={3}
+                className="w-full p-2.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 font-mono text-[11px] focus:outline-hidden"
+              />
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  variant="primary"
+                  size="sm"
+                  disabled={!backupJsonInput.trim()}
+                  className="text-xs"
+                >
+                  Salvar e Carregar Operações
+                </Button>
+              </div>
+            </form>
+          </div>
         </Modal>
       )}
     </div>

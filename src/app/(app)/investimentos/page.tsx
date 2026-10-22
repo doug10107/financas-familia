@@ -64,6 +64,7 @@ export default function InvestmentsPage() {
   const {
     strategies: optionsStrategies,
     isSyncing: isSyncingOptions,
+    isSupabaseTableMissing: isOptionsTableMissing,
     autoRefresh: autoRefreshOptions,
     setAutoRefresh: setAutoRefreshOptions,
     lastSyncTime: optionsLastSyncTime,
@@ -75,7 +76,8 @@ export default function InvestmentsPage() {
     deleteStrategy: deleteOptionStrategy,
     closeStrategy: closeOptionStrategy,
     updateLegPrice: updateOptionLegPrice,
-    resetLegOverride: resetOptionLegOverride
+    resetLegOverride: resetOptionLegOverride,
+    importStrategies: importOptionStrategies
   } = useOptionsStrategies(investments);
 
   // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'
@@ -1179,6 +1181,8 @@ export default function InvestmentsPage() {
           investments={investments}
           totalPortfolioValue={totalCurrentWithDerivatives > 0 ? totalCurrentWithDerivatives : 18200}
           isSyncing={isSyncingOptions}
+          isSupabaseTableMissing={isOptionsTableMissing}
+          onImportStrategies={importOptionStrategies}
           autoRefresh={autoRefreshOptions}
           lastSyncTime={optionsLastSyncTime}
           onToggleAutoRefresh={() => setAutoRefreshOptions(!autoRefreshOptions)}

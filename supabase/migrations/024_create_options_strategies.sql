@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS public.options_strategies (
     target_profit_80 NUMERIC(14, 4) NOT NULL DEFAULT 0,
     stop_loss_price NUMERIC(14, 4) NOT NULL DEFAULT 0,
     max_profit_per_unit NUMERIC(14, 4),
+    underlying_dy_5y NUMERIC(10, 2),
     status VARCHAR(30) NOT NULL DEFAULT 'active', -- 'active', 'closed', 'target_hit', 'stop_hit'
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),

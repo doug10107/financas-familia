@@ -75,6 +75,7 @@ export function useOptionsStrategies(investments: any[] = []) {
   const [strategies, setStrategies] = useState<OptionStrategy[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSupabaseTableMissing, setIsSupabaseTableMissing] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [refreshInterval, setRefreshInterval] = useState(30); // 30 seconds
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
@@ -184,6 +185,7 @@ export function useOptionsStrategies(investments: any[] = []) {
           .order('created_at', { ascending: false });
 
         if (!dbError && Array.isArray(dbData)) {
+          setIsSupabaseTableMissing(false);
           if (dbData.length > 0) {
             const mappedList = dbData.map(mapDbToStrategy);
             setStrategies(mappedList);
@@ -198,7 +200,14 @@ export function useOptionsStrategies(investments: any[] = []) {
             await (supabase as any).from('options_strategies').insert(inserts);
           }
         } else if (dbError) {
-          // Se a tabela ainda não foi criada no Supabase (código 42P01), usa o cache local sem quebrar
+          // Se a tabela ainda não foi criada no Supabase (código 42P01 ou PGRST205), usa o cache local sem quebrar
+          if (
+            dbError.code === 'PGRST205' || 
+            dbError.code === '42P01' || 
+            String(dbError.message || '').includes('options_strategies')
+          ) {
+            setIsSupabaseTableMissing(true);
+          }
           console.warn('[useOptionsStrategies] Tabela de opções não disponível no Supabase:', dbError.message);
         }
       }
@@ -512,10 +521,24 @@ export function useOptionsStrategies(investments: any[] = []) {
     updateStrategy(strategyId, { legs: updatedLegs });
   }, [strategies, investments, updateStrategy]);
 
+  // Import strategies directly (e.g. from JSON transfer)
+  const importStrategies = useCallback(async (newStrategies: OptionStrategy[]) => {
+    saveStrategies(newStrategies);
+    try {
+      const auth = await getFamilyAndUser();
+      if (auth?.familyId) {
+        const inserts = newStrategies.map(s => mapStrategyToDb(s, auth.familyId, auth.userId));
+        await (supabase as any).from('options_strategies').insert(inserts);
+        setIsSupabaseTableMissing(false);
+      }
+    } catch {}
+  }, [saveStrategies, getFamilyAndUser, supabase]);
+
   return {
     strategies,
     loading,
     isSyncing,
+    isSupabaseTableMissing,
     autoRefresh,
     setAutoRefresh,
     refreshInterval,
@@ -530,6 +553,7 @@ export function useOptionsStrategies(investments: any[] = []) {
     closeStrategy,
     updateLegPrice,
     resetLegOverride,
+    importStrategies,
     refreshStrategies: fetchStrategies
   };
 }
