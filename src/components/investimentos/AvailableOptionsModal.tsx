@@ -142,7 +142,7 @@ export function AvailableOptionsModal({
       isOpen={isOpen}
       onClose={onClose}
       title=""
-      size="xl"
+      size="5xl"
     >
       <div className="space-y-4">
         {/* Header Summary */}
@@ -350,20 +350,20 @@ export function AvailableOptionsModal({
               )}
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[55vh] overflow-y-auto">
-              <table className="w-full text-xs text-left">
+            <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
+              <table className="w-full text-xs text-left whitespace-nowrap">
                 <thead className="sticky top-0 bg-gray-50/95 dark:bg-gray-800/95 backdrop-blur-xs text-[11px] text-gray-500 dark:text-gray-400 uppercase font-semibold border-b border-gray-200 dark:border-gray-700 z-10">
                   <tr>
-                    <th className="py-2.5 px-3">Ticker</th>
-                    <th className="py-2.5 px-2">Tipo</th>
-                    <th className="py-2.5 px-2">Mod.</th>
-                    <th className="py-2.5 px-2">Status</th>
-                    <th className="py-2.5 px-3 text-right">Strike</th>
-                    <th className="py-2.5 px-3 text-right">Distância %</th>
-                    <th className="py-2.5 px-3 text-right">Prêmio</th>
-                    <th className="py-2.5 px-3 text-right">Taxa (Yield)</th>
-                    <th className="py-2.5 px-3 text-center">Vencimento</th>
-                    <th className="py-2.5 px-3 text-right">Ação</th>
+                    <th className="py-2.5 px-3 whitespace-nowrap">Ticker</th>
+                    <th className="py-2.5 px-2 text-center whitespace-nowrap">Tipo</th>
+                    <th className="py-2.5 px-2 text-center whitespace-nowrap">Mod.</th>
+                    <th className="py-2.5 px-2 text-center whitespace-nowrap">Status</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Strike</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Distância %</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Prêmio</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Taxa (Yield)</th>
+                    <th className="py-2.5 px-3 text-center whitespace-nowrap">Vencimento</th>
+                    <th className="py-2.5 px-3 text-right whitespace-nowrap">Ação</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-800 font-mono">
@@ -380,21 +380,23 @@ export function AvailableOptionsModal({
                         className="hover:bg-gray-50/80 dark:hover:bg-gray-800/40 transition-colors"
                       >
                         {/* Ticker */}
-                        <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
-                          <span>{opt.ticker}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyTicker(opt.ticker)}
-                            className="p-1 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                            title="Copiar Ticker"
-                          >
-                            <Icon name={isCopied ? 'check' : 'content_copy'} size="xs" className={isCopied ? 'text-emerald-500' : ''} />
-                          </button>
+                        <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-white whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            <span>{opt.ticker}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyTicker(opt.ticker)}
+                              className="p-1 rounded text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                              title="Copiar Ticker"
+                            >
+                              <Icon name={isCopied ? 'check' : 'content_copy'} size="xs" className={isCopied ? 'text-emerald-500' : ''} />
+                            </button>
+                          </div>
                         </td>
 
                         {/* Tipo */}
-                        <td className="py-2.5 px-2 font-sans">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        <td className="py-2.5 px-2 text-center font-sans whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold inline-block ${
                             isPut
                               ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
                               : 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300'
@@ -404,13 +406,13 @@ export function AvailableOptionsModal({
                         </td>
 
                         {/* Modelo */}
-                        <td className="py-2.5 px-2 text-gray-500 font-sans" title={opt.modelo === 'E' ? 'Europeia (exercício no vencimento)' : 'Americana (exercício a qualquer momento)'}>
+                        <td className="py-2.5 px-2 text-center text-gray-500 font-sans whitespace-nowrap" title={opt.modelo === 'E' ? 'Europeia (exercício no vencimento)' : 'Americana (exercício a qualquer momento)'}>
                           {opt.modelo}
                         </td>
 
                         {/* Status (Moneyness) */}
-                        <td className="py-2.5 px-2 font-sans">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                        <td className="py-2.5 px-2 text-center font-sans whitespace-nowrap">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium inline-block ${
                             opt.status === 'OTM'
                               ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
                               : opt.status === 'ATM'
@@ -422,53 +424,53 @@ export function AvailableOptionsModal({
                         </td>
 
                         {/* Strike */}
-                        <td className="py-2.5 px-3 text-right font-bold text-gray-900 dark:text-white">
+                        <td className="py-2.5 px-3 text-right font-bold text-gray-900 dark:text-white whitespace-nowrap">
                           {formatCurrency(opt.strike)}
                         </td>
 
                         {/* Distancia % */}
-                        <td className={`py-2.5 px-3 text-right ${
+                        <td className={`py-2.5 px-3 text-right whitespace-nowrap ${
                           opt.distanciaPercent < 0 
-                            ? 'text-emerald-600 dark:text-emerald-400' 
-                            : 'text-amber-600 dark:text-amber-400'
+                            ? 'text-emerald-600 dark:text-emerald-400 font-semibold' 
+                            : 'text-amber-600 dark:text-amber-400 font-semibold'
                         }`}>
                           {opt.distanciaPercent > 0 ? `+${opt.distanciaPercent.toFixed(1)}%` : `${opt.distanciaPercent.toFixed(1)}%`}
                         </td>
 
                         {/* Ultimo Premio */}
-                        <td className="py-2.5 px-3 text-right font-semibold text-gray-900 dark:text-white">
+                        <td className="py-2.5 px-3 text-right font-semibold text-gray-900 dark:text-white whitespace-nowrap">
                           {opt.ultimo > 0 ? formatCurrency(opt.ultimo) : '-'}
                         </td>
 
                         {/* Taxa % */}
-                        <td className="py-2.5 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                        <td className="py-2.5 px-3 text-right font-semibold text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
                           {estimatedRate > 0 ? `+${estimatedRate.toFixed(2)}%` : '-'}
                         </td>
 
                         {/* Vencimento */}
-                        <td className="py-2.5 px-3 text-center text-gray-500 dark:text-gray-400">
+                        <td className="py-2.5 px-3 text-center text-gray-500 dark:text-gray-400 whitespace-nowrap">
                           {opt.vencimento}
                         </td>
 
                         {/* Action */}
-                        <td className="py-2.5 px-3 text-right font-sans">
+                        <td className="py-2.5 px-3 text-right font-sans whitespace-nowrap">
                           {onSelectOption ? (
-                            <Button
-                              variant="ghost"
-                              size="sm"
+                            <button
+                              type="button"
                               onClick={() => {
                                 onSelectOption(opt);
                                 onClose();
                               }}
-                              className="text-[11px] text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/60 px-2 py-1"
+                              className="inline-flex items-center gap-1 text-[11px] font-semibold text-white bg-emerald-600 hover:bg-emerald-700 px-3 py-1 rounded-lg transition-colors whitespace-nowrap shadow-xs"
                             >
-                              + Usar Opção
-                            </Button>
+                              <span>+</span>
+                              <span>Usar Opção</span>
+                            </button>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleCopyTicker(opt.ticker)}
-                              className="text-[11px] px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-colors"
+                              className="text-[11px] px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 transition-colors whitespace-nowrap"
                             >
                               {isCopied ? 'Copiado!' : 'Copiar'}
                             </button>
