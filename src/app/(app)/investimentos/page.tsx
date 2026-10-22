@@ -81,6 +81,7 @@ export default function InvestmentsPage() {
   const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'>('carteira');
   const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
   const [selectedDetailTicker, setSelectedDetailTicker] = useState<string>('CMIG4');
+  const [filterText, setFilterText] = useState('');
 
   const handleOpenStockDetails = (ticker: string) => {
     setSelectedDetailTicker(ticker.trim().toUpperCase());
@@ -313,6 +314,17 @@ export default function InvestmentsPage() {
     ...i,
     percentage: totalCurrent > 0 ? Number(((i.total / totalCurrent) * 100).toFixed(1)) : 0
   })).sort((a, b) => b.total - a.total);
+
+  const filteredInvestments = investments.filter(inv => {
+    if (!filterText.trim()) return true;
+    const q = filterText.toLowerCase();
+    return (
+      inv.name.toLowerCase().includes(q) ||
+      (inv.ticker && inv.ticker.toLowerCase().includes(q)) ||
+      (inv.institution && inv.institution.toLowerCase().includes(q)) ||
+      (inv.investment_type?.name && inv.investment_type.name.toLowerCase().includes(q))
+    );
+  });
 
 
   // Modal Open Handlers
@@ -562,616 +574,551 @@ export default function InvestmentsPage() {
       {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-            <Icon name="trending_up" className="text-emerald-500" /> Carteira de Investimentos
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
+            Investimentos
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-            Controle de ações, FIIs, ETFs internacionais, criptomoedas e renda fixa com cotações em tempo real da B3 e suporte a Dólar (USD)
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            Acompanhamento de carteira e cotações em tempo real
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {/* USD Rate Badge */}
-          <div className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-xs font-bold text-emerald-700 dark:text-emerald-300 shadow-xs" title="Cotação comercial do dólar atualizada">
-            <span className="text-base leading-none">💵</span>
-            <span>USD = {formatCurrency(usdRate, 'BRL')}</span>
+          {/* USD Rate Pill */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-gray-100/80 dark:bg-gray-800/80 border border-gray-200/60 dark:border-gray-700/50 text-xs text-gray-600 dark:text-gray-300" title="Cotação comercial USD/BRL">
+            <span className="font-semibold text-gray-400 text-[10px] uppercase">USD</span>
+            <span className="font-mono font-medium">{formatCurrency(usdRate, 'BRL')}</span>
           </div>
 
           {/* Live Quote Sync Button */}
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
             onClick={() => {
               syncLiveQuotes();
               syncOptionsQuotes();
             }}
             disabled={isSyncingQuotes || isSyncingOptions || (investments.length === 0 && optionsStrategies.length === 0)}
-            className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40"
+            className="flex items-center gap-1.5 text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
             title="Atualizar cotações atuais de mercado na B3 e mercado internacional"
           >
             <Icon name="refresh" size="sm" className={isSyncingQuotes || isSyncingOptions ? 'animate-spin' : ''} />
-            <span>{isSyncingQuotes || isSyncingOptions ? 'Atualizando...' : 'Cotações em Tempo Real'}</span>
+            <span className="hidden sm:inline">{isSyncingQuotes || isSyncingOptions ? 'Atualizando...' : 'Atualizar'}</span>
           </Button>
 
-          {/* Investidor10 / CSV Import Button */}
+          {/* Import Button */}
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
             onClick={() => setIsImportModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100"
+            className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
           >
-            <Icon name="file_download" size="sm" className="text-purple-500" />
-            <span>Importar Investidor10</span>
+            Importar
+          </Button>
+
+          {/* New Option / Strategy Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsOptionModalOpen(true)}
+            className="text-xs text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
+          >
+            + Opção
           </Button>
 
           {/* Clear Portfolio Button */}
           {investments.length > 0 && (
-            <Button
-              variant="secondary"
-              size="sm"
+            <button
+              type="button"
               onClick={handleClearAllInvestments}
-              className="flex items-center gap-1.5 text-xs text-red-600 dark:text-red-400 border-red-200 dark:border-red-900 bg-red-50/50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-900/50"
+              className="p-1.5 text-gray-400 hover:text-rose-500 dark:hover:text-rose-400 transition-colors rounded-lg"
               title="Excluir todos os ativos da carteira"
             >
-              <Icon name="delete_sweep" size="sm" className="text-red-500" />
-              <span>Limpar Carteira</span>
-            </Button>
+              <Icon name="delete_sweep" size="sm" />
+            </button>
           )}
-
-          {/* New Option / Strategy Button */}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIsOptionModalOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 bg-purple-50/70 dark:bg-purple-950/40 hover:bg-purple-100"
-          >
-            <Icon name="candlestick_chart" size="sm" className="text-purple-500" />
-            <span>+ Nova Trava / Opção</span>
-          </Button>
 
           {/* New Investment Button */}
           <Button
             variant="primary"
             size="sm"
             onClick={() => handleOpenInvModal()}
-            className="flex items-center gap-1.5"
+            className="flex items-center gap-1.5 text-xs font-medium"
           >
             <Icon name="add" size="sm" /> 
-            <span>Novo Ativo / Compra</span>
+            <span>Novo Ativo</span>
           </Button>
         </div>
       </div>
 
       {loadError && (
-        <div className="p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+        <div className="p-3 bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-300 rounded-xl text-xs">
           {loadError}
         </div>
       )}
 
       {/* Navigation Sub-Tabs */}
       <div 
-        className="flex items-center gap-1.5 p-1.5 bg-gray-100/90 dark:bg-gray-800/80 rounded-2xl w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar no-scrollbar border border-gray-200/80 dark:border-gray-700/60 shadow-xs"
+        className="flex items-center gap-1 p-1 bg-gray-100/80 dark:bg-gray-800/50 rounded-xl w-full sm:w-fit max-w-full overflow-x-auto hide-scrollbar no-scrollbar border border-gray-200/60 dark:border-gray-700/40"
         style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
       >
         <button
           type="button"
           onClick={() => setActiveMainTab('carteira')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
             activeMainTab === 'carteira'
-              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="account_balance_wallet" size="sm" className="text-emerald-500" />
-          <span>Minha Carteira</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 font-extrabold">
-            {investments.length}
-          </span>
+          <span>Carteira</span>
+          {investments.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-gray-200/60 dark:bg-gray-800 text-gray-600 dark:text-gray-300 font-semibold">
+              {investments.length}
+            </span>
+          )}
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('detalhes')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
             activeMainTab === 'detalhes'
-              ? 'bg-white dark:bg-gray-900 text-sky-600 dark:text-sky-400 shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="query_stats" size="sm" className="text-sky-500" />
-          <span>Raio-X & Comparador</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 dark:bg-sky-950 text-sky-700 dark:text-sky-300 font-extrabold">
-            ✨
-          </span>
+          Raio-X & Comparador
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('screener')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
             activeMainTab === 'screener'
-              ? 'bg-white dark:bg-gray-900 text-blue-600 dark:text-blue-400 shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="search" size="sm" className="text-blue-500" />
-          <span>Busca / Screener</span>
+          Screener
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('analise')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
             activeMainTab === 'analise'
-              ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="analytics" size="sm" className="text-purple-500" />
-          <span>Análise (Graham / Bazin / FIIs)</span>
+          Análise
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('ir')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${
             activeMainTab === 'ir'
-              ? 'bg-white dark:bg-gray-900 text-orange-600 dark:text-orange-400 shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="receipt_long" size="sm" className="text-orange-500" />
-          <span>Calculadora IR & DARF</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-extrabold">
-            íon B3 ⚡
-          </span>
+          Calculadora IR
         </button>
 
         <button
           type="button"
           onClick={() => setActiveMainTab('opcoes')}
-          className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
             activeMainTab === 'opcoes'
-              ? 'bg-white dark:bg-gray-900 text-purple-600 dark:text-purple-400 shadow-xs'
+              ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-xs font-semibold'
               : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
           }`}
         >
-          <Icon name="candlestick_chart" size="sm" className="text-purple-500" />
-          <span>Opções & Estratégias</span>
-          <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950 text-purple-700 dark:text-purple-300 font-extrabold">
-            {optionsStrategies.filter(s => s.status !== 'closed').length > 0 ? `${optionsStrategies.filter(s => s.status !== 'closed').length} ativas` : 'Novo ⚡'}
-          </span>
+          <span>Opções</span>
+          {optionsStrategies.filter(s => s.status !== 'closed').length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-semibold">
+              {optionsStrategies.filter(s => s.status !== 'closed').length}
+            </span>
+          )}
         </button>
       </div>
 
       {activeMainTab === 'carteira' && (
         <div className="space-y-6">
           {/* KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {/* Total Patrimony */}
-            <GlassCard className="p-5 flex flex-col justify-between space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Patrimônio Total (Mercado)</span>
-                <div className="p-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
-                  <Icon name="account_balance_wallet" className="w-5 h-5" />
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Patrimônio Total</span>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</h2>
+                <p className="text-xs mt-1">
+                  <span className={`font-medium ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                    {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')} ({totalYield.toFixed(2)}%)
+                  </span>
+                </p>
+              </div>
+            </GlassCard>
+
+            {/* Total Invested */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total Aplicado</span>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{formatCurrency(totalInvested, 'BRL')}</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {investments.length} {investments.length === 1 ? 'ativo' : 'ativos'}
+                </p>
+              </div>
+            </GlassCard>
+
+            {/* Total Profit */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Rentabilidade Geral</span>
+              <div>
+                <h2 className={`text-2xl font-bold tracking-tight ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                  {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')}
+                </h2>
+                <p className="text-xs mt-1">
+                  <span className={`font-medium ${totalYield >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                    {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}% acumulado
+                  </span>
+                </p>
+              </div>
+            </GlassCard>
+
+            {/* Liquidity Breakdown */}
+            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Disponibilidade</span>
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">Imediata</span>
+                  <span className="font-semibold text-gray-900 dark:text-white">{formatCurrency(totalLiquid, 'BRL')}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-gray-500 dark:text-gray-400">A Prazo</span>
+                  <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(totalLocked, 'BRL')}</span>
                 </div>
               </div>
-          <div>
-            <h2 className="text-2xl font-extrabold text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-              <span className={`font-semibold ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')} ({totalYield.toFixed(2)}%)
-              </span>
-            </p>
-          </div>
-        </GlassCard>
-
-        {/* Total Invested */}
-        <GlassCard className="p-5 flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Investido (Custo)</span>
-            <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
-              <Icon name="savings" className="w-5 h-5" />
-            </div>
-          </div>
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{formatCurrency(totalInvested, 'BRL')}</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              {investments.length} {investments.length === 1 ? 'ativo na carteira' : 'ativos na carteira'}
-            </p>
-          </div>
-        </GlassCard>
-
-        {/* Total Profit */}
-        <GlassCard className="p-5 flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Lucro / Rentabilidade</span>
-            <div className={`p-2 rounded-xl ${totalProfit >= 0 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-500'}`}>
-              <Icon name={totalProfit >= 0 ? 'trending_up' : 'trending_down'} className="w-5 h-5" />
-            </div>
-          </div>
-          <div>
-            <h2 className={`text-2xl font-bold ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-              {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')}
-            </h2>
-            <Badge color={totalProfit >= 0 ? 'green' : 'red'} className="mt-1">
-              {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}% de retorno
-            </Badge>
-          </div>
-        </GlassCard>
-
-        {/* Liquidity Breakdown */}
-        <GlassCard className="p-5 flex flex-col justify-between space-y-3">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Liquidez & Prazos</span>
-            <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
-              <Icon name="schedule" className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Icon name="check_circle" className="text-emerald-500 w-3.5 h-3.5" /> Imediata:
-              </span>
-              <span className="font-bold text-gray-900 dark:text-white">{formatCurrency(totalLiquid, 'BRL')}</span>
-            </div>
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                <Icon name="lock" className="text-amber-500 w-3.5 h-3.5" /> Com Prazo/Carência:
-              </span>
-              <span className="font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalLocked, 'BRL')}</span>
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Main Charts & Allocation Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Allocation by Type (Donut Chart & Detailed Rows) */}
-        <GlassCard className="p-6 lg:col-span-2 space-y-6">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Alocação por Tipo de Ativo</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Distribuição do seu patrimônio (em Reais) entre categorias de investimentos</p>
-            </div>
-            <span className="px-3 py-1 bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 rounded-full text-xs font-bold flex items-center gap-1">
-              <Icon name="pie_chart" size="sm" /> {typeList.length} Tipos
-            </span>
+            </GlassCard>
           </div>
 
-          {investments.length > 0 && totalCurrent > 0 ? (
-            <div className="flex flex-col md:flex-row items-center gap-8">
-              <div className="w-full md:w-1/2 flex items-center justify-center">
-                <div className="h-56 w-56 relative flex items-center justify-center">
-                  <Doughnut 
-                    data={doughnutChartData} 
-                    options={{
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                          callbacks: {
-                            label: function(context: any) {
-                              const value = context.raw;
-                              const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-                              const percentage = totalCurrent > 0 ? ((value / totalCurrent) * 100).toFixed(1) : '0';
-                              return ` ${context.label}: ${formattedValue} (${percentage}%)`;
+          {/* Main Charts & Allocation Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Allocation by Type (Donut Chart & Clean Rows) */}
+            <GlassCard className="p-5 lg:col-span-2 space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Alocação por Categoria</h3>
+                <span className="text-xs text-gray-400 font-medium">{typeList.length} categorias</span>
+              </div>
+
+              {investments.length > 0 && totalCurrent > 0 ? (
+                <div className="flex flex-col md:flex-row items-center gap-6">
+                  <div className="w-full md:w-5/12 flex items-center justify-center">
+                    <div className="h-44 w-44 relative flex items-center justify-center">
+                      <Doughnut 
+                        data={doughnutChartData} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                              callbacks: {
+                                label: function(context: any) {
+                                  const value = context.raw;
+                                  const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+                                  const percentage = totalCurrent > 0 ? ((value / totalCurrent) * 100).toFixed(1) : '0';
+                                  return ` ${context.label}: ${formattedValue} (${percentage}%)`;
+                                }
+                              }
                             }
-                          }
-                        }
-                      },
-                      cutout: '78%'
-                    }} 
-                  />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-4">
-                    <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase mb-0.5">
-                      PATRIMÔNIO
-                    </span>
-                    <span className="text-lg font-extrabold text-gray-900 dark:text-white">
-                      {formatCurrency(totalCurrent, 'BRL')}
-                    </span>
+                          },
+                          cutout: '80%'
+                        }} 
+                      />
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
+                        <span className="text-[10px] font-medium tracking-wider text-gray-400 uppercase">
+                          Total
+                        </span>
+                        <span className="text-base font-bold text-gray-900 dark:text-white">
+                          {formatCurrency(totalCurrent, 'BRL')}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="w-full md:w-7/12 space-y-2.5">
+                    {typeList.map((type, idx) => (
+                      <div key={idx} className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <span className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                            <span 
+                              className="w-2 h-2 rounded-full shrink-0" 
+                              style={{ backgroundColor: type.color }}
+                            />
+                            <span className="font-medium">{type.name}</span>
+                          </span>
+                          <span className="font-mono text-gray-900 dark:text-white font-medium">
+                            {formatCurrency(type.total, 'BRL')} <span className="text-gray-400 text-[11px] font-normal">({type.percentage}%)</span>
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${Math.max(2, type.percentage)}%`, backgroundColor: type.color }}
+                          />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              ) : (
+                <div className="py-12 text-center text-xs text-gray-400">
+                  Nenhum investimento com saldo cadastrado.
+                </div>
+              )}
+            </GlassCard>
 
-              <div className="w-full md:w-1/2 space-y-3.5">
-                {typeList.map((type, idx) => (
-                  <div key={idx} className="space-y-1.5">
-                    <div className="flex justify-between items-center text-xs font-medium">
-                      <span className="flex items-center gap-2 text-gray-800 dark:text-gray-200">
-                        <span 
-                          className="w-3 h-3 rounded-full shrink-0" 
-                          style={{ backgroundColor: type.color }}
-                        />
-                        {type.name} ({type.count})
-                      </span>
-                      <span className="font-bold text-gray-900 dark:text-white">
-                        {formatCurrency(type.total, 'BRL')} ({type.percentage}%)
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full rounded-full transition-all duration-700 ease-out"
-                        style={{ width: `${Math.max(2, type.percentage)}%`, backgroundColor: type.color }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <div className="py-12 text-center text-xs text-gray-400 italic">
-              Nenhum investimento com saldo cadastrado para exibir a composição da carteira.
-            </div>
-          )}
-        </GlassCard>
+            {/* Allocation by Financial Institution */}
+            <GlassCard className="p-5 space-y-4 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Custódia</h3>
+                  <span className="text-xs text-gray-400 font-medium">{instList.length} instituições</span>
+                </div>
 
-        {/* Allocation by Financial Institution */}
-        <GlassCard className="p-6 space-y-4 flex flex-col justify-between">
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white">Por Instituição</h3>
-              <span className="text-xs text-gray-400 font-medium">{instList.length} Bancos/Corretoras</span>
-            </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-              Onde o seu dinheiro está custodiado
-            </p>
-
-            {instList.length > 0 && totalCurrent > 0 ? (
-              <div className="space-y-4 max-h-[320px] overflow-y-auto pr-1">
-                {instList.map((inst, idx) => (
-                  <div key={idx} className="bg-gray-50/80 dark:bg-gray-800/40 rounded-xl p-3 space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold">
-                          <Icon name="account_balance" size="sm" />
+                {instList.length > 0 && totalCurrent > 0 ? (
+                  <div className="space-y-3 max-h-[260px] overflow-y-auto pr-1">
+                    {instList.map((inst, idx) => (
+                      <div key={idx} className="space-y-1 text-xs">
+                        <div className="flex justify-between items-center">
+                          <span className="font-medium text-gray-800 dark:text-gray-200">{inst.name}</span>
+                          <div className="text-right">
+                            <span className="font-mono font-medium text-gray-900 dark:text-white">{formatCurrency(inst.total, 'BRL')}</span>
+                            <span className="text-[11px] text-gray-400 ml-1.5">({inst.percentage}%)</span>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-bold text-gray-900 dark:text-white text-xs">{inst.name}</p>
-                          <p className="text-[10px] text-gray-400">{inst.count} {inst.count === 1 ? 'ativo' : 'ativos'}</p>
+                        <div className="w-full h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-500/80 rounded-full transition-all duration-500" 
+                            style={{ width: `${Math.max(2, inst.percentage)}%` }}
+                          />
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-extrabold text-gray-900 dark:text-white text-xs">{formatCurrency(inst.total, 'BRL')}</p>
-                        <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400">{inst.percentage}%</p>
-                      </div>
-                    </div>
-                    <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-blue-500 rounded-full transition-all duration-700" 
-                        style={{ width: `${Math.max(2, inst.percentage)}%` }}
-                      />
-                    </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="py-12 text-center text-xs text-gray-400">
+                    Nenhuma instituição registrada.
+                  </div>
+                )}
+              </div>
+            </GlassCard>
+          </div>
+
+          {/* Detailed Assets Table */}
+          <GlassCard className="p-4 sm:p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Ativos na Carteira</h3>
+                <span className="text-xs text-gray-400 font-normal">
+                  {investments.length} {investments.length === 1 ? 'ativo cadastrado' : 'ativos cadastrados'}
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                {investments.length > 3 && (
+                  <div className="relative flex-1 sm:w-48">
+                    <input
+                      type="text"
+                      placeholder="Filtrar ativos..."
+                      value={filterText}
+                      onChange={(e) => setFilterText(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white/50 dark:bg-gray-800/50 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                )}
+                <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap hidden sm:inline">
+                  Saldo: <strong className="text-gray-900 dark:text-white font-mono">{formatCurrency(totalCurrent, 'BRL')}</strong>
+                </span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="py-12 flex justify-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : filteredInvestments.length > 0 ? (
+              <div 
+                className="overflow-x-auto no-scrollbar hide-scrollbar -mx-4 sm:mx-0 px-4 sm:px-0"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              >
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="text-[11px] text-gray-400 uppercase font-medium border-b border-gray-100 dark:border-gray-800">
+                    <tr>
+                      <th scope="col" className="py-2.5 pr-3">Ativo</th>
+                      <th scope="col" className="py-2.5 px-3">Categoria</th>
+                      <th scope="col" className="py-2.5 px-2 text-center">Qtd</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Preço Médio</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Cotação</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Total Aplicado</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Saldo Atual</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Rentabilidade</th>
+                      <th scope="col" className="py-2.5 pl-3 text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-800/60">
+                    {filteredInvestments.map((inv) => {
+                      const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
+                      const curr = isUsd ? 'USD' : 'BRL';
+                      
+                      const invYield = inv.total_invested > 0 
+                        ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 
+                        : (inv.average_price && inv.average_price > 0 && inv.current_price ? ((inv.current_price - inv.average_price) / inv.average_price) * 100 : 0);
+                      
+                      const isPositive = invYield >= 0;
+                      const profitAmt = inv.current_balance - inv.total_invested;
+                      const hasQty = inv.quantity && inv.quantity > 0;
+                      const isNameIdentical = inv.ticker && inv.name.trim().toUpperCase() === inv.ticker.trim().toUpperCase();
+
+                      return (
+                        <tr key={inv.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors group">
+                          <td className="py-3 pr-3">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5">
+                                {inv.ticker ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenStockDetails(inv.ticker!)}
+                                    title={`Ver detalhes e valuations de ${inv.ticker}`}
+                                    className="font-mono font-semibold text-xs text-gray-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-left cursor-pointer"
+                                  >
+                                    {inv.ticker}
+                                  </button>
+                                ) : (
+                                  <span className="font-semibold text-gray-900 dark:text-white text-xs">
+                                    {inv.name}
+                                  </span>
+                                )}
+
+                                {isUsd && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-500">
+                                    USD
+                                  </span>
+                                )}
+                                {inv.plan_type && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-500">
+                                    {inv.plan_type}
+                                  </span>
+                                )}
+                              </div>
+
+                              {inv.ticker && !isNameIdentical && (
+                                <p className="text-gray-400 text-[11px] truncate max-w-[140px] mt-0.5">
+                                  {inv.name}
+                                </p>
+                              )}
+
+                              {inv.due_date && (
+                                <span className="text-[10px] text-gray-400 mt-0.5">
+                                  Venc: {formatDate(inv.due_date)}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-3">
+                            <div className="flex flex-col">
+                              <div className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
+                                <span 
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ backgroundColor: isUsd ? '#0ea5e9' : (inv.investment_type?.color || '#0058be') }}
+                                />
+                                <span>{isUsd ? 'Internacional' : (inv.investment_type?.name || 'Outro')}</span>
+                              </div>
+                              {inv.institution && (
+                                <span className="text-[10px] text-gray-400 mt-0.5">{inv.institution}</span>
+                              )}
+                            </div>
+                          </td>
+
+                          <td className="py-3 px-2 text-center font-mono text-gray-700 dark:text-gray-300 text-xs">
+                            {hasQty ? formatQuantity(inv.quantity) : '-'}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono text-gray-600 dark:text-gray-400 whitespace-nowrap text-xs">
+                            {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price, curr) : '-'}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono font-medium text-gray-900 dark:text-white whitespace-nowrap text-xs">
+                            {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price, curr) : '-'}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono whitespace-nowrap text-xs">
+                            <p className="text-gray-700 dark:text-gray-300">{formatCurrency(inv.total_invested, curr)}</p>
+                            {isUsd && (
+                              <p className="text-[10px] text-gray-400">≈ {formatCurrency(inv.total_invested * usdRate, 'BRL')}</p>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono whitespace-nowrap text-xs">
+                            <p className="font-semibold text-gray-900 dark:text-white">{formatCurrency(inv.current_balance, curr)}</p>
+                            {isUsd && (
+                              <p className="text-[10px] text-gray-400">≈ {formatCurrency(inv.current_balance * usdRate, 'BRL')}</p>
+                            )}
+                          </td>
+
+                          <td className="py-3 px-3 text-right font-mono whitespace-nowrap text-xs">
+                            <p className={`font-semibold ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                              {isPositive ? '+' : ''}{formatCurrency(profitAmt, curr)}
+                            </p>
+                            <p className={`text-[10px] ${isPositive ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-rose-500/80'}`}>
+                              {isPositive ? '+' : ''}{invYield.toFixed(2)}%
+                            </p>
+                          </td>
+
+                          <td className="py-3 pl-3 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end gap-1">
+                              <button 
+                                onClick={() => handleOpenEntryModal(inv)}
+                                className="px-2 py-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded transition-colors text-[11px] font-medium"
+                                title="Registrar aporte ou movimentação"
+                              >
+                                + Aporte
+                              </button>
+                              <button 
+                                onClick={() => handleOpenInvModal(inv)}
+                                className="p-1 text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 rounded transition-colors"
+                                title="Editar"
+                              >
+                                <Icon name="edit" size="sm" />
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteInvestment(inv.id, inv.name)}
+                                className="p-1 text-gray-400 hover:text-rose-600 rounded transition-colors"
+                                title="Excluir"
+                              >
+                                <Icon name="delete" size="sm" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <div className="py-12 text-center text-xs text-gray-400 italic">
-                Nenhuma instituição registrada.
+              <div className="py-12">
+                <EmptyState 
+                  title="Nenhum investimento encontrado" 
+                  description={filterText ? "Tente buscar com outro termo." : "Cadastre seus ativos para começar."} 
+                  icon="account_balance"
+                />
               </div>
             )}
-          </div>
-        </GlassCard>
-      </div>
-
-      {/* Detailed Assets Table */}
-      <GlassCard className="p-4 md:p-6 space-y-4">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900 dark:text-white">Meus Ativos, Ações & Criptomoedas</h3>
-            <p className="text-xs text-gray-400">Posição, Preço Médio, Cotação Atual e Rentabilidade da Carteira</p>
-          </div>
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            Total em Carteira: <strong className="text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</strong>
-          </span>
-        </div>
-        
-        {loading ? (
-          <div className="py-12 flex justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : investments.length > 0 ? (
-          <div 
-            className="overflow-x-auto no-scrollbar hide-scrollbar"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            <table className="w-full text-xs text-left border-collapse">
-              <thead className="text-[11px] text-gray-600 dark:text-gray-300 uppercase bg-gray-100/95 dark:bg-gray-800/95 backdrop-blur-md sticky top-0 z-10 font-bold border-b border-gray-200 dark:border-gray-700 shadow-xs">
-                <tr>
-                  <th scope="col" className="px-3 py-3 rounded-l-lg">Ativo</th>
-                  <th scope="col" className="px-2.5 py-3">Tipo & Corretora</th>
-                  <th scope="col" className="px-2 py-3 text-center">Qtd</th>
-                  <th scope="col" className="px-2.5 py-3 text-right">Preço Médio</th>
-                  <th scope="col" className="px-2.5 py-3 text-right">Cotação Atual</th>
-                  <th scope="col" className="px-2.5 py-3 text-right">Total Investido</th>
-                  <th scope="col" className="px-2.5 py-3 text-right">Saldo Atual</th>
-                  <th scope="col" className="px-2.5 py-3 text-right">Rentabilidade</th>
-                  <th scope="col" className="px-3 py-3 text-center rounded-r-lg">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {investments.map((inv) => {
-                  const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
-                  const curr = isUsd ? 'USD' : 'BRL';
-                  
-                  const invYield = inv.total_invested > 0 
-                    ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 
-                    : (inv.average_price && inv.average_price > 0 && inv.current_price ? ((inv.current_price - inv.average_price) / inv.average_price) * 100 : 0);
-                  
-                  const isPositive = invYield >= 0;
-                  const profitAmt = inv.current_balance - inv.total_invested;
-                  const hasQty = inv.quantity && inv.quantity > 0;
-                  const isNameIdentical = inv.ticker && inv.name.trim().toUpperCase() === inv.ticker.trim().toUpperCase();
-                  
-                  return (
-                    <tr key={inv.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-colors">
-                      <td className="px-3 py-2.5">
-                        <div className="flex flex-col justify-center">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {inv.ticker ? (
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStockDetails(inv.ticker!)}
-                                title={`Ver Raio-X e Valuations de ${inv.ticker}`}
-                                className={`px-2 py-0.5 rounded font-mono font-bold text-xs flex items-center gap-1 hover:scale-105 transition-transform cursor-pointer shrink-0 ${
-                                  isUsd 
-                                    ? 'bg-sky-100 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-300 dark:border-sky-800/40' 
-                                    : 'bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900'
-                                }`}
-                              >
-                                {isUsd && <span>🇺🇸</span>}
-                                {inv.ticker}
-                              </button>
-                            ) : (
-                              <span className="font-bold text-gray-900 dark:text-white text-xs">
-                                {inv.name}
-                              </span>
-                            )}
-
-                            {isUsd && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">
-                                USD
-                              </span>
-                            )}
-                            {inv.plan_type && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
-                                {inv.plan_type}
-                              </span>
-                            )}
-                            {inv.tax_regime && (
-                              <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                                {inv.tax_regime}
-                              </span>
-                            )}
-                          </div>
-
-                          {inv.ticker && !isNameIdentical && (
-                            <p className="font-medium text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-[150px] mt-0.5" title={inv.name}>
-                              {inv.name}
-                            </p>
-                          )}
-
-                          {inv.due_date && (
-                            <span className="text-[10px] text-gray-400 block mt-0.5">
-                              {inv.investment_type?.name?.toLowerCase().includes('previd') ? 'Aposentadoria: ' : 'Venc: '}
-                              {formatDate(inv.due_date)}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-2.5 py-2.5">
-                        <div className="space-y-1">
-                          <span 
-                            className="px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow-xs inline-flex items-center gap-1.5 whitespace-nowrap"
-                            style={{ backgroundColor: isUsd ? '#0ea5e9' : (inv.investment_type?.color || '#0058be') }}
-                            title={isUsd ? 'ETFs Internacionais' : (inv.investment_type?.name || 'Outro')}
-                          >
-                            <span className="w-1.5 h-1.5 rounded-full bg-white shrink-0"></span>
-                            <span>{isUsd ? 'Internacional' : (inv.investment_type?.name || 'Outro')}</span>
-                          </span>
-                          <p className="text-[10px] text-gray-400 font-medium truncate max-w-[110px]" title={inv.institution || '-'}>
-                            {inv.institution || (isUsd ? 'Internacional' : '-')}
-                          </p>
-                        </div>
-                      </td>
-
-                      <td className="px-2 py-3 text-center">
-                        {hasQty ? (
-                          <span className="font-bold text-gray-900 dark:text-white text-xs bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded-md font-mono">
-                            {formatQuantity(inv.quantity)}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
-                      </td>
-
-                      <td className="px-2.5 py-3 text-right text-gray-600 dark:text-gray-300 whitespace-nowrap text-xs font-mono">
-                        {inv.average_price && inv.average_price > 0 ? formatCurrency(inv.average_price, curr) : '-'}
-                      </td>
-
-                      <td className="px-2.5 py-3 text-right font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap text-xs font-mono">
-                        {inv.current_price && inv.current_price > 0 ? formatCurrency(inv.current_price, curr) : '-'}
-                      </td>
-
-                      <td className="px-2.5 py-3 text-right whitespace-nowrap text-xs font-mono">
-                        <p className="font-semibold text-gray-800 dark:text-gray-200">{formatCurrency(inv.total_invested, curr)}</p>
-                        {isUsd && (
-                          <p className="text-[10px] text-gray-400">≈ {formatCurrency(inv.total_invested * usdRate, 'BRL')}</p>
-                        )}
-                      </td>
-
-                      <td className="px-2.5 py-3 text-right whitespace-nowrap font-mono">
-                        <p className="font-extrabold text-gray-900 dark:text-white text-xs">{formatCurrency(inv.current_balance, curr)}</p>
-                        {isUsd && (
-                          <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">≈ {formatCurrency(inv.current_balance * usdRate, 'BRL')}</p>
-                        )}
-                      </td>
-
-                      <td className="px-2.5 py-3 text-right whitespace-nowrap font-mono">
-                        <div className={`font-bold text-xs ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                          <span>{isPositive ? '+' : ''}{formatCurrency(profitAmt, curr)}</span>
-                          <span className="text-[10px] block opacity-80">({isPositive ? '+' : ''}{invYield.toFixed(2)}%)</span>
-                          {isUsd && (
-                            <span className="text-[9px] text-gray-400 block font-normal">
-                              ≈ {isPositive ? '+' : ''}{formatCurrency(profitAmt * usdRate, 'BRL')}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-3 py-3 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          {inv.ticker && !isUsd && (
-                            <button
-                              type="button"
-                              onClick={() => handleOpenStockDetails(inv.ticker!)}
-                              className="px-1.5 py-1 text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-colors rounded-md flex items-center gap-1 text-[11px] font-bold shadow-xs"
-                              title="Abrir Detalhes da Ação, Indicadores e Valuations"
-                            >
-                              <Icon name="query_stats" size="sm" /> Raio-X
-                            </button>
-                          )}
-                          <button 
-                            onClick={() => handleOpenEntryModal(inv)}
-                            className="px-1.5 py-1 text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors rounded-md flex items-center gap-1 text-[11px] font-bold shadow-xs"
-                            title="Comprar mais / Novo aporte"
-                          >
-                            <Icon name="add_circle" size="sm" /> Aporte
-                          </button>
-                          <button 
-                            onClick={() => handleOpenInvModal(inv)}
-                            className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition-colors rounded-md"
-                            title="Editar Ativo"
-                          >
-                            <Icon name="edit" size="sm" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteInvestment(inv.id, inv.name)}
-                            className="p-1 text-red-400 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors rounded-md"
-                            title="Excluir Ativo"
-                          >
-                            <Icon name="delete" size="sm" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="py-12">
-            <EmptyState 
-              title="Nenhum investimento cadastrado" 
-              description="Cadastre seus ativos ou importe sua carteira do Investidor10 para acompanhar suas ações e rendimentos." 
-              icon="account_balance"
-            />
-          </div>
-        )}
-      </GlassCard>
+          </GlassCard>
         </div>
       )}
 
@@ -1251,25 +1198,23 @@ export default function InvestmentsPage() {
               <button
                 type="button"
                 onClick={() => setInvForm(prev => ({ ...prev, currency: 'BRL' }))}
-                className={`p-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                className={`p-2 rounded-xl text-xs font-medium border transition-all flex items-center justify-center gap-1.5 ${
                   invForm.currency === 'BRL'
                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
                     : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
                 }`}
               >
-                <span>🇧🇷</span>
                 <span>Real Brasileiro (R$)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setInvForm(prev => ({ ...prev, currency: 'USD' }))}
-                className={`p-2 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                className={`p-2 rounded-xl text-xs font-medium border transition-all flex items-center justify-center gap-1.5 ${
                   invForm.currency === 'USD'
-                    ? 'bg-sky-600 text-white border-sky-600 shadow-sm'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-sky-400'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-blue-400'
                 }`}
               >
-                <span>🇺🇸</span>
                 <span>Dólar Americano (US$)</span>
               </button>
             </div>
@@ -1277,13 +1222,13 @@ export default function InvestmentsPage() {
 
           {/* Ticker Search & Auto Complete */}
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300">
-              Ticker / Código do Ativo (B3 ou EUA / Cripto)
+            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300">
+              Ticker / Código do Ativo
             </label>
             <div className="flex gap-2">
               <div className="relative flex-1">
                 <Input 
-                  placeholder="Ex: IVV, VXUS, TFLO, VOO, PETR4, MXRF11, BTC" 
+                  placeholder="Ex: IVV, PETR4, MXRF11, BTC" 
                   value={invForm.ticker}
                   onChange={(e) => setInvForm({...invForm, ticker: e.target.value.toUpperCase()})}
                   onKeyDown={(e) => {
@@ -1304,17 +1249,17 @@ export default function InvestmentsPage() {
                 className="shrink-0 text-xs flex items-center gap-1"
               >
                 <Icon name="search" size="sm" className={isSearchingQuote ? 'animate-spin' : ''} />
-                <span>{isSearchingQuote ? 'Buscando...' : 'Buscar Cotação'}</span>
+                <span>{isSearchingQuote ? 'Buscando...' : 'Buscar'}</span>
               </Button>
             </div>
 
             {/* Quick Chips */}
             <div className="flex flex-wrap gap-1.5 pt-1">
               {[
-                { symbol: 'IVV', label: '🇺🇸 IVV (S&P 500)' },
-                { symbol: 'VXUS', label: '🇺🇸 VXUS (Total Intl)' },
-                { symbol: 'TFLO', label: '🇺🇸 TFLO (Treasury)' },
-                { symbol: 'BTC', label: '₿ Bitcoin' },
+                { symbol: 'IVV', label: 'IVV (S&P 500)' },
+                { symbol: 'VXUS', label: 'VXUS (Total Intl)' },
+                { symbol: 'TFLO', label: 'TFLO' },
+                { symbol: 'BTC', label: 'Bitcoin' },
                 { symbol: 'PETR4', label: 'Petrobras' },
                 { symbol: 'VALE3', label: 'Vale' },
                 { symbol: 'MXRF11', label: 'Maxi Renda' }
