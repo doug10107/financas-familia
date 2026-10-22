@@ -313,17 +313,17 @@ export function OptionsStrategyDashboard({
           </div>
 
           <div className="flex flex-wrap items-center gap-5">
-            <div className="text-right px-3 py-1.5 rounded-xl bg-blue-500/10 border border-blue-200/60 dark:border-blue-800/50">
-              <span className="text-[11px] font-semibold text-blue-700 dark:text-blue-300 block">
-                🛡️ Garantia Total Exigida (Strike × Qtd):
-              </span>
-              <p className="text-sm font-extrabold text-blue-700 dark:text-blue-300">
+            <div className="text-right">
+              <span className="text-xs text-gray-500">Garantia Exigida:</span>
+              <p className="text-sm font-extrabold text-blue-600 dark:text-blue-400">
                 {formatCurrency(totalCollateral)}{' '}
-                <span className="text-xs font-medium opacity-80">
-                  ({collateralAllocationPercent.toFixed(1)}% do patrimônio)
+                <span className="text-xs font-medium text-gray-400">
+                  ({collateralAllocationPercent.toFixed(1)}%)
                 </span>
               </p>
             </div>
+
+            <div className="hidden sm:block h-7 w-px bg-gray-200 dark:bg-gray-700/70" />
 
             <div className="text-right">
               <span className="text-xs text-gray-500">Prêmios / Custo Base:</span>
@@ -331,7 +331,7 @@ export function OptionsStrategyDashboard({
                 {riskAllocationPercent.toFixed(2)}% ({formatCurrency(totalAllocated)})
               </p>
             </div>
-            <div className="w-28 sm:w-36 h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+            <div className="w-28 sm:w-36 h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
               <div
                 className={`h-full transition-all rounded-full ${
                   riskAllocationPercent <= 3 ? 'bg-emerald-500' : riskAllocationPercent <= 5 ? 'bg-amber-500' : 'bg-red-500'
@@ -489,54 +489,64 @@ export function OptionsStrategyDashboard({
                     const isLong = strat.strategyCategory === 'compra_seco' || (!!buyLeg && !sellLeg);
 
                     return (
-                      <div className="flex flex-wrap items-center gap-5 justify-between lg:justify-end">
-                        {/* Garantia Total da Operação */}
-                        <div className="text-left lg:text-right px-3 py-1.5 rounded-xl bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60">
-                          <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-wide flex items-center lg:justify-end gap-1">
-                            <Icon name="shield" size="xs" />
-                            {analysis.collateralLabel}
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-4 xl:gap-6 justify-between lg:justify-end shrink-0">
+                        <div className="text-left lg:text-right">
+                          <span className="text-[11px] text-gray-400 font-semibold block">
+                            {isShort ? 'Garantia (Strike)' : 'Garantia / Risco'}
                           </span>
-                          <span className="text-sm font-extrabold text-blue-700 dark:text-blue-300 block">
+                          <span className="text-sm font-extrabold text-blue-600 dark:text-blue-400 block">
                             {formatCurrency(analysis.collateralTotal)}
                           </span>
-                          {analysis.collateralSubtext && (
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium block">
-                              {analysis.collateralSubtext}
+                          {isShort && (
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 block">
+                              Líq: {formatCurrency(analysis.collateralNet)} • PM R$ {analysis.breakevenPrice.toFixed(2)}
                             </span>
                           )}
                         </div>
+
+                        <div className="hidden sm:block h-7 w-px bg-gray-200 dark:bg-gray-700/70" />
 
                         <div className="text-left lg:text-right">
                           <span className="text-[11px] text-gray-400 font-semibold block">
                             {isShort ? 'Prêmio Recebido' : 'Custo Base'}
                           </span>
-                          <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                            R$ {analysis.entryCost.toFixed(2)}/un ({formatCurrency(analysis.totalEntryCost)})
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200 block">
+                            {formatCurrency(analysis.totalEntryCost)}
+                          </span>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 block">
+                            R$ {analysis.entryCost.toFixed(2)}/un
                           </span>
                         </div>
+
+                        <div className="hidden sm:block h-7 w-px bg-gray-200 dark:bg-gray-700/70" />
 
                         <div className="text-left lg:text-right">
                           <span className="text-[11px] text-gray-400 font-semibold block">
                             {isShort ? 'Cotação Recompra' : isLong ? 'Cotação Atual' : 'Spread Atual'}
                           </span>
-                          <span className="text-sm font-extrabold text-purple-600 dark:text-purple-400">
+                          <span className="text-sm font-extrabold text-purple-600 dark:text-purple-400 block">
                             R$ {analysis.currentSpread.toFixed(2)}
                           </span>
+                          {analysis.distanceToShortStrikePercent !== undefined && (
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 block">
+                              Dist. Strike: {analysis.distanceToShortStrikePercent > 0 ? '+' : ''}{analysis.distanceToShortStrikePercent.toFixed(1)}%
+                            </span>
+                          )}
                         </div>
+
+                        <div className="hidden sm:block h-7 w-px bg-gray-200 dark:bg-gray-700/70" />
 
                         <div className="text-left lg:text-right">
                           <span className="text-[11px] text-gray-400 font-semibold block">P&L Aberto</span>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`text-base font-extrabold ${analysis.pnlTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
-                              {analysis.pnlTotal >= 0 ? '+' : ''}{formatCurrency(analysis.pnlTotal)}
-                            </span>
-                            <span className={`text-xs font-bold ${analysis.pnlPercent >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                              ({analysis.pnlPercent >= 0 ? '+' : ''}{analysis.pnlPercent.toFixed(1)}%)
-                            </span>
-                          </div>
+                          <span className={`text-sm font-extrabold block ${analysis.pnlTotal >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                            {analysis.pnlTotal >= 0 ? '+' : ''}{formatCurrency(analysis.pnlTotal)}
+                          </span>
+                          <span className={`text-[10px] font-bold block ${analysis.pnlPercent >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'}`}>
+                            {analysis.pnlPercent >= 0 ? '+' : ''}{analysis.pnlPercent.toFixed(1)}%
+                          </span>
                         </div>
 
-                        <div className="w-6 h-6 flex items-center justify-center text-gray-400">
+                        <div className="w-6 h-6 flex items-center justify-center text-gray-400 ml-1">
                           <Icon name={isExpanded ? 'expand_less' : 'expand_more'} size="sm" />
                         </div>
                       </div>
@@ -570,19 +580,19 @@ export function OptionsStrategyDashboard({
                     const t80Pos = Math.max(4, Math.min(96, ((target80 - minVal) / range) * 100));
 
                     return (
-                      <div className="p-3 bg-gray-50/80 dark:bg-gray-800/40 rounded-xl border border-gray-200/60 dark:border-gray-700/40 space-y-2">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-1.5">
+                      <div className="p-3 bg-gray-50/70 dark:bg-gray-800/30 rounded-xl border border-gray-200/50 dark:border-gray-700/40 space-y-2">
+                        <div className="flex flex-wrap justify-between items-center gap-2 text-xs">
+                          <span className="font-bold text-gray-700 dark:text-gray-200 flex items-center gap-2">
                             <Icon name="speed" size="sm" className="text-purple-500" /> 
-                            {isShort ? 'Termômetro da Venda:' : 'Termômetro da Trava:'}
+                            <span>{isShort ? 'Termômetro da Venda:' : 'Termômetro da Trava:'}</span>
                             <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300 font-extrabold font-mono text-xs">
                               {isShort ? `Cotação R$ ${analysis.currentSpread.toFixed(2)}` : `Spread Atual R$ ${analysis.currentSpread.toFixed(2)}`}
                             </span>
                           </span>
 
-                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 flex items-center gap-1">
+                          <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
                             <Icon name="info" size="xs" className="text-gray-400" />
-                            {analysis.statusBadge.actionRecommendation || 'Aguardando faixa de saída'}
+                            <span>{analysis.statusBadge.actionRecommendation || 'Aguardando faixa de saída'}</span>
                           </span>
                         </div>
 
@@ -600,7 +610,7 @@ export function OptionsStrategyDashboard({
                                 ? 'bg-red-600 text-white border-red-400 animate-pulse'
                                 : 'bg-purple-700 text-white border-purple-400'
                             }`}>
-                              <span>Spread: R$ {analysis.currentSpread.toFixed(2)}</span>
+                              <span>{isShort ? 'Atual' : 'Spread'}: R$ {analysis.currentSpread.toFixed(2)}</span>
                             </div>
                             <div className={`w-0 h-0 border-l-[4px] border-l-transparent border-r-[4px] border-r-transparent border-t-[5px] ${
                               analysis.statusBadge.color === 'emerald'
@@ -612,7 +622,7 @@ export function OptionsStrategyDashboard({
                           </div>
 
                           {/* Trilho multi-segmento do Termômetro */}
-                          <div className="relative w-full h-4 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex shadow-inner">
+                          <div className="relative w-full h-2.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden flex shadow-inner">
                             {isShort ? (
                               <>
                                 <div className="h-full bg-emerald-600 dark:bg-emerald-500" style={{ width: `${t80Pos}%` }} title="Lucro Máximo (Virando Pó)"></div>
@@ -657,74 +667,11 @@ export function OptionsStrategyDashboard({
 
                 {/* Expanded Section with Leg Details & Actions */}
                 {isExpanded && (
-                  <div className="px-5 pb-5 pt-3 border-t border-gray-200/80 dark:border-gray-700/80 space-y-4 bg-white/40 dark:bg-gray-900/40">
-                    {/* Resumo de Garantia & Ponto de Equilíbrio (Breakeven) */}
-                    {(() => {
-                      const isShort = strat.strategyCategory === 'venda_put' || strat.strategyCategory === 'venda_coberta' || (!buyLeg && !!sellLeg);
-                      return (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-3 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40">
-                          <div>
-                            <span className="text-[10px] font-bold uppercase text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                              <Icon name="shield" size="xs" />
-                              {isShort ? 'Garantia Total (Strike × Qtd)' : 'Garantia / Exposição da Operação'}
-                            </span>
-                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                              {formatCurrency(analysis.collateralTotal)}
-                            </p>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                              {isShort && sellLeg
-                                ? `${strat.quantity}x R$ ${sellLeg.strike.toFixed(2)} no exercício`
-                                : analysis.collateralSubtext}
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-bold uppercase text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                              <Icon name="payments" size="xs" />
-                              {isShort ? 'Prêmio Total Recebido' : 'Custo Total de Montagem'}
-                            </span>
-                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                              {formatCurrency(analysis.totalEntryCost)}
-                            </p>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                              R$ {analysis.entryCost.toFixed(2)} por opção ({strat.quantity} un)
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-bold uppercase text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                              <Icon name="account_balance_wallet" size="xs" />
-                              {isShort ? 'Garantia Líquida (c/ Prêmio)' : 'Valor Atual da Posição'}
-                            </span>
-                            <p className="text-sm font-extrabold text-emerald-700 dark:text-emerald-300 mt-0.5">
-                              {formatCurrency(isShort ? analysis.collateralNet : analysis.currentValue)}
-                            </p>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                              {isShort ? 'Desembolso real se exercido' : `Cotação atual: R$ ${analysis.currentSpread.toFixed(2)}/un`}
-                            </span>
-                          </div>
-
-                          <div>
-                            <span className="text-[10px] font-bold uppercase text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                              <Icon name="balance" size="xs" />
-                              Preço Médio / Breakeven
-                            </span>
-                            <p className="text-sm font-extrabold text-gray-900 dark:text-white mt-0.5">
-                              R$ {analysis.breakevenPrice.toFixed(2)}
-                            </p>
-                            <span className="text-[10px] text-gray-500 dark:text-gray-400">
-                              {analysis.distanceToShortStrikePercent !== undefined
-                                ? `Distância do Strike: ${analysis.distanceToShortStrikePercent > 0 ? '+' : ''}${analysis.distanceToShortStrikePercent.toFixed(1)}%`
-                                : 'Ponto de equilíbrio no vencimento'}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
+                  <div className="px-5 pb-5 pt-3 border-t border-gray-200/80 dark:border-gray-700/80 space-y-3 bg-white/40 dark:bg-gray-900/40">
                     <div className="flex items-center justify-between">
-                      <h5 className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
-                        <Icon name="view_list" size="sm" /> Pernas Detalhadas da Operação
+                      <h5 className="text-xs font-extrabold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <Icon name="view_list" size="sm" className="text-gray-400" />
+                        <span>Pernas Detalhadas da Operação</span>
                       </h5>
                       <span className="text-[11px] text-gray-400">
                         Cotação sincronizada em tempo real (2 cliques para override manual)
