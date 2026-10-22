@@ -25,6 +25,7 @@ import { TaxCalculatorDashboard } from '@/components/investimentos/TaxCalculator
 import { useOptionsStrategies } from '@/hooks/useOptionsStrategies';
 import { OptionsStrategyDashboard } from '@/components/investimentos/OptionsStrategyDashboard';
 import { NewOptionStrategyModal } from '@/components/investimentos/NewOptionStrategyModal';
+import { StrategyCategory } from '@/lib/options/optionsEngine';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -94,6 +95,12 @@ export default function InvestmentsPage() {
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
+  const [optionModalInitialConfig, setOptionModalInitialConfig] = useState<{
+    underlying?: string;
+    optionTicker?: string;
+    strike?: number;
+    category?: StrategyCategory;
+  } | null>(null);
   const [editingInvId, setEditingInvId] = useState<string | null>(null);
   const [selectedInv, setSelectedInv] = useState<Investment | null>(null);
 
@@ -1130,6 +1137,15 @@ export default function InvestmentsPage() {
           initialTicker={selectedDetailTicker}
           investments={investments}
           onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
+          onOpenNewOptionModal={(underlying, optionTicker, strike, category) => {
+            setOptionModalInitialConfig({
+              underlying,
+              optionTicker,
+              strike,
+              category
+            });
+            setIsOptionModalOpen(true);
+          }}
         />
       )}
 
@@ -1671,10 +1687,18 @@ export default function InvestmentsPage() {
       {/* Modal - Nova Trava / Estratégia de Opções */}
       <NewOptionStrategyModal
         isOpen={isOptionModalOpen}
-        onClose={() => setIsOptionModalOpen(false)}
+        onClose={() => {
+          setIsOptionModalOpen(false);
+          setOptionModalInitialConfig(null);
+        }}
+        initialUnderlying={optionModalInitialConfig?.underlying}
+        initialOptionTicker={optionModalInitialConfig?.optionTicker}
+        initialStrike={optionModalInitialConfig?.strike}
+        initialCategory={optionModalInitialConfig?.category}
         onSave={(newStrat) => {
           addOptionStrategy(newStrat);
           setActiveMainTab('opcoes');
+          setOptionModalInitialConfig(null);
         }}
       />
     </div>

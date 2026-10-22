@@ -45,6 +45,7 @@ export interface OptionStrategy {
   maxProfitPerUnit?: number; // difference in strikes - cost
   status: 'active' | 'closed' | 'target_hit' | 'stop_hit';
   notes?: string;
+  underlyingDy5y?: number; // e.g. 6.57 (%) - DY médio 5 anos para cálculo de dividendo sintético
   createdAt: string;
   updatedAt: string;
 }

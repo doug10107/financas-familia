@@ -12,6 +12,7 @@ import {
   analyzeStrategy 
 } from '@/lib/options/optionsEngine';
 import { formatCurrency } from '@/lib/formatters';
+import { SyntheticDividendCard } from './SyntheticDividendCard';
 
 interface OptionsStrategyDashboardProps {
   strategies: OptionStrategy[];
@@ -554,8 +555,14 @@ export function OptionsStrategyDashboard({
 
                 {/* Expanded Section with Leg Details & Actions */}
                 {isExpanded && (
-                  <div className="px-4 sm:px-5 pb-5 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-3 bg-gray-50/30 dark:bg-gray-900/20">
-                    <div className="flex items-center justify-between">
+                  <div className="px-4 sm:px-5 pb-5 pt-3 border-t border-gray-100 dark:border-gray-800 space-y-4 bg-gray-50/30 dark:bg-gray-900/20">
+                    {/* Dividendo Sintético vs Proventos da Ação */}
+                    <SyntheticDividendCard 
+                      strategy={strat}
+                      onUpdateStrategy={onUpdateStrategy}
+                    />
+
+                    <div className="flex items-center justify-between pt-1">
                       <h5 className="text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Pernas da Operação
                       </h5>

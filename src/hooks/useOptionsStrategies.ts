@@ -40,6 +40,7 @@ function mapDbToStrategy(row: any): OptionStrategy {
       : (row.maxProfitPerUnit != null ? Number(row.maxProfitPerUnit) : undefined),
     status: (row.status || 'active') as any,
     notes: row.notes || undefined,
+    underlyingDy5y: row.underlying_dy_5y != null ? Number(row.underlying_dy_5y) : (row.underlyingDy5y != null ? Number(row.underlyingDy5y) : undefined),
     createdAt: row.created_at || row.createdAt || new Date().toISOString(),
     updatedAt: row.updated_at || row.updatedAt || new Date().toISOString()
   };
@@ -65,6 +66,7 @@ function mapStrategyToDb(strat: OptionStrategy, familyId: string, userId?: strin
     max_profit_per_unit: strat.maxProfitPerUnit != null ? strat.maxProfitPerUnit : null,
     status: strat.status || 'active',
     notes: strat.notes || null,
+    underlying_dy_5y: strat.underlyingDy5y != null ? strat.underlyingDy5y : null,
     updated_at: new Date().toISOString()
   };
 }

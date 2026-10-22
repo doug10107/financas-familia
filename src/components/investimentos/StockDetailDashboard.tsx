@@ -9,11 +9,13 @@ import { StockFullDetails } from '@/app/api/stocks/details/route';
 import { Investment } from '@/hooks/useInvestments';
 import { StockComparator } from './StockComparator';
 import { IndicatorHistoryModal, IndicatorKey } from './IndicatorHistoryModal';
+import { AvailableOptionsModal } from './AvailableOptionsModal';
 
 interface StockDetailDashboardProps {
   initialTicker?: string;
   investments?: Investment[];
   onOpenNewInvModal?: (prefilledTicker?: string, prefilledPrice?: number) => void;
+  onOpenNewOptionModal?: (prefilledTicker: string, prefilledOptionTicker?: string, prefilledStrike?: number, prefilledType?: 'venda_put' | 'venda_coberta') => void;
   onClose?: () => void;
 }
 
@@ -77,6 +79,7 @@ export function StockDetailDashboard({
   initialTicker = 'CMIG4',
   investments = [],
   onOpenNewInvModal,
+  onOpenNewOptionModal,
   onClose
 }: StockDetailDashboardProps) {
   const [searchInput, setSearchInput] = useState(initialTicker || 'CMIG4');
@@ -84,6 +87,18 @@ export function StockDetailDashboard({
   const [stock, setStock] = useState<StockFullDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Options Chain Modal State
+  const [optionsModalOpen, setOptionsModalOpen] = useState(false);
+  const [optionsModalConfig, setOptionsModalConfig] = useState<{
+    initialType: 'PUT' | 'CALL';
+    zoneFilter: {
+      type: 'PUT' | 'CALL';
+      strikeCondition: 'lte' | 'gte';
+      targetStrike: number;
+      zoneLabel: string;
+    };
+  } | null>(null);
 
   // Collapsible sections state
   const [openSections, setOpenSections] = useState({
@@ -1473,10 +1488,27 @@ export function StockDetailDashboard({
 
             {/* Zonas Operacionais: Buy & Hold + Opções (Put / Call) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-              <div className="p-4 rounded-xl bg-white dark:bg-[#1c273b]/90 border border-emerald-200 dark:border-emerald-500/30 shadow-xs">
+              {/* Card 1: Venda de Put */}
+              <div 
+                onClick={() => {
+                  setOptionsModalConfig({
+                    initialType: 'PUT',
+                    zoneFilter: {
+                      type: 'PUT',
+                      strikeCondition: 'lte',
+                      targetStrike: consensus.conservativePutStrike,
+                      zoneLabel: `1. Zona para Venda de PUT (${activeTicker})`
+                    }
+                  });
+                  setOptionsModalOpen(true);
+                }}
+                className="p-4 rounded-xl bg-white dark:bg-[#1c273b]/90 border border-emerald-200 dark:border-emerald-500/30 shadow-xs cursor-pointer hover:border-emerald-400 dark:hover:border-emerald-400 hover:shadow-md transition-all active:scale-[0.99] group"
+                title="Clique para ver todas as PUTs disponíveis na B3 nesta faixa de strike"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase">
-                    1. Zona para Venda de PUT
+                  <span className="text-xs font-extrabold text-emerald-700 dark:text-emerald-400 uppercase flex items-center gap-1">
+                    <span>1. Zona para Venda de PUT</span>
+                    <Icon name="launch" size="xs" className="opacity-0 group-hover:opacity-100 transition-opacity" />
                   </span>
                   <Badge color="green">Aquisição c/ Desconto</Badge>
                 </div>
@@ -1486,8 +1518,13 @@ export function StockDetailDashboard({
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   Faixa conservadora para vender PUT (ganhar prêmio para assumir o ativo ainda mais barato que a cotação atual).
                 </p>
+                <div className="mt-3 pt-2 border-t border-emerald-100 dark:border-emerald-950/60 flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-semibold">
+                  <span>Ver PUTs disponíveis</span>
+                  <span>&rarr;</span>
+                </div>
               </div>
 
+              {/* Card 2: Preço Justo Médio */}
               <div className="p-4 rounded-xl bg-white dark:bg-[#1c273b]/90 border border-sky-200 dark:border-sky-500/30 shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-extrabold text-sky-700 dark:text-sky-400 uppercase">
@@ -1503,10 +1540,27 @@ export function StockDetailDashboard({
                 </p>
               </div>
 
-              <div className="p-4 rounded-xl bg-white dark:bg-[#1c273b]/90 border border-amber-200 dark:border-amber-500/30 shadow-xs">
+              {/* Card 3: Venda Coberta CALL */}
+              <div 
+                onClick={() => {
+                  setOptionsModalConfig({
+                    initialType: 'CALL',
+                    zoneFilter: {
+                      type: 'CALL',
+                      strikeCondition: 'gte',
+                      targetStrike: consensus.coveredCallStrike,
+                      zoneLabel: `3. Zona para Venda Coberta CALL (${activeTicker})`
+                    }
+                  });
+                  setOptionsModalOpen(true);
+                }}
+                className="p-4 rounded-xl bg-white dark:bg-[#1c273b]/90 border border-amber-200 dark:border-amber-500/30 shadow-xs cursor-pointer hover:border-amber-400 dark:hover:border-amber-400 hover:shadow-md transition-all active:scale-[0.99] group"
+                title="Clique para ver todas as CALLs disponíveis na B3 nesta faixa de strike"
+              >
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase">
-                    3. Zona para Venda Coberta (CALL)
+                  <span className="text-xs font-extrabold text-amber-700 dark:text-amber-400 uppercase flex items-center gap-1">
+                    <span>3. Zona para Venda Coberta (CALL)</span>
+                    <Icon name="launch" size="xs" className="opacity-0 group-hover:opacity-100 transition-opacity" />
                   </span>
                   <Badge color="yellow">Renda c/ Opções</Badge>
                 </div>
@@ -1516,6 +1570,10 @@ export function StockDetailDashboard({
                 <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
                   Região acima do preço justo ideal para lançar Call coberta e rentabilizar a carteira com dividendos sintéticos.
                 </p>
+                <div className="mt-3 pt-2 border-t border-amber-100 dark:border-amber-950/60 flex items-center justify-between text-xs text-amber-600 dark:text-amber-400 font-semibold">
+                  <span>Ver CALLs disponíveis</span>
+                  <span>&rarr;</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1530,6 +1588,23 @@ export function StockDetailDashboard({
           ticker={activeTicker}
           stock={stock}
           initialIndicator={activeHistoryIndicator}
+        />
+      )}
+
+      {/* Modal de Grade de Opções B3 */}
+      {optionsModalConfig && (
+        <AvailableOptionsModal
+          isOpen={optionsModalOpen}
+          onClose={() => setOptionsModalOpen(false)}
+          underlyingTicker={activeTicker}
+          underlyingPrice={currentPrice}
+          initialType={optionsModalConfig.initialType}
+          zoneFilter={optionsModalConfig.zoneFilter}
+          onSelectOption={(opt) => {
+            if (onOpenNewOptionModal) {
+              onOpenNewOptionModal(activeTicker, opt.ticker, opt.strike, opt.tipo === 'PUT' ? 'venda_put' : 'venda_coberta');
+            }
+          }}
         />
       )}
     </div>

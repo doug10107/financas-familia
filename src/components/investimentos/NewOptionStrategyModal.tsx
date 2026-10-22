@@ -17,9 +17,21 @@ interface NewOptionStrategyModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (strat: Omit<OptionStrategy, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  initialUnderlying?: string;
+  initialOptionTicker?: string;
+  initialStrike?: number;
+  initialCategory?: StrategyCategory;
 }
 
-export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStrategyModalProps) {
+export function NewOptionStrategyModal({ 
+  isOpen, 
+  onClose, 
+  onSave,
+  initialUnderlying,
+  initialOptionTicker,
+  initialStrike,
+  initialCategory
+}: NewOptionStrategyModalProps) {
   const [strategyCategory, setStrategyCategory] = useState<StrategyCategory>('trava_baixa');
   const [name, setName] = useState('');
   const [underlyingTicker, setUnderlyingTicker] = useState('BOVA11');
@@ -30,6 +42,24 @@ export function NewOptionStrategyModal({ isOpen, onClose, onSave }: NewOptionStr
   const [entryCostPerUnit, setEntryCostPerUnit] = useState('');
   const [entryDate, setEntryDate] = useState(new Date().toISOString().split('T')[0]);
   const [notes, setNotes] = useState('');
+
+  // Sync initial parameters when opened
+  useEffect(() => {
+    if (isOpen) {
+      if (initialUnderlying) {
+        setUnderlyingTicker(initialUnderlying);
+      }
+      if (initialCategory) {
+        setStrategyCategory(initialCategory);
+      }
+      if (initialOptionTicker) {
+        setLeg1Ticker(initialOptionTicker);
+      }
+      if (initialStrike) {
+        setLeg1Strike(String(initialStrike));
+      }
+    }
+  }, [isOpen, initialUnderlying, initialCategory, initialOptionTicker, initialStrike]);
 
   // Targets
   const [target50, setTarget50] = useState('');
