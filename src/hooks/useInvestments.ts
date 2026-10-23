@@ -15,6 +15,7 @@ export type Investment = {
   institution: string | null;
   current_balance: number;
   total_invested: number;
+  total_earnings?: number;
   quantity?: number | null;
   average_price?: number | null;
   current_price?: number | null;
@@ -25,6 +26,7 @@ export type Investment = {
   due_date?: string | null;
   type_id: string | null;
   investment_type?: InvestmentType;
+  entries?: InvestmentEntry[];
 };
 
 export type InvestmentEntry = {
@@ -71,7 +73,8 @@ export function useInvestments() {
       .from('investments')
       .select(`
         *,
-        investment_type:investment_types(*)
+        investment_type:investment_types(*),
+        investment_entries(*)
       `)
       .order('name');
 
@@ -79,13 +82,26 @@ export function useInvestments() {
     
     const mapped = (data || []).map((t: any) => {
       const isUsd = t.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((t.ticker || '').toUpperCase());
+      const rawEntries = Array.isArray(t.investment_entries) ? t.investment_entries : [];
+      const totalEarnings = rawEntries
+        .filter((e: any) => e.type === 'rendimento')
+        .reduce((sum: number, e: any) => sum + (Number(e.amount) || 0), 0);
+
+      const qty = Number(t.quantity) || 0;
+      const avgPrice = Number(t.average_price) || 0;
+      const dbTotalInvested = Number(t.total_invested) || 0;
+      const calculatedInvested = (qty > 0 && avgPrice > 0) ? Number((qty * avgPrice).toFixed(2)) : 0;
+      const totalInvested = dbTotalInvested > 0 ? dbTotalInvested : calculatedInvested;
+
       return {
         ...t,
-        quantity: Number(t.quantity) || 0,
-        average_price: Number(t.average_price) || 0,
+        quantity: qty,
+        average_price: avgPrice,
         current_price: Number(t.current_price) || 0,
         current_balance: Number(t.current_balance) || 0,
-        total_invested: Number(t.total_invested) || 0,
+        total_invested: totalInvested,
+        total_earnings: Number(totalEarnings.toFixed(2)),
+        entries: rawEntries.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()),
         currency: isUsd ? 'USD' : (t.currency || 'BRL'),
         investment_type: Array.isArray(t.investment_type) ? t.investment_type[0] : t.investment_type
       };
@@ -533,6 +549,73 @@ export function useInvestments() {
     }
   };
 
+  // Batch import dividends / proventos from Investidor10, CSV or text
+  const batchImportDividends = async (dividends: {
+    ticker?: string;
+    name?: string;
+    amount: number;
+    date?: string;
+    notes?: string;
+    type?: string;
+  }[]): Promise<{ success: boolean; count: number; error?: string }> => {
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
+
+      let importedCount = 0;
+      for (const item of dividends) {
+        if (!item.amount || item.amount <= 0) continue;
+        const cleanTicker = (item.ticker || '').trim().toUpperCase();
+        const cleanName = (item.name || '').trim().toLowerCase();
+
+        // Match with existing investment in portfolio
+        const targetInv = investments.find(inv => {
+          if (cleanTicker && inv.ticker?.trim().toUpperCase() === cleanTicker) return true;
+          if (cleanName && inv.name.trim().toLowerCase() === cleanName) return true;
+          return false;
+        });
+
+        if (!targetInv) continue;
+
+        const { error: insErr } = await (supabase.from('investment_entries') as any).insert({
+          investment_id: targetInv.id,
+          user_id: user.id,
+          type: 'rendimento',
+          amount: Number(item.amount.toFixed(2)),
+          currency: targetInv.currency || 'BRL',
+          date: item.date || new Date().toISOString().split('T')[0],
+          notes: item.notes || (item.type ? `Provento: ${item.type}` : 'Rendimento / Dividendo')
+        });
+
+        if (!insErr) {
+          importedCount++;
+        }
+      }
+
+      await refreshData();
+      return { success: true, count: importedCount };
+    } catch (err: any) {
+      console.error('Error batch importing dividends:', err);
+      setError(err.message || 'Erro ao importar proventos');
+      return { success: false, count: 0, error: err.message };
+    }
+  };
+
+  const deleteInvestmentEntry = async (entryId: string): Promise<boolean> => {
+    setError(null);
+    try {
+      const { error } = await (supabase.from('investment_entries') as any).delete().eq('id', entryId);
+      if (error) throw error;
+      await refreshData();
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting entry:', err);
+      setError(err.message || 'Erro ao remover lançamento');
+      return false;
+    }
+  };
+
   return {
     investments,
     types,
@@ -547,6 +630,8 @@ export function useInvestments() {
     deleteInvestment,
     clearAllInvestments,
     addInvestmentEntry,
-    batchImportInvestments
+    deleteInvestmentEntry,
+    batchImportInvestments,
+    batchImportDividends
   };
 }

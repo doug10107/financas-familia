@@ -25,6 +25,7 @@ import { TaxCalculatorDashboard } from '@/components/investimentos/TaxCalculator
 import { useOptionsStrategies } from '@/hooks/useOptionsStrategies';
 import { OptionsStrategyDashboard } from '@/components/investimentos/OptionsStrategyDashboard';
 import { NewOptionStrategyModal } from '@/components/investimentos/NewOptionStrategyModal';
+import { ProventosModal } from '@/components/investimentos/ProventosModal';
 import { StrategyCategory } from '@/lib/options/optionsEngine';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
@@ -57,7 +58,9 @@ export default function InvestmentsPage() {
     deleteInvestment,
     clearAllInvestments,
     addInvestmentEntry,
-    batchImportInvestments
+    deleteInvestmentEntry,
+    batchImportInvestments,
+    batchImportDividends
   } = useInvestments();
 
   // Options & Strategies Hook
@@ -97,6 +100,8 @@ export default function InvestmentsPage() {
   const [isEntryModalOpen, setIsEntryModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isOptionModalOpen, setIsOptionModalOpen] = useState(false);
+  const [isProventosModalOpen, setIsProventosModalOpen] = useState(false);
+  const [proventoModalTicker, setProventoModalTicker] = useState<string | undefined>(undefined);
   const [optionModalInitialConfig, setOptionModalInitialConfig] = useState<{
     underlying?: string;
     optionTicker?: string;
@@ -247,8 +252,18 @@ export default function InvestmentsPage() {
     return acc + (isUsd ? balance * usdRate : balance);
   }, 0);
 
-  const totalProfit = totalCurrent - totalInvested;
+  const totalDividends = investments.reduce((acc, curr) => {
+    const isUsd = curr.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((curr.ticker || '').toUpperCase());
+    const earnings = Number(curr.total_earnings) || 0;
+    return acc + (isUsd ? earnings * usdRate : earnings);
+  }, 0);
+
+  const totalCapitalGain = totalCurrent - totalInvested;
+  // Lucro Total real (Ganho de Capital + Dividendos Recebidos, igual ao Investidor 10)
+  const totalProfit = totalCapitalGain + totalDividends;
   const totalYield = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
+  const capitalGainYield = totalInvested > 0 ? (totalCapitalGain / totalInvested) * 100 : 0;
+  const dividendYield = totalInvested > 0 ? (totalDividends / totalInvested) * 100 : 0;
 
   const todayStr = new Date().toISOString().split('T')[0];
   const lockedInvestments = investments.filter(i => i.due_date && i.due_date > todayStr);
@@ -624,6 +639,21 @@ export default function InvestmentsPage() {
             Importar
           </Button>
 
+          {/* Proventos / Dividendos Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setProventoModalTicker(undefined);
+              setIsProventosModalOpen(true);
+            }}
+            className="text-xs text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 font-semibold flex items-center gap-1"
+            title="Ver histórico, lançar e importar proventos e dividendos"
+          >
+            <Icon name="payments" size="sm" />
+            <span>Proventos {totalDividends > 0 ? `(${formatCurrency(totalDividends, 'BRL')})` : ''}</span>
+          </Button>
+
           {/* New Option / Strategy Button */}
           <Button
             variant="ghost"
@@ -764,52 +794,59 @@ export default function InvestmentsPage() {
               <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Patrimônio Total</span>
               <div>
                 <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{formatCurrency(totalCurrent, 'BRL')}</h2>
-                <p className="text-xs mt-1">
-                  <span className={`font-medium ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                    {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')} ({totalYield.toFixed(2)}%)
-                  </span>
-                </p>
-              </div>
-            </GlassCard>
-
-            {/* Total Invested */}
-            <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Total Aplicado</span>
-              <div>
-                <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">{formatCurrency(totalInvested, 'BRL')}</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {investments.length} {investments.length === 1 ? 'ativo' : 'ativos'}
+                  Aplicado: <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(totalInvested, 'BRL')}</span> ({investments.length} ativos)
                 </p>
               </div>
             </GlassCard>
 
-            {/* Total Profit */}
+            {/* Total Profit (Capital Gain + Dividends) */}
             <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Rentabilidade Geral</span>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Lucro Total da Carteira</span>
               <div>
                 <h2 className={`text-2xl font-bold tracking-tight ${totalProfit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
                   {totalProfit >= 0 ? '+' : ''}{formatCurrency(totalProfit, 'BRL')}
                 </h2>
-                <p className="text-xs mt-1">
-                  <span className={`font-medium ${totalYield >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                    {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}% acumulado
-                  </span>
+                <p className="text-xs mt-1 text-gray-500 dark:text-gray-400">
+                  Cotas: <span className={totalCapitalGain >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-rose-500 font-medium'}>{totalCapitalGain >= 0 ? '+' : ''}{formatCurrency(totalCapitalGain, 'BRL')}</span> • Prov: <span className="text-emerald-600 dark:text-emerald-400 font-medium">+{formatCurrency(totalDividends, 'BRL')}</span>
                 </p>
               </div>
             </GlassCard>
 
-            {/* Liquidity Breakdown */}
+            {/* Proventos Recebidos */}
+            <GlassCard 
+              onClick={() => {
+                setProventoModalTicker(undefined);
+                setIsProventosModalOpen(true);
+              }}
+              className="p-4 sm:p-5 flex flex-col justify-between space-y-3 cursor-pointer hover:border-emerald-500/40 transition-all group"
+            >
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Proventos Recebidos</span>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold group-hover:underline flex items-center gap-0.5">
+                  Ver Proventos <Icon name="chevron_right" size="xs" />
+                </span>
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(totalDividends, 'BRL')}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  +{dividendYield.toFixed(2)}% de retorno em dividendos
+                </p>
+              </div>
+            </GlassCard>
+
+            {/* Total Yield (Total Return with Dividends) */}
             <GlassCard className="p-4 sm:p-5 flex flex-col justify-between space-y-3">
-              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Disponibilidade</span>
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Imediata</span>
-                  <span className="font-semibold text-gray-900 dark:text-white">{formatCurrency(totalLiquid, 'BRL')}</span>
-                </div>
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">A Prazo</span>
-                  <span className="font-semibold text-gray-700 dark:text-gray-300">{formatCurrency(totalLocked, 'BRL')}</span>
-                </div>
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">Rentabilidade Total</span>
+              <div>
+                <h2 className={`text-2xl font-bold tracking-tight ${totalYield >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                  {totalYield >= 0 ? '+' : ''}{totalYield.toFixed(2)}%
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  Cota: <span className={capitalGainYield >= 0 ? 'text-emerald-600 dark:text-emerald-400 font-medium' : 'text-rose-500 font-medium'}>{capitalGainYield >= 0 ? '+' : ''}{capitalGainYield.toFixed(2)}%</span> • Prov: <span className="text-emerald-600 dark:text-emerald-400 font-medium">+{dividendYield.toFixed(2)}%</span>
+                </p>
               </div>
             </GlassCard>
           </div>
@@ -975,6 +1012,7 @@ export default function InvestmentsPage() {
                       <th scope="col" className="py-2.5 px-3 text-right">Cotação</th>
                       <th scope="col" className="py-2.5 px-3 text-right">Total Aplicado</th>
                       <th scope="col" className="py-2.5 px-3 text-right">Saldo Atual</th>
+                      <th scope="col" className="py-2.5 px-3 text-right">Proventos</th>
                       <th scope="col" className="py-2.5 px-3 text-right">Rentabilidade</th>
                       <th scope="col" className="py-2.5 pl-3 text-right">Ações</th>
                     </tr>
@@ -984,12 +1022,15 @@ export default function InvestmentsPage() {
                       const isUsd = inv.currency === 'USD' || ['IVV', 'VXUS', 'TFLO', 'VOO', 'QQQ', 'VT', 'SCHD'].includes((inv.ticker || '').toUpperCase());
                       const curr = isUsd ? 'USD' : 'BRL';
                       
-                      const invYield = inv.total_invested > 0 
-                        ? ((inv.current_balance - inv.total_invested) / inv.total_invested) * 100 
+                      const capitalGain = inv.current_balance - inv.total_invested;
+                      const earnings = Number(inv.total_earnings) || 0;
+                      const totalAssetProfit = capitalGain + earnings;
+                      const totalAssetYield = inv.total_invested > 0 
+                        ? (totalAssetProfit / inv.total_invested) * 100 
                         : (inv.average_price && inv.average_price > 0 && inv.current_price ? ((inv.current_price - inv.average_price) / inv.average_price) * 100 : 0);
+                      const cotaYield = inv.total_invested > 0 ? (capitalGain / inv.total_invested) * 100 : 0;
                       
-                      const isPositive = invYield >= 0;
-                      const profitAmt = inv.current_balance - inv.total_invested;
+                      const isPositive = totalAssetProfit >= 0;
                       const hasQty = inv.quantity && inv.quantity > 0;
                       const isNameIdentical = inv.ticker && inv.name.trim().toUpperCase() === inv.ticker.trim().toUpperCase();
 
@@ -1080,20 +1121,53 @@ export default function InvestmentsPage() {
                             )}
                           </td>
 
+                          {/* Proventos Recebidos do Ativo */}
+                          <td className="py-3 px-3 text-right font-mono whitespace-nowrap text-xs">
+                            {earnings > 0 ? (
+                              <div>
+                                <p className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                  +{formatCurrency(earnings, curr)}
+                                </p>
+                                {isUsd && (
+                                  <p className="text-[10px] text-gray-400">≈ {formatCurrency(earnings * usdRate, 'BRL')}</p>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-gray-400 text-[11px]">-</span>
+                            )}
+                          </td>
+
+                          {/* Rentabilidade Total (Cota + Proventos) */}
                           <td className="py-3 px-3 text-right font-mono whitespace-nowrap text-xs">
                             <p className={`font-semibold ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
-                              {isPositive ? '+' : ''}{formatCurrency(profitAmt, curr)}
+                              {isPositive ? '+' : ''}{formatCurrency(totalAssetProfit, curr)}
                             </p>
-                            <p className={`text-[10px] ${isPositive ? 'text-emerald-600/80 dark:text-emerald-400/80' : 'text-rose-500/80'}`}>
-                              {isPositive ? '+' : ''}{invYield.toFixed(2)}%
+                            <p className={`text-[10px] font-bold ${isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>
+                              {isPositive ? '+' : ''}{totalAssetYield.toFixed(2)}%
                             </p>
+                            {earnings > 0 && (
+                              <p className="text-[9px] text-gray-400">
+                                Cota: {cotaYield >= 0 ? '+' : ''}{cotaYield.toFixed(1)}% | Prov: +{formatCurrency(earnings, curr)}
+                              </p>
+                            )}
                           </td>
 
                           <td className="py-3 pl-3 text-right whitespace-nowrap">
                             <div className="flex items-center justify-end gap-1">
                               <button 
+                                onClick={() => {
+                                  setProventoModalTicker(inv.ticker || inv.name);
+                                  setIsProventosModalOpen(true);
+                                }}
+                                className="px-2 py-1 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded transition-colors text-[11px] font-medium flex items-center gap-0.5"
+                                title={`Lançar ou ver proventos de ${inv.ticker || inv.name}`}
+                              >
+                                <Icon name="payments" size="xs" />
+                                <span>+ Prov</span>
+                              </button>
+                              <button 
                                 onClick={() => handleOpenEntryModal(inv)}
-                                className="px-2 py-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded transition-colors text-[11px] font-medium"
+                                className="px-2 py-1 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded transition-colors text-[11px] font-medium"
                                 title="Registrar aporte ou movimentação"
                               >
                                 + Aporte
@@ -1685,6 +1759,33 @@ export default function InvestmentsPage() {
         types={types}
         onImportAssets={async (assets) => {
           return await batchImportInvestments(assets);
+        }}
+      />
+
+      {/* Modal - Proventos & Dividendos (Investidor 10 / B3) */}
+      <ProventosModal
+        isOpen={isProventosModalOpen}
+        onClose={() => {
+          setIsProventosModalOpen(false);
+          setProventoModalTicker(undefined);
+        }}
+        investments={investments}
+        usdRate={usdRate}
+        initialTicker={proventoModalTicker}
+        onAddDividend={async (input) => {
+          return await addInvestmentEntry({
+            investment_id: input.investment_id,
+            type: 'rendimento',
+            amount: input.amount,
+            date: input.date,
+            notes: input.notes
+          });
+        }}
+        onBatchImportDividends={async (dividends) => {
+          return await batchImportDividends(dividends);
+        }}
+        onDeleteEntry={async (entryId) => {
+          return await deleteInvestmentEntry(entryId);
         }}
       />
 
