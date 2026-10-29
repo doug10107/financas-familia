@@ -22,6 +22,7 @@ import { GrahamAnalysisTable } from '@/components/investimentos/GrahamAnalysisTa
 import { AdvancedStockScreener } from '@/components/investimentos/AdvancedStockScreener';
 import { StockDetailDashboard } from '@/components/investimentos/StockDetailDashboard';
 import { TaxCalculatorDashboard } from '@/components/investimentos/TaxCalculatorDashboard';
+import { Top30BarganhasDashboard } from '@/components/investimentos/Top30BarganhasDashboard';
 import { useOptionsStrategies } from '@/hooks/useOptionsStrategies';
 import { OptionsStrategyDashboard } from '@/components/investimentos/OptionsStrategyDashboard';
 import { NewOptionStrategyModal } from '@/components/investimentos/NewOptionStrategyModal';
@@ -83,8 +84,8 @@ export default function InvestmentsPage() {
     importStrategies: importOptionStrategies
   } = useOptionsStrategies(investments);
 
-  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'
-  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes'>('carteira');
+  // Main Section Navigation: 'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes' | 'top30'
+  const [activeMainTab, setActiveMainTab] = useState<'carteira' | 'screener' | 'detalhes' | 'analise' | 'ir' | 'opcoes' | 'top30'>('carteira');
   const [selectedGrahamTicker, setSelectedGrahamTicker] = useState<string | undefined>(undefined);
   const [selectedDetailTicker, setSelectedDetailTicker] = useState<string>('CMIG4');
   const [filterText, setFilterText] = useState('');
@@ -783,6 +784,20 @@ export default function InvestmentsPage() {
             </span>
           )}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('top30')}
+          className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            activeMainTab === 'top30'
+              ? 'bg-white dark:bg-gray-900 text-emerald-700 dark:text-emerald-300 shadow-xs font-semibold'
+              : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+          }`}
+        >
+          <span className="text-amber-500 font-black">🏆</span>
+          <span className="hidden sm:inline">Top 30 Baratas</span>
+          <span className="sm:hidden">Top 30</span>
+        </button>
       </div>
 
       {activeMainTab === 'carteira' && (
@@ -1269,6 +1284,14 @@ export default function InvestmentsPage() {
           onResetLegOverride={resetOptionLegOverride}
           notificationPermission={optionsNotificationPermission}
           onRequestNotifications={requestOptionsNotifications}
+        />
+      )}
+
+      {/* 7. Top 30 Ações Mais Baratas da Bolsa (Value Investing & Barganhas B3) */}
+      {activeMainTab === 'top30' && (
+        <Top30BarganhasDashboard
+          onOpenStockDetails={handleOpenStockDetails}
+          onOpenNewInvModal={(ticker, price) => handleOpenInvModal(undefined, ticker, price)}
         />
       )}
 
