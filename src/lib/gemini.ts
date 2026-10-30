@@ -8,17 +8,20 @@
 export const GEMINI_MODELS = {
   /** Modelos disponíveis e ativos para análise (alta disponibilidade e baixa latência) */
   DEFAULT: [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-8b',
-    'gemini-1.5-pro',
+    'gemini-2.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
   ] as const,
 
   /** Modelos com suporte a visão (imagens/PDFs) */
   VISION: [
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
-    'gemini-1.5-pro',
+    'gemini-2.5-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.8-flash',
+    'gemini-flash-latest',
   ] as const,
 } as const;
 
@@ -113,12 +116,22 @@ export async function callGeminiWithFallback(
       try {
         parsed = JSON.parse(cleanJsonText);
       } catch (jsonErr) {
-        // Fallback: tentar extrair substring entre o primeiro '{' e o último '}'
+        // Fallback: tentar extrair substring entre o primeiro '{'/'[' e o último '}'/']'
         const firstBrace = cleanJsonText.indexOf('{');
         const lastBrace = cleanJsonText.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        const firstBracket = cleanJsonText.indexOf('[');
+        const lastBracket = cleanJsonText.lastIndexOf(']');
+
+        let candidateJson: string | null = null;
+        if (firstBracket !== -1 && lastBracket > firstBracket && (firstBrace === -1 || firstBracket < firstBrace)) {
+          candidateJson = cleanJsonText.slice(firstBracket, lastBracket + 1);
+        } else if (firstBrace !== -1 && lastBrace > firstBrace) {
+          candidateJson = cleanJsonText.slice(firstBrace, lastBrace + 1);
+        }
+
+        if (candidateJson) {
           try {
-            parsed = JSON.parse(cleanJsonText.slice(firstBrace, lastBrace + 1));
+            parsed = JSON.parse(candidateJson);
           } catch {
             console.warn(`[Gemini] Falha no parse JSON do modelo ${model}:`, jsonErr);
             lastError = jsonErr;
