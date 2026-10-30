@@ -66,6 +66,10 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
   "totalNet": 617.19
 }`;
 
+    let inputType: 'file' | 'qrUrl' | 'text' = 'file';
+    let rawQrUrl: string | null = null;
+    let isUrlFetchSuccessful = false;
+
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
       const file = formData.get('file') as File | null;
@@ -73,18 +77,25 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
       const qrUrl = formData.get('qrUrl') as string | null;
 
       if (qrUrl) {
-        let fetchedContent = qrUrl;
+        inputType = 'qrUrl';
+        rawQrUrl = qrUrl.trim();
+        let fetchedContent = rawQrUrl;
         try {
-          if (qrUrl.startsWith('http://') || qrUrl.startsWith('https://')) {
-            const pageRes = await fetch(qrUrl, {
+          if (rawQrUrl.startsWith('http://') || rawQrUrl.startsWith('https://')) {
+            const pageRes = await fetch(rawQrUrl, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-              }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+              },
+              redirect: 'follow',
             });
             if (pageRes.ok) {
               const html = await pageRes.text();
               fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+              isUrlFetchSuccessful = true;
             }
           }
         } catch (fetchErr) {
@@ -97,6 +108,7 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
           }
         ];
       } else if (file) {
+        inputType = 'file';
         const buffer = await file.arrayBuffer();
         const base64Data = Buffer.from(buffer).toString('base64');
         const mimeType = file.type || 'image/jpeg';
@@ -113,6 +125,7 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
           }
         ];
       } else if (rawText) {
+        inputType = 'text';
         promptParts = [
           {
             text: `${systemPrompt}\n\nExtraia os itens, valores e eventuais descontos a partir do seguinte texto de cupom/lista em formato JSON:\n\n${rawText}`
@@ -124,19 +137,26 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
     } else {
       const body = await req.json();
       if (body.qrUrl || body.url) {
-        const targetUrl = body.qrUrl || body.url;
+        inputType = 'qrUrl';
+        const targetUrl = (body.qrUrl || body.url || '').trim();
+        rawQrUrl = targetUrl;
         let fetchedContent = targetUrl;
         try {
           if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
             const pageRes = await fetch(targetUrl, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-              }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+              },
+              redirect: 'follow',
             });
             if (pageRes.ok) {
               const html = await pageRes.text();
               fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+              isUrlFetchSuccessful = true;
             }
           }
         } catch (fetchErr) {
@@ -149,12 +169,14 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
           }
         ];
       } else if (body.text) {
+        inputType = 'text';
         promptParts = [
           {
             text: `${systemPrompt}\n\nExtraia os itens, valores e eventuais descontos a partir do seguinte texto de cupom/lista em formato JSON:\n\n${body.text}`
           }
         ];
       } else if (body.imageBase64 && body.mimeType) {
+        inputType = 'file';
         promptParts = [
           {
             text: `${systemPrompt}\n\nExtraia todos os itens, preços e eventuais descontos da imagem enviada em formato JSON:`
@@ -173,6 +195,7 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
 
     // Chamar API Gemini com fallback automático de modelos e timeout
     let parsedData: any = null;
+    let geminiErrorMessage: string | null = null;
 
     try {
       const result = await callGeminiWithFallback(
@@ -180,7 +203,7 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
         promptParts,
         {
           models: [...GEMINI_MODELS.VISION],
-          timeoutMs: 20_000,
+          timeoutMs: 25_000,
           generationConfig: {
             response_mime_type: 'application/json',
             temperature: 0.1,
@@ -190,6 +213,7 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
       parsedData = result.parsed;
     } catch (geminiErr: any) {
       console.error('[scan-list] Gemini falhou:', geminiErr);
+      geminiErrorMessage = geminiErr?.message || String(geminiErr);
     }
 
     // Extract raw items and discount from parsedData
@@ -216,10 +240,25 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
     }
 
     if (rawItems.length === 0) {
+      let customError = 'Não foi possível extrair os itens da imagem, texto ou QR Code. Tente novamente.';
+
+      if (inputType === 'qrUrl') {
+        const cleanDigits = (rawQrUrl || '').replace(/\D/g, '');
+        if (cleanDigits.length === 44 && !rawQrUrl?.startsWith('http')) {
+          customError = 'A chave numérica de 44 dígitos não contém os nomes e valores dos produtos. Aponte a câmera para o QR Code impresso no cupom ou fotografe o cupom na aba "Foto ou PDF".';
+        } else if (!isUrlFetchSuccessful) {
+          customError = 'Não foi possível carregar os itens pelo link do QR Code da SEFAZ (o portal estadual pode estar temporariamente bloqueando consultas automatizadas). Por favor, use a aba "Foto ou PDF" para fotografar o cupom ou use a aba "Colar Texto".';
+        } else {
+          customError = 'A consulta ao cupom fiscal não retornou itens identificáveis. Tente fotografar o cupom fiscal na aba "Foto ou PDF".';
+        }
+      } else if (inputType === 'text') {
+        customError = 'Não foi possível identificar os produtos e preços no texto informado. Certifique-se de que o texto inclui nomes dos produtos e valores.';
+      } else if (geminiErrorMessage) {
+        customError = `Falha na comunicação com a IA: ${geminiErrorMessage}`;
+      }
+
       return NextResponse.json(
-        {
-          error: 'Não foi possível extrair os itens da imagem, texto ou QR Code. Tente novamente.',
-        },
+        { error: customError },
         { status: 422 }
       );
     }

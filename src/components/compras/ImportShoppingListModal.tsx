@@ -178,11 +178,11 @@ export function ImportShoppingListModal({
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const code = jsQR(imageData.data, imageData.width, imageData.height, {
-          inversionAttempts: 'dontInvert'
+          inversionAttempts: 'attemptBoth'
         });
 
         if (code && code.data) {
-          setQrUrl(code.data);
+          setQrUrl(code.data.trim());
           stopCamera();
           return;
         }
@@ -208,9 +208,11 @@ export function ImportShoppingListModal({
           if (ctx) {
             ctx.drawImage(img, 0, 0);
             const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const code = jsQR(imgData.data, imgData.width, imgData.height);
+            const code = jsQR(imgData.data, imgData.width, imgData.height, {
+              inversionAttempts: 'attemptBoth'
+            });
             if (code && code.data) {
-              setQrUrl(code.data);
+              setQrUrl(code.data.trim());
               setErrorMessage(null);
             } else {
               // If QR library can't decode it directly, we can still send the file to AI

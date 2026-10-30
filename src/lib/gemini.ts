@@ -8,16 +8,17 @@
 export const GEMINI_MODELS = {
   /** Modelos disponíveis e ativos para análise (alta disponibilidade e baixa latência) */
   DEFAULT: [
-    'gemini-2.5-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-3.6-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-8b',
+    'gemini-1.5-pro',
   ] as const,
 
   /** Modelos com suporte a visão (imagens/PDFs) */
   VISION: [
-    'gemini-2.5-flash',
-    'gemini-3.5-flash-lite',
-    'gemini-3.6-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
+    'gemini-1.5-pro',
   ] as const,
 } as const;
 
