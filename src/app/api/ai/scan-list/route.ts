@@ -69,6 +69,25 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
     let inputType: 'file' | 'qrUrl' | 'text' = 'file';
     let rawQrUrl: string | null = null;
     let isUrlFetchSuccessful = false;
+    let isBlockedByWaf = false;
+
+    // Helper para verificar se a página retornada pela SEFAZ é um bloqueio de segurança/WAF
+    const checkIsSefazBlocked = (html: string) => {
+      const lower = html.toLowerCase();
+      return (
+        lower.includes('request rejected') ||
+        lower.includes('requested url was rejected') ||
+        lower.includes('acesso negado') ||
+        lower.includes('access denied') ||
+        lower.includes('bloqueio de seguran') ||
+        lower.includes('challenge-platform') ||
+        lower.includes('cf-browser-verification') ||
+        lower.includes('hcaptcha') ||
+        lower.includes('recaptcha') ||
+        lower.includes('support id is:') ||
+        html.length < 400
+      );
+    };
 
     if (contentType.includes('multipart/form-data')) {
       const formData = await req.formData();
@@ -94,12 +113,21 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
             });
             if (pageRes.ok) {
               const html = await pageRes.text();
-              fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
-              isUrlFetchSuccessful = true;
+              if (checkIsSefazBlocked(html)) {
+                console.warn('[scan-list] Consulta ao QR Code foi bloqueada pelo portal da SEFAZ (WAF / Request Rejected).');
+                isBlockedByWaf = true;
+                isUrlFetchSuccessful = false;
+              } else {
+                fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+                isUrlFetchSuccessful = true;
+              }
+            } else {
+              isBlockedByWaf = true;
             }
           }
         } catch (fetchErr) {
           console.warn('Erro ao consultar URL do QR Code diretamente:', fetchErr);
+          isBlockedByWaf = true;
         }
 
         promptParts = [
@@ -155,12 +183,21 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
             });
             if (pageRes.ok) {
               const html = await pageRes.text();
-              fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
-              isUrlFetchSuccessful = true;
+              if (checkIsSefazBlocked(html)) {
+                console.warn('[scan-list] Consulta ao QR Code foi bloqueada pelo portal da SEFAZ (WAF / Request Rejected).');
+                isBlockedByWaf = true;
+                isUrlFetchSuccessful = false;
+              } else {
+                fetchedContent = `CONTEÚDO DA PÁGINA DO CUPOM FISCAL / NFC-E:\n${html.slice(0, 50000)}`;
+                isUrlFetchSuccessful = true;
+              }
+            } else {
+              isBlockedByWaf = true;
             }
           }
         } catch (fetchErr) {
           console.warn('Erro ao consultar URL do QR Code diretamente:', fetchErr);
+          isBlockedByWaf = true;
         }
 
         promptParts = [
@@ -246,10 +283,10 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
         const cleanDigits = (rawQrUrl || '').replace(/\D/g, '');
         if (cleanDigits.length === 44 && !rawQrUrl?.startsWith('http')) {
           customError = 'A chave numérica de 44 dígitos não contém os nomes e valores dos produtos. Aponte a câmera para o QR Code impresso no cupom ou fotografe o cupom na aba "Foto ou PDF".';
-        } else if (!isUrlFetchSuccessful) {
-          customError = 'Não foi possível carregar os itens pelo link do QR Code da SEFAZ (o portal estadual pode estar temporariamente bloqueando consultas automatizadas). Por favor, use a aba "Foto ou PDF" para fotografar o cupom ou use a aba "Colar Texto".';
+        } else if (!isUrlFetchSuccessful || isBlockedByWaf) {
+          customError = 'O portal da SEFAZ (Secretaria da Fazenda de SP / Estado) bloqueou a consulta automática deste QR Code com proteção de segurança governamental (F5 WAF). Por favor, use a aba "Foto ou PDF" para fotografar o cupom fiscal impresso — a IA lê todos os produtos na hora!';
         } else {
-          customError = 'A consulta ao cupom fiscal não retornou itens identificáveis. Tente fotografar o cupom fiscal na aba "Foto ou PDF".';
+          customError = 'A consulta ao link do cupom não retornou a lista de produtos (o portal estadual pode exigir verificação interativa). Fotografe o cupom fiscal impresso na aba "Foto ou PDF".';
         }
       } else if (inputType === 'text') {
         customError = 'Não foi possível identificar os produtos e preços no texto informado. Certifique-se de que o texto inclui nomes dos produtos e valores.';
@@ -258,7 +295,10 @@ Retorne SEMPRE um objeto JSON válido com a seguinte estrutura:
       }
 
       return NextResponse.json(
-        { error: customError },
+        { 
+          error: customError,
+          isSefazBlocked: inputType === 'qrUrl'
+        },
         { status: 422 }
       );
     }

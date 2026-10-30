@@ -83,7 +83,9 @@ export function ImportShoppingListModal({
   const [targetExistingListId, setTargetExistingListId] = useState(activeListId || lists[0]?.id || '');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const qrFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isQrBlocked, setIsQrBlocked] = useState(false);
 
   const stopCamera = () => {
     if (animFrameRef.current) {
@@ -111,6 +113,7 @@ export function ImportShoppingListModal({
     setQrUrl('');
     setIsProcessing(false);
     setErrorMessage(null);
+    setIsQrBlocked(false);
     setStep('input');
     setExtractedItems([]);
     setDiscountAmount(0);
@@ -276,6 +279,9 @@ export function ImportShoppingListModal({
       const data = await response.json();
 
       if (!response.ok) {
+        if (data.isSefazBlocked || activeTab === 'qrcode') {
+          setIsQrBlocked(true);
+        }
         throw new Error(data.error || 'Erro ao processar a lista com IA.');
       }
 
@@ -434,11 +440,47 @@ export function ImportShoppingListModal({
     >
       <div className="space-y-4">
         {errorMessage && (
-          <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
-            <Icon name="error" size="sm" className="text-red-500 shrink-0 mt-0.5" />
-            <div>
-              <p className="font-semibold">{errorMessage}</p>
+          <div className="space-y-2">
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-start gap-2">
+              <Icon name="error" size="sm" className="text-red-500 shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold leading-relaxed">{errorMessage}</p>
+              </div>
             </div>
+
+            {(activeTab === 'qrcode' || isQrBlocked) && (
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3 shadow-sm">
+                <div className="flex items-center gap-2.5 text-left">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <Icon name="photo_camera" size="sm" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                      Fotografe a lista impressa no cupom
+                    </p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                      A inteligência artificial extrai produtos e valores direto do papel.
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="primary"
+                  onClick={() => {
+                    stopCamera();
+                    setActiveTab('upload');
+                    setErrorMessage(null);
+                    setIsQrBlocked(false);
+                    setTimeout(() => {
+                      cameraInputRef.current?.click();
+                    }, 100);
+                  }}
+                  className="w-full sm:w-auto whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3.5 rounded-lg shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <Icon name="photo_camera" size="sm" /> Fotografar Cupom Agora
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -453,13 +495,17 @@ export function ImportShoppingListModal({
                   stopCamera();
                   setActiveTab('upload');
                 }}
-                className={`flex-1 py-2 px-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                className={`flex-1 py-2 px-2 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all relative ${
                   activeTab === 'upload'
                     ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
                 }`}
               >
-                <Icon name="photo_camera" size="sm" /> Foto ou PDF
+                <Icon name="photo_camera" size="sm" />
+                <span>Foto ou PDF</span>
+                <span className="hidden sm:inline-block px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 rounded text-[9px] font-bold">
+                  Recomendado
+                </span>
               </button>
 
               <button
@@ -495,6 +541,15 @@ export function ImportShoppingListModal({
             {/* TAB 1: UPLOAD PHOTO / PDF */}
             {activeTab === 'upload' && (
               <div className="space-y-3">
+                {/* Inputs ocultos para Câmera Direta e Arquivo */}
+                <input
+                  type="file"
+                  ref={cameraInputRef}
+                  onChange={handleFileChange}
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                />
                 <input
                   type="file"
                   ref={fileInputRef}
@@ -503,11 +558,8 @@ export function ImportShoppingListModal({
                   className="hidden"
                 />
 
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-blue-500 dark:hover:border-blue-400 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-gray-50/50 dark:bg-gray-800/30 group"
-                >
-                  {file ? (
+                {file ? (
+                  <div className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-5 text-center bg-gray-50/50 dark:bg-gray-800/30">
                     <div className="space-y-3">
                       {filePreview ? (
                         <div className="relative max-h-48 mx-auto overflow-hidden rounded-xl border border-gray-200 dark:border-gray-700 inline-block shadow-sm">
@@ -524,30 +576,74 @@ export function ImportShoppingListModal({
                       )}
                       <div>
                         <p className="text-xs font-bold text-gray-800 dark:text-gray-200">{file.name}</p>
-                        <p className="text-[11px] text-gray-500">{(file.size / 1024).toFixed(1)} KB • Clique para trocar de arquivo</p>
+                        <p className="text-[11px] text-gray-500">{(file.size / 1024).toFixed(1)} KB</p>
+                      </div>
+                      <div className="flex justify-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="text-xs flex items-center gap-1 text-emerald-600 dark:text-emerald-400"
+                        >
+                          <Icon name="photo_camera" size="sm" /> Tirar outra foto
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="text-xs flex items-center gap-1 text-blue-600 dark:text-blue-400"
+                        >
+                          <Icon name="folder_open" size="sm" /> Escolher outro arquivo
+                        </Button>
                       </div>
                     </div>
-                  ) : (
-                    <div className="space-y-2 py-4">
-                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 rounded-2xl flex items-center justify-center mx-auto group-hover:scale-110 transition-transform">
-                        <Icon name="add_a_photo" size="md" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="p-5 rounded-2xl border-2 border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/30 text-center transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer shadow-sm"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center shadow group-hover:scale-110 transition-transform">
+                        <Icon name="photo_camera" size="md" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-emerald-950 dark:text-emerald-200">
+                          Tirar Foto do Cupom
+                        </p>
+                        <p className="text-[11px] text-emerald-700 dark:text-emerald-300 mt-0.5">
+                          Abre a câmera do celular
+                        </p>
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="p-5 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/60 dark:bg-gray-800/40 hover:bg-gray-100 dark:hover:bg-gray-800 text-center transition-all flex flex-col items-center justify-center gap-2 group cursor-pointer"
+                    >
+                      <div className="w-12 h-12 rounded-2xl bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-center group-hover:scale-110 transition-transform">
+                        <Icon name="upload_file" size="md" />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-800 dark:text-gray-200">
-                          Tirar Foto ou Escolher Arquivo
+                          Galeria ou PDF
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Foto do cupom fiscal, lista de compras manuscrita ou PDF
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                          Carregar imagem salva
                         </p>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    </button>
+                  </div>
+                )}
 
                 <div className="bg-blue-50/50 dark:bg-blue-950/20 p-3 rounded-xl border border-blue-100 dark:border-blue-900/30 flex items-start gap-2">
                   <Icon name="auto_awesome" size="sm" className="text-blue-500 shrink-0 mt-0.5" />
                   <p className="text-[11px] text-blue-800 dark:text-blue-200 leading-relaxed">
-                    <strong>Dica IA:</strong> Identifica quantidades (un/kg), preços unitários (Vl.Un), totais e descontos gerais do cupom automaticamente.
+                    <strong>Dica IA:</strong> Enquadre o cupom completo com os nomes e valores dos produtos bem nítidos. A IA identifica itens, quantidades (un/kg), preços unitários e descontos gerais automaticamente.
                   </p>
                 </div>
               </div>
@@ -556,6 +652,14 @@ export function ImportShoppingListModal({
             {/* TAB 2: QR CODE / NFC-E */}
             {activeTab === 'qrcode' && (
               <div className="space-y-3">
+                {/* Banner explicativo sobre bloqueio da SEFAZ */}
+                <div className="bg-amber-50/70 dark:bg-amber-950/30 p-2.5 rounded-xl border border-amber-200 dark:border-amber-900/50 flex items-start gap-2">
+                  <Icon name="info" size="sm" className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-amber-900 dark:text-amber-200 leading-relaxed">
+                    <strong>Aviso SEFAZ:</strong> Os portais da Fazenda (especialmente SP) costumam bloquear a consulta automatizada de links por segurança (F5 WAF). Se o QR Code for rejeitado, fotografe o cupom impresso na aba <strong>Foto ou PDF</strong>.
+                  </p>
+                </div>
+
                 <canvas ref={canvasRef} className="hidden" />
                 <input
                   type="file"
