@@ -5,13 +5,13 @@ import { useTheme } from '../ThemeProvider';
 import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Button } from '../ui/Button';
-import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTransactions } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useBiometricAuth } from '@/hooks/useBiometricAuth';
 import { useFamily } from '@/hooks/useFamily';
 import { FamilyModal } from '../family/FamilyModal';
+import { useSidebar } from './SidebarContext';
 
 interface TopAppBarProps {
   userName?: string;
@@ -20,9 +20,9 @@ interface TopAppBarProps {
 export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [isFamilyModalOpen, setIsFamilyModalOpen] = useState(false);
   const { theme, setTheme } = useTheme();
+  const { toggleMobile } = useSidebar();
   const pathname = usePathname();
   const { transactions } = useTransactions();
   const { creditCards } = useCreditCards();
@@ -57,7 +57,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
     isInvoice?: boolean;
   }
 
-  // Check for bills due today (excluding individual credit card purchases, which belong to the card invoice)
+  // Check for bills due today
   const todayString = currentDate.toISOString().split('T')[0];
   const directBillsDueToday: NotificationBill[] = transactions
     .filter(t => !t.credit_card_id && t.type === 'despesa' && t.status === 'pendente' && t.date === todayString)
@@ -68,7 +68,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
       isInvoice: false
     }));
 
-  // Credit card invoices due today (when invoice transactions are due today)
+  // Credit card invoices due today
   const cardInvoicesDueToday: NotificationBill[] = creditCards.reduce<NotificationBill[]>((acc, card) => {
     const pendingTxsToday = transactions.filter(
       t => t.credit_card_id === card.id && t.status === 'pendente' && t.date === todayString
@@ -114,143 +114,67 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
 
   const currentMember = family?.members?.find(m => m.is_current_user);
   const activeDisplayName = currentMember?.display_name || userName;
-  const familyName = family?.family_name || 'Família';
+  const familyName = family?.family_name || 'Família Menezes';
 
-  const primaryNavItems = [
-    { href: '/dashboard', label: 'Dashboard', icon: 'dashboard' },
-    { href: '/lancamentos', label: 'Lançamentos', icon: 'receipt_long' },
-    { href: '/cartoes', label: 'Cartões', icon: 'credit_card' },
-    { href: '/investimentos', label: 'Investimentos', icon: 'trending_up' },
-    { href: '/metas', label: 'Metas', icon: 'flag' },
-  ];
-
-  const secondaryNavItems = [
-    { href: '/planejamento', label: 'Planejamento', desc: 'Viagens, projetos e orçamentos', icon: 'event_note', color: 'text-purple-500 bg-purple-500/10' },
-    { href: '/beneficios', label: 'VA & VR', desc: 'Cartões de alimentação e refeição', icon: 'restaurant', color: 'text-amber-500 bg-amber-500/10' },
-    { href: '/compras', label: 'Lista de Compras', desc: 'Supermercado e controle de itens', icon: 'shopping_cart', color: 'text-blue-500 bg-blue-500/10' },
-    { href: '/importar', label: 'Importar Dados', desc: 'Faturas e extratos bancários', icon: 'upload_file', color: 'text-emerald-500 bg-emerald-500/10' },
-  ];
-
-  const activeSecondaryItem = secondaryNavItems.find(item => pathname.startsWith(item.href));
+  // Obter título amigável da página atual
+  const getPageTitle = () => {
+    if (pathname.startsWith('/dashboard')) return 'Visão Geral & Indicadores';
+    if (pathname.startsWith('/lancamentos')) return 'Lançamentos & Fluxo';
+    if (pathname.startsWith('/cartoes')) return 'Cartões de Crédito';
+    if (pathname.startsWith('/investimentos')) return 'Investimentos & Carteira';
+    if (pathname.startsWith('/metas')) return 'Metas & Sonhos';
+    if (pathname.startsWith('/planejamento')) return 'Planejamento Financeiro';
+    if (pathname.startsWith('/beneficios')) return 'Benefícios (VA & VR)';
+    if (pathname.startsWith('/compras')) return 'Lista de Compras';
+    if (pathname.startsWith('/importar')) return 'Importar Extratos';
+    return 'Painel de Controle';
+  };
 
   return (
     <header 
-      className={`sticky top-0 z-40 w-full transition-all duration-300 ${
+      className={`sticky top-0 z-20 w-full transition-all duration-300 ${
         isScrolled 
-          ? 'bg-white/85 dark:bg-[#0f172a]/85 backdrop-blur-xl shadow-sm border-b border-gray-200/50 dark:border-slate-800/80' 
+          ? 'bg-white/85 dark:bg-[#0f1419]/85 backdrop-blur-xl shadow-xs border-b border-gray-200/50 dark:border-slate-800/80' 
           : 'bg-transparent'
       }`}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 gap-4">
-          {/* Left: User Profile & Family Badge (never wraps) */}
-          <div className="flex items-center gap-3 shrink-0">
+          {/* Left: Mobile Hambúrguer + Título / Saudação */}
+          <div className="flex items-center gap-3">
+            {/* Mobile Hamburger Button */}
+            <button
+              onClick={toggleMobile}
+              className="md:hidden p-2 rounded-xl text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+              aria-label="Abrir menu lateral"
+            >
+              <Icon name="menu" className="text-[22px]" />
+            </button>
+
+            {/* Mobile avatar */}
             <button
               onClick={() => setIsFamilyModalOpen(true)}
-              className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-[#0f1419] font-extrabold text-base shadow-sm hover:scale-105 transition-transform shrink-0"
+              className="md:hidden w-8 h-8 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-white font-extrabold text-xs shadow-xs"
               title="Ver detalhes da Família"
             >
               {activeDisplayName.charAt(0).toUpperCase()}
             </button>
+
+            {/* Contexto da página e saudação */}
             <div className="flex flex-col">
-              <div className="flex items-center gap-2 whitespace-nowrap">
-                <span className="text-sm font-bold text-gray-900 dark:text-white">
-                  Olá, {activeDisplayName.split(' ')[0]}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-extrabold text-gray-900 dark:text-white">
+                  {getPageTitle()}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setIsFamilyModalOpen(true)}
-                  className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-0.5 rounded-full font-bold border border-emerald-500/25 transition-colors whitespace-nowrap"
-                >
+                <span className="hidden sm:inline-block text-[11px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full font-bold border border-emerald-500/20">
                   {familyName}
-                </button>
+                </span>
               </div>
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium whitespace-nowrap">
+              <span className="text-[11px] text-gray-600 dark:text-slate-400 font-medium">
                 {capitalizedDate}
               </span>
             </div>
           </div>
-          
-          {/* Center: Clean Pill Navigation Bar */}
-          <nav className="hidden md:flex items-center gap-1 p-1 rounded-2xl bg-gray-100/90 dark:bg-slate-900/90 border border-gray-200/70 dark:border-slate-800 shadow-inner">
-            {primaryNavItems.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setShowMoreMenu(false)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                    isActive
-                      ? 'bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs'
-                      : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
-                  }`}
-                >
-                  <Icon name={item.icon} className="text-[15px]" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-
-            {/* Dropdown "Mais" for Secondary Modules */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowMoreMenu(!showMoreMenu);
-                  setShowNotifications(false);
-                }}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
-                  activeSecondaryItem || showMoreMenu
-                    ? 'bg-white dark:bg-[#1e293b] text-emerald-600 dark:text-emerald-400 shadow-xs'
-                    : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-slate-800/50'
-                }`}
-              >
-                <Icon name={activeSecondaryItem ? activeSecondaryItem.icon : 'apps'} className="text-[15px]" />
-                <span>{activeSecondaryItem ? activeSecondaryItem.label : 'Mais'}</span>
-                <Icon name={showMoreMenu ? 'expand_less' : 'expand_more'} className="text-[14px] opacity-70" />
-              </button>
-
-              {showMoreMenu && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10"
-                    onClick={() => setShowMoreMenu(false)}
-                  />
-                  <div className="absolute right-0 mt-2 w-72 z-20 bg-white dark:bg-[#161f30] rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700/80 p-2 animate-slide-up origin-top-right">
-                    <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-gray-400 dark:text-slate-400">
-                      Ferramentas & Gestão
-                    </div>
-                    <div className="space-y-1 mt-1">
-                      {secondaryNavItems.map((item) => {
-                        const isSubActive = pathname.startsWith(item.href);
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setShowMoreMenu(false)}
-                            className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors ${
-                              isSubActive
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
-                                : 'hover:bg-gray-50 dark:hover:bg-slate-800/60 text-gray-800 dark:text-slate-200'
-                            }`}
-                          >
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${item.color}`}>
-                              <Icon name={item.icon} size="sm" />
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold truncate">{item.label}</p>
-                              <p className="text-[11px] text-gray-400 dark:text-slate-400 truncate">{item.desc}</p>
-                            </div>
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </nav>
 
           {/* Right: Action Icons */}
           <div className="flex items-center gap-1.5 relative shrink-0">
@@ -288,61 +212,70 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             {/* Notifications Dropdown */}
             <div className="relative">
               <button 
-                onClick={() => {
-                  setShowNotifications(!showNotifications);
-                  setShowMoreMenu(false);
-                }}
+                onClick={() => setShowNotifications(!showNotifications)}
                 className="p-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-600 dark:text-gray-300 relative"
+                aria-label="Notificações"
               >
                 <Icon name="notifications" />
                 {hasNotifications && (
-                  <span className="absolute top-2 right-2 w-2 h-2 bg-[#ba1a1a] dark:bg-[#ffb4ab] rounded-full animate-pulse-soft"></span>
+                  <span className="absolute top-2 right-2 w-2 h-2 bg-[#ba1a1a] dark:bg-[#ffb4ab] rounded-full animate-pulse"></span>
                 )}
               </button>
               
               {showNotifications && (
-                <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#1a2332] rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 overflow-hidden animate-slide-up origin-top-right">
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">Notificações</h3>
-                  </div>
-                  <div className="max-h-80 overflow-y-auto">
-                    {hasNotifications ? (
-                      <ul className="divide-y divide-gray-100 dark:divide-gray-700">
-                        {dueTodayBills.map(bill => (
-                          <li key={bill.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                            <div className="flex gap-3">
-                              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                                bill.isInvoice 
-                                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
-                                  : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
-                              }`}>
-                                <Icon name={bill.isInvoice ? "credit_card" : "warning"} size="sm" />
+                <>
+                  <div
+                    className="fixed inset-0 z-30"
+                    onClick={() => setShowNotifications(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-80 bg-white dark:bg-[#1a2332] rounded-2xl shadow-2xl border border-gray-100 dark:border-slate-700/80 overflow-hidden animate-slide-up origin-top-right z-40">
+                    <div className="p-4 border-b border-gray-100 dark:border-slate-700 bg-gray-50/80 dark:bg-slate-800/50 flex items-center justify-between">
+                      <h3 className="font-bold text-sm text-gray-900 dark:text-white">Notificações</h3>
+                      {hasNotifications && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-500 text-white">
+                          {dueTodayBills.length} hoje
+                        </span>
+                      )}
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {hasNotifications ? (
+                        <ul className="divide-y divide-gray-100 dark:divide-slate-700">
+                          {dueTodayBills.map(bill => (
+                            <li key={bill.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                              <div className="flex gap-3">
+                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                                  bill.isInvoice 
+                                    ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' 
+                                    : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                                }`}>
+                                  <Icon name={bill.isInvoice ? "credit_card" : "warning"} size="sm" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-800 dark:text-gray-200">
+                                    {bill.isInvoice ? (
+                                      <>A <strong className="font-semibold">{bill.description}</strong> vence hoje!</>
+                                    ) : (
+                                      <>Conta <strong className="font-semibold">{bill.description}</strong> vencendo hoje!</>
+                                    )}
+                                  </p>
+                                  <p className="text-xs text-red-500 font-bold mt-0.5">
+                                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(bill.amount))}
+                                  </p>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-sm text-gray-800 dark:text-gray-200">
-                                  {bill.isInvoice ? (
-                                    <>A <strong className="font-semibold">{bill.description}</strong> vence hoje!</>
-                                  ) : (
-                                    <>Você tem a conta <strong className="font-semibold">{bill.description}</strong> vencendo hoje!</>
-                                  )}
-                                </p>
-                                <p className="text-xs text-red-500 font-medium mt-1">
-                                  Valor: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(bill.amount))}
-                                </p>
-                              </div>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <div className="p-8 text-center text-gray-500 dark:text-gray-400 flex flex-col items-center">
-                        <Icon name="notifications_off" className="w-8 h-8 mb-2 opacity-50" />
-                        <p className="text-sm">Nenhuma notificação no momento.</p>
-                        <p className="text-xs mt-1">Você não tem contas vencendo hoje!</p>
-                      </div>
-                    )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <div className="p-8 text-center text-gray-600 dark:text-slate-400 flex flex-col items-center">
+                          <Icon name="notifications_off" className="w-8 h-8 mb-2 opacity-50" />
+                          <p className="text-xs font-semibold">Tudo tranquilo!</p>
+                          <p className="text-[11px] mt-1">Você não tem contas pendentes para hoje.</p>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
