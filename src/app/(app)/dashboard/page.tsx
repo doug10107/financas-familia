@@ -367,112 +367,10 @@ export default function DashboardPage() {
          ========================================================================= */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* =====================================================================
-            LEFT COLUMN (8 COLS): CHARTS, SHARED BUDGET & CATEGORIES
+            LEFT COLUMN (8 COLS): EXPENSES, CATEGORIES & CONSOLIDATED CHARTS
            ===================================================================== */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {/* 1. Projeção & Fluxo Mensal Consolidado */}
-          <FinancialProjectionChart
-            chartData={dashboardData.chartData}
-            projectionMonths={dashboardData.projectionMonths}
-            currentBalance={dashboardData.totalBalance}
-          />
-
-          {/* 2. Meta Conjunta de Gastos Mensal (Teto Familiar Inteligente) */}
-          <div className="bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                  <Icon name="groups" className="text-[22px]" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">
-                    Meta Conjunta de Gastos Mensal
-                  </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">
-                    Teto programado de despesas familiares
-                  </p>
-                </div>
-              </div>
-
-              {/* Family Members Active Pill */}
-              <div className="flex items-center gap-2">
-                <div className="flex -space-x-2 overflow-hidden">
-                  {(family?.members || []).slice(0, 4).map((member, mIdx) => (
-                    <div
-                      key={member.id || mIdx}
-                      className="inline-flex h-8 w-8 rounded-full bg-emerald-600 text-white items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs"
-                      title={member.display_name}
-                    >
-                      {member.display_name.charAt(0).toUpperCase()}
-                    </div>
-                  ))}
-                  {(!family?.members || family.members.length === 0) && (
-                    <div className="inline-flex h-8 w-8 rounded-full bg-emerald-600 text-white items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs">
-                      D
-                    </div>
-                  )}
-                </div>
-                <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">
-                  {family?.members?.length || 1} {family?.members?.length === 1 ? 'ativo' : 'ativos'}
-                </span>
-              </div>
-            </div>
-
-            {/* Gauge Progress Bar */}
-            <div className="space-y-2 mt-1">
-              <div className="flex items-baseline justify-between">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-                    {formatCurrency(dashboardData.monthlyExpense)}
-                  </span>
-                  <span className="text-xs text-gray-400">
-                    de {formatCurrency(financialInsights?.estimatedCeiling || 12000)} teto
-                  </span>
-                </div>
-                <span className={`text-xs font-extrabold ${
-                  (financialInsights?.budgetPercentage || 0) > 90
-                    ? 'text-rose-600 dark:text-rose-400'
-                    : 'text-emerald-600 dark:text-emerald-400'
-                }`}>
-                  {financialInsights?.budgetPercentage || 0}% consumido
-                </span>
-              </div>
-
-              {/* Progress track */}
-              <div className="h-2.5 w-full bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ease-out ${
-                    (financialInsights?.budgetPercentage || 0) > 90
-                      ? 'bg-rose-500'
-                      : (financialInsights?.budgetPercentage || 0) > 75
-                        ? 'bg-amber-500'
-                        : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${Math.min(100, Math.max(2, financialInsights?.budgetPercentage || 0))}%` }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium pt-1">
-                <span>R$ 0</span>
-                <span>
-                  Risco de estouro: {(financialInsights?.budgetPercentage || 0) > 90 ? 'Alto' : (financialInsights?.budgetPercentage || 0) > 70 ? 'Moderado' : 'Baixo'}
-                </span>
-                <span>
-                  Disponível: {formatCurrency(Math.max(0, (financialInsights?.estimatedCeiling || 12000) - dashboardData.monthlyExpense))}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* 3. Mapa de Calor Diário (Calendário de Gastos) */}
-          <DailyExpenseHeatmap
-            monthFilter={filterMonth}
-            transactions={dashboardData.monthlyTransactions}
-            totalExpense={dashboardData.monthlyExpense}
-            totalIncome={dashboardData.monthlyIncome}
-          />
-
-          {/* 4. Top 5 Despesas & Despesas por Categoria */}
+          {/* 1. Top 5 Despesas & Despesas por Categoria (Lá em cima, alinhado aos Próximos Vencimentos) */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
             {/* Top 5 Despesas (5 cols) */}
             <div className="md:col-span-5 bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
@@ -665,6 +563,108 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* 2. Projeção & Fluxo Mensal Consolidado */}
+          <FinancialProjectionChart
+            chartData={dashboardData.chartData}
+            projectionMonths={dashboardData.projectionMonths}
+            currentBalance={dashboardData.totalBalance}
+          />
+
+          {/* 2. Meta Conjunta de Gastos Mensal (Teto Familiar Inteligente) */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Icon name="groups" className="text-[22px]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">
+                    Meta Conjunta de Gastos Mensal
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-slate-400">
+                    Teto programado de despesas familiares
+                  </p>
+                </div>
+              </div>
+
+              {/* Family Members Active Pill */}
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-2 overflow-hidden">
+                  {(family?.members || []).slice(0, 4).map((member, mIdx) => (
+                    <div
+                      key={member.id || mIdx}
+                      className="inline-flex h-8 w-8 rounded-full bg-emerald-600 text-white items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs"
+                      title={member.display_name}
+                    >
+                      {member.display_name.charAt(0).toUpperCase()}
+                    </div>
+                  ))}
+                  {(!family?.members || family.members.length === 0) && (
+                    <div className="inline-flex h-8 w-8 rounded-full bg-emerald-600 text-white items-center justify-center font-bold text-xs ring-2 ring-white dark:ring-slate-900 shadow-xs">
+                      D
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">
+                  {family?.members?.length || 1} {family?.members?.length === 1 ? 'ativo' : 'ativos'}
+                </span>
+              </div>
+            </div>
+
+            {/* Gauge Progress Bar */}
+            <div className="space-y-2 mt-1">
+              <div className="flex items-baseline justify-between">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
+                    {formatCurrency(dashboardData.monthlyExpense)}
+                  </span>
+                  <span className="text-xs text-gray-400">
+                    de {formatCurrency(financialInsights?.estimatedCeiling || 12000)} teto
+                  </span>
+                </div>
+                <span className={`text-xs font-extrabold ${
+                  (financialInsights?.budgetPercentage || 0) > 90
+                    ? 'text-rose-600 dark:text-rose-400'
+                    : 'text-emerald-600 dark:text-emerald-400'
+                }`}>
+                  {financialInsights?.budgetPercentage || 0}% consumido
+                </span>
+              </div>
+
+              {/* Progress track */}
+              <div className="h-2.5 w-full bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ease-out ${
+                    (financialInsights?.budgetPercentage || 0) > 90
+                      ? 'bg-rose-500'
+                      : (financialInsights?.budgetPercentage || 0) > 75
+                        ? 'bg-amber-500'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${Math.min(100, Math.max(2, financialInsights?.budgetPercentage || 0))}%` }}
+                />
+              </div>
+
+              <div className="flex items-center justify-between text-[11px] text-gray-400 font-medium pt-1">
+                <span>R$ 0</span>
+                <span>
+                  Risco de estouro: {(financialInsights?.budgetPercentage || 0) > 90 ? 'Alto' : (financialInsights?.budgetPercentage || 0) > 70 ? 'Moderado' : 'Baixo'}
+                </span>
+                <span>
+                  Disponível: {formatCurrency(Math.max(0, (financialInsights?.estimatedCeiling || 12000) - dashboardData.monthlyExpense))}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Mapa de Calor Diário (Calendário de Gastos) */}
+          <DailyExpenseHeatmap
+            monthFilter={filterMonth}
+            transactions={dashboardData.monthlyTransactions}
+            totalExpense={dashboardData.monthlyExpense}
+            totalIncome={dashboardData.monthlyIncome}
+          />
         </div>
 
         {/* =====================================================================
