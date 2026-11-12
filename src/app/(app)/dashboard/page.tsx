@@ -367,204 +367,10 @@ export default function DashboardPage() {
          ========================================================================= */}
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* =====================================================================
-            LEFT COLUMN (8 COLS): EXPENSES, CATEGORIES & CONSOLIDATED CHARTS
+            LEFT COLUMN (8 COLS): CHARTS, SHARED BUDGET & HEATMAP
            ===================================================================== */}
         <div className="lg:col-span-8 flex flex-col gap-6">
-          {/* 1. Top 5 Despesas & Despesas por Categoria (Lá em cima, alinhado aos Próximos Vencimentos) */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch">
-            {/* Top 5 Despesas (5 cols) */}
-            <div className="md:col-span-5 bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Top 5 Despesas</h3>
-                  <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
-                    <button
-                      type="button"
-                      onClick={() => setExpenseTab('all')}
-                      className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'all' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-                    >
-                      Todas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExpenseTab('fixed')}
-                      className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'fixed' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-                    >
-                      Fixas
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setExpenseTab('variable')}
-                      className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'variable' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
-                    >
-                      Variáveis
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  {topExpensesDisplayed.length > 0 ? (
-                    topExpensesDisplayed.map((expense: any, idx: number) => (
-                      <div key={idx} className="space-y-1">
-                        <div className="flex justify-between items-center text-xs">
-                          <span className="font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{expense.name}</span>
-                          <span className="font-bold text-gray-900 dark:text-white shrink-0">{formatCurrency(expense.amount)}</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div
-                            className="h-full rounded-full transition-all duration-700 ease-out"
-                            style={{ width: `${Math.max(3, expense.percentage)}%`, backgroundColor: expense.color }}
-                          />
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-gray-400 text-xs py-10">
-                      Nenhuma despesa para listar.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Despesas por Categoria (7 cols) */}
-            <div className="md:col-span-7 bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
-              <div>
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800">
-                  <div className="w-full sm:w-1/2 flex flex-col items-center justify-center">
-                    <div className="h-44 w-44 relative flex items-center justify-center">
-                      {dashboardData.expensesByCategory.labels.length > 0 ? (
-                        <>
-                          <Doughnut
-                            data={dashboardData.expensesByCategory}
-                            options={{
-                              responsive: true,
-                              maintainAspectRatio: false,
-                              plugins: {
-                                legend: { display: false },
-                                tooltip: {
-                                  callbacks: {
-                                    label: function(context: any) {
-                                      const value = context.raw;
-                                      const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
-                                      const percentage = ((value / total) * 100).toFixed(1);
-                                      const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-                                      return ` ${context.label}: ${formattedValue} (${percentage}%)`;
-                                    }
-                                  }
-                                }
-                              },
-                              cutout: '78%'
-                            }}
-                          />
-                          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
-                            <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
-                              TOTAL
-                            </span>
-                            <span className="text-base font-extrabold text-gray-900 dark:text-white">
-                              {formatCurrency(dashboardData.monthlyExpense)}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="h-full flex items-center justify-center text-gray-400 text-xs italic">
-                          Sem despesas no mês
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="w-full sm:w-1/2 space-y-1 text-center sm:text-left">
-                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 inline-flex items-center gap-1">
-                      <Icon name="donut_large" className="text-[14px]" /> Categorias
-                    </span>
-                    <h3 className="font-bold text-sm text-gray-900 dark:text-white">
-                      Distribuição Mensal
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">
-                      Detalhamento do fluxo por grupo de gasto
-                    </p>
-                  </div>
-                </div>
-
-                {/* Category Rows List */}
-                <div className="space-y-2 pt-3 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                  {dashboardData.expensesByCategory.categoryList && dashboardData.expensesByCategory.categoryList.length > 0 ? (
-                    dashboardData.expensesByCategory.categoryList.map((cat: any, idx: number) => {
-                      const isExpanded = expandedCategory === cat.name;
-
-                      return (
-                        <div key={idx} className="bg-gray-50/70 dark:bg-slate-800/40 rounded-xl p-3 hover:bg-gray-100/70 dark:hover:bg-slate-800/70 transition-all border border-transparent space-y-2">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <div
-                                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-xs"
-                                style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
-                              >
-                                <Icon name={cat.icon || 'category'} className="text-[17px]" />
-                              </div>
-                              <div className="min-w-0">
-                                <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{cat.name}</p>
-                                <p className="text-[10px] text-gray-400">
-                                  {cat.transactions.length} {cat.transactions.length === 1 ? 'item' : 'itens'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                              <span className="font-extrabold text-xs text-gray-900 dark:text-white">
-                                {formatCurrency(cat.total)}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}
-                                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
-                              >
-                                <Icon name={isExpanded ? 'expand_less' : 'expand_more'} className="text-[18px]" />
-                              </button>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                              <div
-                                className="h-full rounded-full transition-all duration-700 ease-out"
-                                style={{ width: `${Math.max(2, cat.percentage)}%`, backgroundColor: cat.color }}
-                              />
-                            </div>
-                            <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 w-10 text-right">
-                              {cat.percentage}%
-                            </span>
-                          </div>
-
-                          {isExpanded && (
-                            <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-slate-700/50 space-y-1">
-                              {cat.transactions.map((tx: any, tIdx: number) => (
-                                <div key={tIdx} className="flex justify-between items-center text-[11px] py-0.5">
-                                  <span className="text-gray-600 dark:text-slate-300 font-medium truncate pr-2">
-                                    {tx.description}
-                                  </span>
-                                  <span className="font-bold text-gray-900 dark:text-white shrink-0">
-                                    {formatCurrency(Number(tx.amount))}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  ) : (
-                    <div className="py-6 text-center text-xs text-gray-400 italic">
-                      Nenhuma despesa para exibir no mês.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2. Projeção & Fluxo Mensal Consolidado */}
+          {/* 1. Projeção & Fluxo Mensal Consolidado */}
           <FinancialProjectionChart
             chartData={dashboardData.chartData}
             projectionMonths={dashboardData.projectionMonths}
@@ -658,7 +464,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 4. Mapa de Calor Diário (Calendário de Gastos) */}
+          {/* 3. Mapa de Calor Diário (Calendário de Gastos) */}
           <DailyExpenseHeatmap
             monthFilter={filterMonth}
             transactions={dashboardData.monthlyTransactions}
@@ -668,7 +474,7 @@ export default function DashboardPage() {
         </div>
 
         {/* =====================================================================
-            RIGHT COLUMN (4 COLS): UPCOMING BILLS, HEALTH DIAGNOSTIC & SMART TIPS
+            RIGHT COLUMN (4 COLS): BILLS, TOP EXPENSES, CATEGORIES & INSIGHTS
            ===================================================================== */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           {/* 1. Próximos Vencimentos */}
@@ -768,7 +574,200 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          {/* 2. Financial Status Health Widget ("Tudo sob controle") */}
+          {/* 2. Top 5 Despesas */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-center mb-5">
+                <h3 className="font-bold text-sm text-gray-900 dark:text-white">Top 5 Despesas</h3>
+                <div className="flex bg-gray-100 dark:bg-slate-800 p-0.5 rounded-lg text-xs font-semibold">
+                  <button
+                    type="button"
+                    onClick={() => setExpenseTab('all')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'all' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseTab('fixed')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'fixed' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+                  >
+                    Fixas
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setExpenseTab('variable')}
+                    className={`px-2 py-0.5 rounded-md transition-colors ${expenseTab === 'variable' ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}
+                  >
+                    Variáveis
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {topExpensesDisplayed.length > 0 ? (
+                  topExpensesDisplayed.map((expense: any, idx: number) => (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-gray-800 dark:text-gray-200 truncate pr-2">{expense.name}</span>
+                        <span className="font-bold text-gray-900 dark:text-white shrink-0">{formatCurrency(expense.amount)}</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-700 ease-out"
+                          style={{ width: `${Math.max(3, expense.percentage)}%`, backgroundColor: expense.color }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-400 text-xs py-10">
+                    Nenhuma despesa para listar.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. Despesas por Categoria (Distribuição Mensal) */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+            <div>
+              <div className="flex flex-col items-center justify-between gap-4 pb-4 border-b border-gray-100 dark:border-slate-800">
+                <div className="w-full flex items-center justify-between">
+                  <div>
+                    <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 inline-flex items-center gap-1">
+                      <Icon name="donut_large" className="text-[14px]" /> Categorias
+                    </span>
+                    <h3 className="font-bold text-sm text-gray-900 dark:text-white mt-1">
+                      Distribuição Mensal
+                    </h3>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">
+                      Detalhamento do fluxo por grupo de gasto
+                    </p>
+                  </div>
+                </div>
+
+                <div className="w-full flex flex-col items-center justify-center pt-2">
+                  <div className="h-44 w-44 relative flex items-center justify-center">
+                    {dashboardData.expensesByCategory.labels.length > 0 ? (
+                      <>
+                        <Doughnut
+                          data={dashboardData.expensesByCategory}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: {
+                                callbacks: {
+                                  label: function(context: any) {
+                                    const value = context.raw;
+                                    const total = context.dataset.data.reduce((a: number, b: number) => a + b, 0);
+                                    const percentage = ((value / total) * 100).toFixed(1);
+                                    const formattedValue = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+                                    return ` ${context.label}: ${formattedValue} (${percentage}%)`;
+                                  }
+                                }
+                              }
+                            },
+                            cutout: '78%'
+                          }}
+                        />
+                        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center p-2">
+                          <span className="text-[10px] font-bold tracking-widest text-gray-400 uppercase">
+                            TOTAL
+                          </span>
+                          <span className="text-base font-extrabold text-gray-900 dark:text-white">
+                            {formatCurrency(dashboardData.monthlyExpense)}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="h-full flex items-center justify-center text-gray-400 text-xs italic">
+                        Sem despesas no mês
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Rows List */}
+              <div className="space-y-2 pt-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
+                {dashboardData.expensesByCategory.categoryList && dashboardData.expensesByCategory.categoryList.length > 0 ? (
+                  dashboardData.expensesByCategory.categoryList.map((cat: any, idx: number) => {
+                    const isExpanded = expandedCategory === cat.name;
+
+                    return (
+                      <div key={idx} className="bg-gray-50/70 dark:bg-slate-800/40 rounded-xl p-3 hover:bg-gray-100/70 dark:hover:bg-slate-800/70 transition-all border border-transparent space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 shadow-xs"
+                              style={{ backgroundColor: `${cat.color}20`, color: cat.color }}
+                            >
+                              <Icon name={cat.icon || 'category'} className="text-[17px]" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-xs text-gray-900 dark:text-white truncate">{cat.name}</p>
+                              <p className="text-[10px] text-gray-400">
+                                {cat.transactions.length} {cat.transactions.length === 1 ? 'item' : 'itens'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="font-extrabold text-xs text-gray-900 dark:text-white">
+                              {formatCurrency(cat.total)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedCategory(isExpanded ? null : cat.name)}
+                              className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                            >
+                              <Icon name={isExpanded ? 'expand_less' : 'expand_more'} className="text-[18px]" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700 ease-out"
+                              style={{ width: `${Math.max(2, cat.percentage)}%`, backgroundColor: cat.color }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-bold text-gray-500 dark:text-slate-400 w-10 text-right">
+                            {cat.percentage}%
+                          </span>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-2 pt-2 border-t border-gray-200/50 dark:border-slate-700/50 space-y-1">
+                            {cat.transactions.map((tx: any, tIdx: number) => (
+                              <div key={tIdx} className="flex justify-between items-center text-[11px] py-0.5">
+                                <span className="text-gray-600 dark:text-slate-300 font-medium truncate pr-2">
+                                  {tx.description}
+                                </span>
+                                <span className="font-bold text-gray-900 dark:text-white shrink-0">
+                                  {formatCurrency(Number(tx.amount))}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="py-6 text-center text-xs text-gray-400 italic">
+                    Nenhuma despesa para exibir no mês.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Financial Status Health Widget ("Tudo sob controle") */}
           <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-md relative overflow-hidden flex flex-col justify-between">
             <div className="absolute -right-6 -bottom-6 w-36 h-36 rounded-full bg-white/10 pointer-events-none blur-xl" />
 
@@ -808,7 +807,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 3. Dica do Planejador / Insights Inteligentes */}
+          {/* 5. Dica do Planejador / Insights Inteligentes */}
           <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Icon name="tips_and_updates" className="text-[24px]" />
