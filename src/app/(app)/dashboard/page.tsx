@@ -189,10 +189,11 @@ export default function DashboardPage() {
               <Icon name="chevron_left" className="text-[18px]" />
             </button>
 
-            <div className="w-40 px-1">
+            <div className="w-48 sm:w-52 px-1">
               <Select
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
+                className="!text-sm !py-1.5 !px-3 !pr-8 font-semibold"
                 options={[
                   ...Array.from({ length: 15 }, (_, i) => {
                     const today = new Date();

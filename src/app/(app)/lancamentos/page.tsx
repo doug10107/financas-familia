@@ -327,10 +327,11 @@ export default function TransactionsPage() {
               Despesas
             </Button>
             
-            <div className="w-40 ml-2">
+            <div className="w-48 sm:w-52 ml-2">
               <Select 
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(e.target.value)}
+                className="!text-sm !py-1.5 !px-3 !pr-8 font-semibold"
                 options={[
                   {value: 'all', label: 'Todos os Meses'},
                   // Generate last 3 months, current, and next 12 months dynamically based on data or just a fixed list
