@@ -123,23 +123,25 @@ export function CreditCardEvolutionChart({ creditCards, transactions }: CreditCa
       });
     }
 
-    // Filter and sum transactions per month
+    // Filter and sum transactions per month (accounting for refunds)
     const cardMap = new Map(monthList.map(m => [m.key, 0]));
 
     transactions.forEach(t => {
-      if (t.type !== 'despesa') return;
       if (!t.credit_card_id) return;
       if (selectedCardId !== 'all' && t.credit_card_id !== selectedCardId) return;
 
+      const isRefund = t.type === 'receita' || (t as any).is_refund || t.notes?.includes('[ESTORNO]');
       const txKey = t.date.substring(0, 7); // YYYY-MM
       if (cardMap.has(txKey)) {
         const currentVal = cardMap.get(txKey) || 0;
-        cardMap.set(txKey, currentVal + Number(t.amount));
+        const delta = isRefund ? -Number(t.amount) : Number(t.amount);
+        cardMap.set(txKey, currentVal + delta);
       }
     });
 
     monthList.forEach(m => {
-      m.total = cardMap.get(m.key) || 0;
+      const rawTotal = cardMap.get(m.key) || 0;
+      m.total = Math.max(0, rawTotal);
     });
 
     const totals = monthList.map(m => m.total);

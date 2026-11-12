@@ -23,9 +23,66 @@ export type Transaction = {
   installment_group_id?: string | null;
   current_installment?: number | null;
   total_installments?: number | null;
+  is_refund?: boolean;
+  refund_for_id?: string | null;
+  notes?: string | null;
   category?: Category; // Joined data
   profile?: { id: string; display_name: string; avatar_url?: string | null };
 };
+
+// Helper to identify if a transaction is a credit card refund / credit
+export function isRefundTransaction(t: {
+  type?: string;
+  is_refund?: boolean;
+  notes?: string | null;
+  credit_card_id?: string | null;
+}): boolean {
+  if (!t.credit_card_id) return false;
+  return t.type === 'receita' || Boolean(t.is_refund) || Boolean(t.notes && t.notes.includes('[ESTORNO]'));
+}
+
+// Helper to calculate invoice due date based on purchase date, closing day and due day
+export function calculateInvoiceDueDate(
+  purchaseDate: Date,
+  closingDay: number,
+  dueDay: number,
+  monthOffset: number = 0
+): Date {
+  const pYear = purchaseDate.getFullYear();
+  const pMonth = purchaseDate.getMonth();
+  const pDay = purchaseDate.getDate();
+
+  let invoiceMonth = pMonth;
+  let invoiceYear = pYear;
+
+  // If purchase day is on or after the closing day, it goes to the next month's invoice
+  if (pDay >= closingDay) {
+    invoiceMonth++;
+  }
+
+  // Add the installment or month offset
+  invoiceMonth += monthOffset;
+
+  // Adjust year if month goes beyond December
+  while (invoiceMonth > 11) {
+    invoiceMonth -= 12;
+    invoiceYear++;
+  }
+
+  // Usually if dueDay is less than closingDay (e.g. closing 25, due 05), the due date is actually in the following month of the closing date.
+  let finalDueMonth = invoiceMonth;
+  if (dueDay < closingDay) {
+    finalDueMonth++;
+    if (finalDueMonth > 11) {
+      finalDueMonth = 0;
+      invoiceYear++;
+    }
+  }
+
+  const maxDays = new Date(invoiceYear, finalDueMonth + 1, 0).getDate();
+  const safeDueDay = Math.min(dueDay, maxDays);
+  return new Date(invoiceYear, finalDueMonth, safeDueDay, 12, 0, 0);
+}
 
 export function useTransactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -99,6 +156,7 @@ export function useTransactions() {
     card_due_day?: number;
     card_closing_day?: number;
     repeat_until?: string; // Formato "YYYY-MM"
+    notes?: string;
   }) => {
     setError(null);
     try {
@@ -210,6 +268,9 @@ export function useTransactions() {
            status = 'pendente'; // Credit card purchases are always pending until paid
         }
 
+        const defaultNote = isCreditCard && transactionInput.type === 'receita' ? '[ESTORNO]' : null;
+        const finalNotes = transactionInput.notes || defaultNote;
+
         const { error } = await supabase
           .from('transactions')
           .insert({
@@ -222,6 +283,7 @@ export function useTransactions() {
             category_id: transactionInput.category_id,
             status: status || 'pago',
             credit_card_id: transactionInput.credit_card_id || null,
+            notes: finalNotes,
             total_installments: isCreditCard ? 1 : null,
             current_installment: isCreditCard ? 1 : null
           } as any);
@@ -271,44 +333,81 @@ export function useTransactions() {
     }
   };
 
-  // Helper to calculate invoice due date based on purchase date, closing day and due day
-  const calculateInvoiceDueDate = (purchaseDate: Date, closingDay: number, dueDay: number, monthOffset: number) => {
-    const pYear = purchaseDate.getFullYear();
-    const pMonth = purchaseDate.getMonth();
-    const pDay = purchaseDate.getDate();
+  const refundTransaction = async (params: {
+    creditCardId: string;
+    amount: number;
+    description: string;
+    targetInvoiceDueDate: string;
+    categoryId?: string | null;
+    originalTransactionId?: string;
+    notes?: string;
+  }) => {
+    setError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado');
 
-    let invoiceMonth = pMonth;
-    let invoiceYear = pYear;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('family_id')
+        .eq('id', user.id)
+        .single() as any;
+        
+      if (!profile) throw new Error('Perfil não encontrado');
 
-    // If purchase day is on or after the closing day, it goes to the next month's invoice
-    if (pDay >= closingDay) {
-      invoiceMonth++;
-    }
+      const baseNote = params.notes?.trim() ? params.notes.trim() : 'Estorno de compra no cartão';
+      const finalNotes = `[ESTORNO] ${baseNote}`;
 
-    // Add the installment offset
-    invoiceMonth += monthOffset;
+      const insertPayload: any = {
+        family_id: profile.family_id,
+        user_id: user.id,
+        type: 'receita',
+        description: params.description.startsWith('Estorno') ? params.description : `Estorno: ${params.description}`,
+        amount: params.amount,
+        date: params.targetInvoiceDueDate,
+        category_id: params.categoryId || null,
+        status: 'pendente',
+        credit_card_id: params.creditCardId,
+        notes: finalNotes,
+        total_installments: 1,
+        current_installment: 1
+      };
 
-    // Adjust year if month goes beyond December
-    while (invoiceMonth > 11) {
-      invoiceMonth -= 12;
-      invoiceYear++;
-    }
+      const { error: insertErr } = await supabase
+        .from('transactions')
+        .insert(insertPayload);
 
-    // Usually if dueDay is less than closingDay (e.g. closing 25, due 05), the due date is actually in the following month of the closing date.
-    // E.g. buys on Aug 20. Closes Aug 25. Due Sep 05.
-    // E.g. buys on Aug 26. Closes Sep 25. Due Oct 05.
-    let finalDueMonth = invoiceMonth;
-    if (dueDay < closingDay) {
-      finalDueMonth++;
-      if (finalDueMonth > 11) {
-        finalDueMonth = 0;
-        invoiceYear++;
+      if (insertErr) throw insertErr;
+
+      // Se houver transação original, atualiza suas notas marcando que foi estornada
+      if (params.originalTransactionId) {
+        try {
+          const { data: origTx } = await (supabase
+            .from('transactions') as any)
+            .select('notes')
+            .eq('id', params.originalTransactionId)
+            .single();
+
+          const currentNotes = origTx?.notes || '';
+          if (!currentNotes.includes('[Compra Estornada]')) {
+            const updatedNotes = currentNotes ? `${currentNotes} | [Compra Estornada]` : '[Compra Estornada]';
+            await (supabase
+              .from('transactions') as any)
+              .update({ notes: updatedNotes })
+              .eq('id', params.originalTransactionId);
+          }
+        } catch (e) {
+          console.warn('Could not update original transaction note:', e);
+        }
       }
-    }
 
-    const maxDays = new Date(invoiceYear, finalDueMonth + 1, 0).getDate();
-    const safeDueDay = Math.min(dueDay, maxDays);
-    return new Date(invoiceYear, finalDueMonth, safeDueDay, 12, 0, 0);
+      await refreshData();
+      return true;
+    } catch (err: any) {
+      console.error('Error in refundTransaction:', err);
+      setError(err.message || 'Erro ao registrar estorno');
+      return false;
+    }
   };
 
   const updateTransaction = async (id: string, transactionInput: {
@@ -499,6 +598,7 @@ export function useTransactions() {
     error,
     refreshData,
     addTransaction,
+    refundTransaction,
     updateTransaction,
     deleteTransaction,
     addCategory,

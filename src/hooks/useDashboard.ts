@@ -98,8 +98,9 @@ export function useDashboard(monthFilter?: string) {
           }
         }
 
-        // Contas Próximas (Despesas pendentes)
-        if (t.status === 'pendente' && t.type === 'despesa') {
+        // Contas Próximas (Despesas pendentes ou estornos pendentes no cartão)
+        const isCreditCardRefund = t.credit_card_id && (t.type === 'receita' || (t as any).is_refund || t.notes?.includes('[ESTORNO]'));
+        if (t.status === 'pendente' && (t.type === 'despesa' || isCreditCardRefund)) {
           upcomingBillsRaw.push(t);
         }
       });
@@ -244,9 +245,22 @@ export function useDashboard(monthFilter?: string) {
             };
             upcomingBills.push(consolidatedCards[key]);
           }
-          consolidatedCards[key].amount += Number(t.amount);
+
+          const isRefund = t.type === 'receita' || (t as any).is_refund || t.notes?.includes('[ESTORNO]');
+          if (isRefund) {
+            consolidatedCards[key].amount -= Number(t.amount);
+          } else {
+            consolidatedCards[key].amount += Number(t.amount);
+          }
         } else {
           upcomingBills.push(t);
+        }
+      });
+
+      // Garantir que faturas consolidadas não fiquem negativas caso estornos excedam os gastos
+      upcomingBills.forEach(b => {
+        if (b.isInvoice) {
+          b.amount = Math.max(0, b.amount);
         }
       });
 

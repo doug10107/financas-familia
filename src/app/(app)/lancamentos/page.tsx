@@ -10,16 +10,19 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { useTransactions, Transaction } from '@/hooks/useTransactions';
+import { useTransactions, Transaction, isRefundTransaction } from '@/hooks/useTransactions';
 import { useCreditCards } from '@/hooks/useCreditCards';
 import { useBenefitCards } from '@/hooks/useBenefitCards';
+import { RefundModal } from '@/components/cartoes/RefundModal';
 
 export default function TransactionsPage() {
   const router = useRouter();
-  const { transactions, categories, loading: loadingTx, error: txError, addTransaction, updateTransaction, deleteTransaction, addCategory, deleteCategory } = useTransactions();
+  const { transactions, categories, loading: loadingTx, error: txError, addTransaction, refundTransaction, updateTransaction, deleteTransaction, addCategory, deleteCategory } = useTransactions();
   const { creditCards, loading: loadingCards } = useCreditCards();
   const { cards: benefitCards, debitBalance: debitBenefitBalance } = useBenefitCards();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefundModalOpen, setIsRefundModalOpen] = useState(false);
+  const [targetTransactionForRefund, setTargetTransactionForRefund] = useState<Transaction | null>(null);
   const [filterType, setFilterType] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterMonth, setFilterMonth] = useState(() => {
@@ -135,6 +138,11 @@ export default function TransactionsPage() {
     setIsModalOpen(true);
   };
 
+  const handleOpenRefundModal = (transaction?: Transaction) => {
+    setTargetTransactionForRefund(transaction || null);
+    setIsRefundModalOpen(true);
+  };
+
   const handleCreateCategory = async () => {
     if (!catForm.name) {
       setCatFormError('Por favor, preencha o nome da categoria.');
@@ -246,7 +254,11 @@ export default function TransactionsPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Lançamentos</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gerencie suas receitas e despesas</p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex items-center gap-3 w-full sm:w-auto flex-wrap sm:flex-nowrap">
+          <Button variant="secondary" onClick={() => handleOpenRefundModal()} className="flex-1 sm:flex-none">
+            <Icon name="replay" className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400" /> 
+            Estornar Cartão
+          </Button>
           <Button variant="secondary" onClick={() => router.push('/importar')} className="flex-1 sm:flex-none">
             <Icon name="file_upload" className="w-4 h-4 mr-2 text-purple-600 dark:text-purple-400" /> 
             Importar Extrato / PDF
@@ -392,8 +404,17 @@ export default function TransactionsPage() {
                             {transaction.description}
                           </span>
                           {transaction.credit_card_id && (
-                            <span className="inline-flex items-center text-[9px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 rounded font-bold uppercase">
-                              Cartão
+                            <span className={`inline-flex items-center text-[9px] px-1.5 py-0.2 rounded font-bold uppercase ${
+                              isRefundTransaction(transaction)
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                            }`}>
+                              {isRefundTransaction(transaction) ? 'Estorno' : 'Cartão'}
+                            </span>
+                          )}
+                          {transaction.notes?.includes('[Compra Estornada]') && (
+                            <span className="inline-flex items-center text-[9px] bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.2 rounded font-bold uppercase">
+                              Estornada
                             </span>
                           )}
                         </div>
@@ -416,6 +437,15 @@ export default function TransactionsPage() {
                         {transaction.type === 'despesa' ? '-' : '+'} {formatCurrency(transaction.amount)}
                       </span>
                       <div className="flex items-center gap-1 mt-1">
+                        {transaction.credit_card_id && transaction.type === 'despesa' && (
+                          <button
+                            onClick={() => handleOpenRefundModal(transaction)}
+                            className="p-1 text-purple-500 hover:text-purple-700 dark:hover:text-purple-300 transition-colors rounded-md"
+                            title="Estornar compra no cartão"
+                          >
+                            <Icon name="replay" className="text-[14px]" />
+                          </button>
+                        )}
                         <button
                           onClick={() => handleOpenModal(transaction, true)}
                           className="p-1 text-gray-400 hover:text-emerald-500 transition-colors rounded-md"
@@ -466,8 +496,17 @@ export default function TransactionsPage() {
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span>{transaction.description}</span>
                           {transaction.credit_card_id && (
-                            <span className="inline-flex items-center text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase font-bold">
-                              Cartão
+                            <span className={`inline-flex items-center text-[10px] px-1.5 py-0.5 rounded uppercase font-bold ${
+                              isRefundTransaction(transaction)
+                                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                                : 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                            }`}>
+                              {isRefundTransaction(transaction) ? 'Estorno' : 'Cartão'}
+                            </span>
+                          )}
+                          {transaction.notes?.includes('[Compra Estornada]') && (
+                            <span className="inline-flex items-center text-[10px] bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded uppercase font-bold">
+                              Estornada
                             </span>
                           )}
                         </div>
@@ -491,7 +530,9 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-4 py-4">
                       {transaction.credit_card_id ? (
-                        transaction.status === 'pendente' ? (
+                        isRefundTransaction(transaction) ? (
+                          <Badge color="green">Estorno de Fatura</Badge>
+                        ) : transaction.status === 'pendente' ? (
                           <Badge color="purple">Na Fatura</Badge>
                         ) : (
                           <Badge color="green">Fatura Paga</Badge>
@@ -509,6 +550,15 @@ export default function TransactionsPage() {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-2">
+                        {transaction.credit_card_id && transaction.type === 'despesa' && (
+                          <button 
+                            onClick={() => handleOpenRefundModal(transaction)}
+                            className="p-1.5 text-purple-500 hover:text-purple-700 dark:hover:text-purple-300 transition-colors rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                            title="Estornar compra no cartão"
+                          >
+                            <Icon name="replay" size="sm" />
+                          </button>
+                        )}
                         <button 
                           onClick={() => handleOpenModal(transaction, true)}
                           className="p-1.5 text-gray-400 hover:text-green-500 transition-colors rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20"
@@ -925,6 +975,16 @@ export default function TransactionsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Modal de Estorno de Cartão de Crédito */}
+      <RefundModal
+        isOpen={isRefundModalOpen}
+        onClose={() => setIsRefundModalOpen(false)}
+        creditCards={creditCards}
+        categories={categories}
+        originalTransaction={targetTransactionForRefund}
+        onRefund={refundTransaction}
+      />
     </div>
   );
 }
