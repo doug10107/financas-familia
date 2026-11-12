@@ -471,6 +471,84 @@ export default function DashboardPage() {
             totalExpense={dashboardData.monthlyExpense}
             totalIncome={dashboardData.monthlyIncome}
           />
+
+          {/* 4. Diagnóstico Financeiro & Dica do Planejador (Abaixo do Calendário de Saídas por Dia) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
+            {/* Diagnóstico de Inteligência Financeira / Score */}
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-md relative overflow-hidden flex flex-col justify-between">
+              <div className="absolute -right-6 -bottom-6 w-36 h-36 rounded-full bg-white/10 pointer-events-none blur-xl" />
+
+              <div className="z-10">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
+                    <Icon name="verified_user" className="text-white text-[22px]" />
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-extrabold">
+                    Score: {financialInsights?.score ?? 90}/100
+                  </span>
+                </div>
+
+                <h4 className="font-extrabold text-base tracking-tight">
+                  {(financialInsights?.score ?? 90) >= 80 ? 'Tudo sob controle' : 'Atenção ao fluxo'}
+                </h4>
+                <p className="text-[11px] text-white/80 font-medium mt-0.5">
+                  Diagnóstico de Inteligência Financeira
+                </p>
+
+                <p className="text-xs text-white/95 mt-3 leading-relaxed">
+                  {(financialInsights?.overdueCount ?? 0) > 0 ? (
+                    <>Você possui <strong className="font-bold underline">{financialInsights?.overdueCount} contas vencidas</strong> aguardando liquidação para regularizar seu fluxo.</>
+                  ) : (financialInsights?.savingsRate ?? 0) >= 20 ? (
+                    <>Excelente gestão! Sua taxa de poupança está em <strong className="font-bold">{financialInsights?.savingsRate}%</strong> e as despesas fixas representam <strong className="font-bold">{financialInsights?.fixedRatio}%</strong> dos proventos, mantendo liquidez de alto padrão.</>
+                  ) : (
+                    <>Suas contas estão em dia. Mantenha as saídas sob controle para acelerar a formação da reserva de emergência familiar.</>
+                  )}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/20 z-10 text-xs">
+                <span className="text-white/80 font-medium">Saúde Financeira</span>
+                <span className="font-extrabold text-white">
+                  {(financialInsights?.score ?? 90) >= 80 ? 'Nível Excelente' : 'Nível Moderado'}
+                </span>
+              </div>
+            </div>
+
+            {/* Dica do Planejador / Insights Inteligentes */}
+            <div className="bg-white dark:bg-[#111827] rounded-2xl p-6 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Icon name="tips_and_updates" className="text-[22px]" />
+                  </div>
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 text-[11px] font-extrabold uppercase tracking-wider">
+                    Dica do Planejador
+                  </span>
+                </div>
+
+                <h4 className="font-extrabold text-base tracking-tight text-gray-900 dark:text-white mt-1">
+                  Estratégia do Mês
+                </h4>
+                <p className="text-xs text-gray-600 dark:text-slate-300 mt-2 leading-relaxed">
+                  {(financialInsights?.savingsRate ?? 0) > 0 
+                    ? 'Sua taxa de poupança está saudável! Potencialize suas metas familiares realizando aportes programados nas reservas de longo prazo.' 
+                    : 'Revise suas despesas variáveis este mês para estancar vazamentos e gerar sobras financeiras para investimentos.'}
+                </p>
+              </div>
+
+              <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800/80 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => router.push('/metas')}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-1"
+                >
+                  <span>Acessar Metas & Investimentos</span>
+                  <Icon name="chevron_right" className="text-[14px]" />
+                </button>
+                <span className="text-[11px] text-gray-400">Automatizado</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* =====================================================================
@@ -764,70 +842,6 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
-            </div>
-          </div>
-
-          {/* 4. Financial Status Health Widget ("Tudo sob controle") */}
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white rounded-2xl p-6 shadow-md relative overflow-hidden flex flex-col justify-between">
-            <div className="absolute -right-6 -bottom-6 w-36 h-36 rounded-full bg-white/10 pointer-events-none blur-xl" />
-
-            <div className="z-10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0">
-                  <Icon name="verified_user" className="text-white text-[22px]" />
-                </div>
-                <span className="px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-[11px] font-extrabold">
-                  Score: {financialInsights?.score ?? 90}/100
-                </span>
-              </div>
-
-              <h4 className="font-extrabold text-base tracking-tight">
-                {(financialInsights?.score ?? 90) >= 80 ? 'Tudo sob controle' : 'Atenção ao fluxo'}
-              </h4>
-              <p className="text-[11px] text-white/80 font-medium mt-0.5">
-                Diagnóstico de Inteligência Financeira
-              </p>
-
-              <p className="text-xs text-white/95 mt-3 leading-relaxed">
-                {(financialInsights?.overdueCount ?? 0) > 0 ? (
-                  <>Você possui <strong className="font-bold underline">{financialInsights?.overdueCount} contas vencidas</strong> aguardando liquidação para regularizar seu fluxo.</>
-                ) : (financialInsights?.savingsRate ?? 0) >= 20 ? (
-                  <>Excelente gestão! Sua taxa de poupança está em <strong className="font-bold">{financialInsights?.savingsRate}%</strong> e as despesas fixas representam <strong className="font-bold">{financialInsights?.fixedRatio}%</strong> dos proventos, mantendo liquidez de alto padrão.</>
-                ) : (
-                  <>Suas contas estão em dia. Mantenha as saídas sob controle para acelerar a formação da reserva de emergência familiar.</>
-                )}
-              </p>
-            </div>
-
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-white/20 z-10 text-xs">
-              <span className="text-white/80 font-medium">Saúde Financeira</span>
-              <span className="font-extrabold text-white">
-                {(financialInsights?.score ?? 90) >= 80 ? 'Nível Excelente' : 'Nível Moderado'}
-              </span>
-            </div>
-          </div>
-
-          {/* 5. Dica do Planejador / Insights Inteligentes */}
-          <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Icon name="tips_and_updates" className="text-[24px]" />
-            </div>
-
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
-                Dica do Planejador
-              </span>
-              <p className="text-xs font-bold text-gray-800 dark:text-white leading-tight mt-0.5 truncate">
-                {(financialInsights?.savingsRate ?? 0) > 0 ? 'Potencialize suas metas com aportes programados' : 'Revise suas despesas variáveis para gerar sobra'}
-              </p>
-              <button
-                type="button"
-                onClick={() => router.push('/metas')}
-                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline mt-1.5 inline-flex items-center gap-0.5 self-start"
-              >
-                <span>Acessar Metas & Investimentos</span>
-                <Icon name="chevron_right" className="text-[14px]" />
-              </button>
             </div>
           </div>
         </div>
