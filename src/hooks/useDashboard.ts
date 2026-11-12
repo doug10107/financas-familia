@@ -22,13 +22,30 @@ export type DashboardData = {
   totalBalance: number;
   monthlyIncome: number;
   monthlyExpense: number;
+  monthlyInvestments: number;
+  monthlyOperatingExpense: number;
   upcomingBills: any[];
   chartData: any;
   projectionMonths: ProjectionMonth[];
   expensesByCategory: any;
-  topExpenses: { name: string; amount: number; color: string; percentage: number }[];
+  topExpenses: { name: string; amount: number; color: string; percentage: number; isInvestment?: boolean }[];
   monthlyTransactions: any[];
 };
+
+export function isInvestmentTransaction(t: {
+  category?: { name?: string | null } | null;
+  description?: string | null;
+}): boolean {
+  const catName = t.category?.name?.toLowerCase().trim() || '';
+  if (catName === 'investimentos' || catName === 'investimento' || catName.includes('investimento')) {
+    return true;
+  }
+  const desc = t.description?.toLowerCase().trim() || '';
+  if (desc.startsWith('investimento') || desc.startsWith('aporte')) {
+    return true;
+  }
+  return false;
+}
 
 export function useDashboard(monthFilter?: string) {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -71,6 +88,7 @@ export function useDashboard(monthFilter?: string) {
       let totalBalance = 0;
       let monthlyIncome = 0;
       let monthlyExpense = 0;
+      let monthlyInvestments = 0;
       const upcomingBillsRaw: any[] = [];
 
       // Calcular Saldo Geral, Receitas/Despesas do mês selecionado e Contas Próximas
@@ -89,12 +107,15 @@ export function useDashboard(monthFilter?: string) {
           }
         }
 
-        // Mês Selecionado (Receitas e Despesas do mês)
+        // Mês Selecionado (Receitas, Despesas e Investimentos do mês)
         if (tMonth === filterMonth && tYear === filterYear) {
           if (t.type === 'receita') {
             monthlyIncome += amount;
           } else {
             monthlyExpense += amount;
+            if (isInvestmentTransaction(t)) {
+              monthlyInvestments += amount;
+            }
           }
         }
 
@@ -325,13 +346,15 @@ export function useDashboard(monthFilter?: string) {
           const catName = t.category?.name || 'Sem Categoria';
           const fixedCategories = ['Contas Fixas', 'Assinaturas', 'Moradia', 'Educação'];
           const isFixed = t.is_recurring || fixedCategories.includes(catName);
+          const isInvestment = isInvestmentTransaction(t);
 
           return {
             name: t.description,
             amount: Number(t.amount),
             color: t.category?.color || '#ef4444',
             categoryName: catName,
-            isFixed
+            isFixed,
+            isInvestment
           };
         })
         .sort((a, b) => b.amount - a.amount);
@@ -347,10 +370,14 @@ export function useDashboard(monthFilter?: string) {
         return tDate.getMonth() === filterMonth && tDate.getFullYear() === filterYear;
       });
 
+      const monthlyOperatingExpense = Math.max(0, monthlyExpense - monthlyInvestments);
+
       setData({
         totalBalance,
         monthlyIncome,
         monthlyExpense,
+        monthlyInvestments,
+        monthlyOperatingExpense,
         upcomingBills: upcomingBills.slice(0, 5),
         chartData,
         projectionMonths: allProjectionMonths,

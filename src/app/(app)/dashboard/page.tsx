@@ -79,13 +79,19 @@ export default function DashboardPage() {
     if (!dashboardData) return null;
 
     const income = dashboardData.monthlyIncome || 0;
-    const expense = dashboardData.monthlyExpense || 0;
-    const netSavings = income - expense;
-    const savingsRate = income > 0 ? Math.round((netSavings / income) * 100) : 0;
+    const totalExpense = dashboardData.monthlyExpense || 0;
+    const investments = dashboardData.monthlyInvestments || 0;
+    // Gastos operacionais de consumo (exclui aportes e poupança)
+    const operatingExpense = dashboardData.monthlyOperatingExpense ?? Math.max(0, totalExpense - investments);
 
-    // Fixed expense percentage
+    // Poupança real = sobra líquida de caixa + valor aportado em investimentos
+    const netSavings = Math.max(0, income - totalExpense) + investments;
+    const savingsRate = income > 0 ? Math.round((netSavings / income) * 100) : 0;
+    const investmentRate = income > 0 ? Math.round((investments / income) * 100) : 0;
+
+    // Fixed expense percentage (sem contar investimentos)
     const fixedExpensesTotal = (dashboardData.topExpenses || [])
-      .filter((e: any) => e.isFixed)
+      .filter((e: any) => e.isFixed && !e.isInvestment)
       .reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0);
     const fixedRatio = income > 0 ? Math.round((fixedExpensesTotal / income) * 100) : 0;
 
@@ -99,7 +105,7 @@ export default function DashboardPage() {
 
     // Calculate score (0-100)
     let score = 85;
-    if (savingsRate >= 20) score += 10;
+    if (savingsRate >= 20 || investmentRate >= 20) score += 12;
     else if (savingsRate < 0) score -= 25;
     else if (savingsRate < 10) score -= 10;
 
@@ -107,12 +113,20 @@ export default function DashboardPage() {
     if (fixedRatio > 60) score -= 8;
     score = Math.max(20, Math.min(100, score));
 
-    // Estimated monthly ceiling (based on income or standard multiplier)
-    const estimatedCeiling = income > 0 ? Math.round(income * 0.85) : Math.max(expense * 1.2, 5000);
-    const budgetPercentage = Math.min(100, Math.round((expense / estimatedCeiling) * 100));
+    // Teto de despesas operacionais da família:
+    // O teto padrão é a renda líquida menos a meta de investimentos realizada/programada (ou 85% da renda)
+    const plannedInvestment = Math.max(investments, income * 0.15);
+    const estimatedCeiling = income > 0 
+      ? Math.round(income - plannedInvestment > 0 ? (income - plannedInvestment) : income * 0.85)
+      : Math.max(operatingExpense * 1.2, 5000);
+
+    const budgetPercentage = Math.min(100, Math.round((operatingExpense / (estimatedCeiling || 1)) * 100));
 
     return {
       savingsRate,
+      investmentRate,
+      investments,
+      operatingExpense,
       fixedRatio,
       overdueCount,
       score,
@@ -330,33 +344,37 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80 text-[11px] font-medium">
-            <span className="w-2 h-2 rounded-full bg-rose-500" />
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80 text-[11px] font-medium">
             <span className="text-gray-500 dark:text-slate-400">
-              Fixas: {formatCurrency((dashboardData.topExpenses || []).filter((e: any) => e.isFixed).reduce((a: number, b: any) => a + b.amount, 0))}
+              Consumo: {formatCurrency(financialInsights?.operatingExpense || 0)}
             </span>
+            {(dashboardData.monthlyInvestments || 0) > 0 && (
+              <span className="text-blue-600 dark:text-blue-400 font-bold">
+                Aporte: {formatCurrency(dashboardData.monthlyInvestments)}
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Card 4: Aporte & Reservas / Economia Líquida */}
+        {/* Card 4: Aporte & Reservas / Poupança Total */}
         <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-gray-500 dark:text-slate-400 mb-2">
-              <span className="text-xs font-bold tracking-tight">Economia Líquida</span>
+              <span className="text-xs font-bold tracking-tight">Investimentos & Poupança</span>
               <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
                 <Icon name="savings" className="text-[17px]" />
               </div>
             </div>
 
-            <div className={`text-xl sm:text-2xl font-extrabold tracking-tight ${dashboardData.monthlyIncome - dashboardData.monthlyExpense >= 0 ? 'text-blue-600 dark:text-blue-400' : 'text-rose-600'}`}>
-              {formatCurrency(dashboardData.monthlyIncome - dashboardData.monthlyExpense)}
+            <div className="text-xl sm:text-2xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
+              {formatCurrency(financialInsights?.netSavings || 0)}
             </div>
           </div>
 
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80 text-[11px] font-bold">
             <span className="text-blue-600 dark:text-blue-400 inline-flex items-center gap-1">
-              <Icon name="pie_chart" className="text-[13px]" />
-              {financialInsights?.savingsRate ?? 0}% da renda poupada
+              <Icon name="trending_up" className="text-[13px]" />
+              {financialInsights?.savingsRate ?? 0}% poupado ({financialInsights?.investmentRate ?? 0}% em ativos)
             </span>
             <span className="text-gray-400 font-normal">no mês</span>
           </div>
@@ -421,19 +439,27 @@ export default function DashboardPage() {
 
             {/* Gauge Progress Bar */}
             <div className="space-y-2 mt-1">
-              <div className="flex items-baseline justify-between">
-                <div className="flex items-baseline gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-1.5">
+                <div className="flex flex-wrap items-baseline gap-2">
                   <span className="text-xl sm:text-2xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-                    {formatCurrency(dashboardData.monthlyExpense)}
+                    {formatCurrency(financialInsights?.operatingExpense || 0)}
                   </span>
                   <span className="text-xs text-gray-400">
-                    de {formatCurrency(financialInsights?.estimatedCeiling || 12000)} teto
+                    consumo de {formatCurrency(financialInsights?.estimatedCeiling || 9610)} teto
                   </span>
+                  {(dashboardData.monthlyInvestments || 0) > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[11px] font-extrabold inline-flex items-center gap-1 shadow-2xs">
+                      <Icon name="trending_up" className="text-[12px]" />
+                      +{formatCurrency(dashboardData.monthlyInvestments)} ({financialInsights?.investmentRate}%) em investimentos
+                    </span>
+                  )}
                 </div>
                 <span className={`text-xs font-extrabold ${
                   (financialInsights?.budgetPercentage || 0) > 90
                     ? 'text-rose-600 dark:text-rose-400'
-                    : 'text-emerald-600 dark:text-emerald-400'
+                    : (financialInsights?.budgetPercentage || 0) > 75
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-emerald-600 dark:text-emerald-400'
                 }`}>
                   {financialInsights?.budgetPercentage || 0}% consumido
                 </span>
@@ -459,7 +485,7 @@ export default function DashboardPage() {
                   Risco de estouro: {(financialInsights?.budgetPercentage || 0) > 90 ? 'Alto' : (financialInsights?.budgetPercentage || 0) > 70 ? 'Moderado' : 'Baixo'}
                 </span>
                 <span>
-                  Disponível: {formatCurrency(Math.max(0, (financialInsights?.estimatedCeiling || 12000) - dashboardData.monthlyExpense))}
+                  Disponível p/ consumo: {formatCurrency(Math.max(0, (financialInsights?.estimatedCeiling || 9610) - (financialInsights?.operatingExpense || 0)))}
                 </span>
               </div>
             </div>
@@ -499,10 +525,10 @@ export default function DashboardPage() {
                 <p className="text-xs text-white/95 mt-3 leading-relaxed">
                   {(financialInsights?.overdueCount ?? 0) > 0 ? (
                     <>Você possui <strong className="font-bold underline">{financialInsights?.overdueCount} contas vencidas</strong> aguardando liquidação para regularizar seu fluxo.</>
-                  ) : (financialInsights?.savingsRate ?? 0) >= 20 ? (
-                    <>Excelente gestão! Sua taxa de poupança está em <strong className="font-bold">{financialInsights?.savingsRate}%</strong> e as despesas fixas representam <strong className="font-bold">{financialInsights?.fixedRatio}%</strong> dos proventos, mantendo liquidez de alto padrão.</>
+                  ) : (financialInsights?.investmentRate ?? 0) >= 15 || (financialInsights?.savingsRate ?? 0) >= 20 ? (
+                    <>Excelente gestão! Você já direcionou <strong className="font-bold">{financialInsights?.investmentRate}% da renda para investimentos ({formatCurrency(financialInsights?.investments || 0)})</strong> e seus gastos de consumo estão sob controle.</>
                   ) : (
-                    <>Suas contas estão em dia. Mantenha as saídas sob controle para acelerar a formação da reserva de emergência familiar.</>
+                    <>Suas contas estão em dia. Mantenha as saídas de consumo sob controle para acelerar os aportes em investimentos e reservas.</>
                   )}
                 </p>
               </div>
