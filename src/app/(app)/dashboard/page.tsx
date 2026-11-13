@@ -84,6 +84,9 @@ export default function DashboardPage() {
     // Gastos operacionais de consumo (exclui aportes e poupança)
     const operatingExpense = dashboardData.monthlyOperatingExpense ?? Math.max(0, totalExpense - investments);
 
+    // Saldo real líquido do mês (Entradas - Saídas)
+    const monthlyBalance = income - totalExpense;
+
     // Poupança real = sobra líquida de caixa + valor aportado em investimentos
     const netSavings = Math.max(0, income - totalExpense) + investments;
     const savingsRate = income > 0 ? Math.round((netSavings / income) * 100) : 0;
@@ -127,6 +130,7 @@ export default function DashboardPage() {
       investmentRate,
       investments,
       operatingExpense,
+      monthlyBalance,
       fixedRatio,
       overdueCount,
       score,
@@ -300,9 +304,13 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-extrabold">
-              <Icon name="trending_up" className="text-[13px]" />
-              Fluxo Positivo
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+              dashboardData.totalBalance >= 0
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300'
+            }`}>
+              <Icon name={dashboardData.totalBalance >= 0 ? 'trending_up' : 'trending_down'} className="text-[13px]" />
+              {dashboardData.totalBalance >= 0 ? 'Fluxo Positivo' : 'Fluxo Negativo'}
             </span>
             <span className="text-[11px] text-gray-400">Total acumulado</span>
           </div>
@@ -356,26 +364,51 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Card 4: Aporte & Reservas / Poupança Total */}
+        {/* Card 4: Saldo do Mês & Poupança */}
         <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between text-gray-500 dark:text-slate-400 mb-2">
-              <span className="text-xs font-bold tracking-tight">Investimentos & Poupança</span>
-              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                <Icon name="savings" className="text-[17px]" />
+              <span className="text-xs font-bold tracking-tight">Saldo do Mês</span>
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
+                (financialInsights?.monthlyBalance ?? 0) >= 0
+                  ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400'
+              }`}>
+                <Icon name="account_balance_wallet" className="text-[17px]" />
               </div>
             </div>
 
-            <div className="text-xl sm:text-2xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
-              {formatCurrency(financialInsights?.netSavings || 0)}
+            <div className={`text-xl sm:text-2xl font-extrabold tracking-tight ${
+              (financialInsights?.monthlyBalance ?? 0) >= 0
+                ? 'text-emerald-600 dark:text-emerald-400'
+                : 'text-rose-600 dark:text-rose-400'
+            }`}>
+              {isBalanceHidden
+                ? 'R$ ••••••••'
+                : (financialInsights?.monthlyBalance ?? 0) > 0
+                  ? `+${formatCurrency(financialInsights?.monthlyBalance ?? 0)}`
+                  : formatCurrency(financialInsights?.monthlyBalance ?? 0)}
             </div>
           </div>
 
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80 text-[11px] font-bold">
-            <span className="text-blue-600 dark:text-blue-400 inline-flex items-center gap-1">
-              <Icon name="trending_up" className="text-[13px]" />
-              {financialInsights?.savingsRate ?? 0}% poupado ({financialInsights?.investmentRate ?? 0}% em ativos)
-            </span>
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-gray-50 dark:border-slate-800/80 text-[11px] font-medium">
+            {(dashboardData.monthlyInvestments || 0) > 0 ? (
+              <span className="text-blue-600 dark:text-blue-400 font-bold inline-flex items-center gap-1">
+                <Icon name="savings" className="text-[13px]" />
+                +{formatCurrency(dashboardData.monthlyInvestments)} em aportes ({financialInsights?.investmentRate ?? 0}%)
+              </span>
+            ) : (
+              <span className={`inline-flex items-center gap-1 font-semibold ${
+                (financialInsights?.monthlyBalance ?? 0) >= 0
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : 'text-rose-600 dark:text-rose-400'
+              }`}>
+                <span className={`w-2 h-2 rounded-full ${
+                  (financialInsights?.monthlyBalance ?? 0) >= 0 ? 'bg-emerald-500' : 'bg-rose-500'
+                }`} />
+                {(financialInsights?.monthlyBalance ?? 0) >= 0 ? 'Resultado no azul' : 'Déficit no período'}
+              </span>
+            )}
             <span className="text-gray-400 font-normal">no mês</span>
           </div>
         </div>
