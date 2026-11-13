@@ -4,7 +4,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Icon } from '@/components/ui/Icon';
-import { useFamily } from '@/hooks/useFamily';
+import { useFamily, FamilyMember } from '@/hooks/useFamily';
 
 interface FamilyModalProps {
   isOpen: boolean;
@@ -12,11 +12,32 @@ interface FamilyModalProps {
 }
 
 export function FamilyModal({ isOpen, onClose }: FamilyModalProps) {
-  const { family, loading, copied, copyInviteCode, copyInviteLink, joinFamily } = useFamily();
+  const { family, loading, copied, copyInviteCode, copyInviteLink, joinFamily, removeMember } = useFamily();
   const [showJoinForm, setShowJoinForm] = useState(false);
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinFeedback, setJoinFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const [memberToRemove, setMemberToRemove] = useState<FamilyMember | null>(null);
+  const [removeLoading, setRemoveLoading] = useState(false);
+  const [memberFeedback, setMemberFeedback] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const isCurrentUserAdmin = family?.members?.some((m) => m.is_current_user && m.role === 'admin');
+
+  const handleConfirmRemove = async (memberId: string) => {
+    setRemoveLoading(true);
+    setMemberFeedback(null);
+    const result = await removeMember(memberId);
+    setRemoveLoading(false);
+    setMemberToRemove(null);
+
+    if (result.success) {
+      setMemberFeedback({ text: result.message, isError: false });
+      setTimeout(() => setMemberFeedback(null), 4000);
+    } else {
+      setMemberFeedback({ text: result.message, isError: true });
+    }
+  };
 
   const handleJoinSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,34 +155,101 @@ export function FamilyModal({ isOpen, onClose }: FamilyModalProps) {
             <span className="text-[11px] text-gray-400">Acesso Total Compartilhado</span>
           </div>
 
-          <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+          {memberFeedback && (
+            <div
+              className={`p-2.5 rounded-xl text-xs font-medium flex items-center gap-2 ${
+                memberFeedback.isError
+                  ? 'bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-900/50'
+              }`}
+            >
+              <Icon name={memberFeedback.isError ? 'error' : 'check_circle'} size="sm" />
+              <span>{memberFeedback.text}</span>
+            </div>
+          )}
+
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
             {family?.members && family.members.length > 0 ? (
-              family.members.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
-                      {member.display_name.charAt(0).toUpperCase()}
+              family.members.map((member) =>
+                memberToRemove?.id === member.id ? (
+                  <div
+                    key={member.id}
+                    className="p-3 rounded-xl bg-red-50/90 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 space-y-2 animate-fadeIn"
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-red-900 dark:text-red-200">
+                        Remover <span className="font-bold underline">{member.display_name}</span>?
+                      </p>
+                      <span className="text-[10px] text-red-500 font-medium">Perderá o acesso</span>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
-                        {member.display_name}
-                        {member.is_current_user && (
-                          <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-normal">
-                            Você
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        {member.role === 'admin' ? 'Administrador' : 'Membro da Família'}
-                      </p>
+                    <p className="text-[11px] text-red-700 dark:text-red-300 leading-tight">
+                      Esta conta será desvinculada do espaço compartilhado da família.
+                    </p>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs py-1 h-7"
+                        onClick={() => setMemberToRemove(null)}
+                        disabled={removeLoading}
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="danger"
+                        size="sm"
+                        className="text-xs py-1 h-7"
+                        loading={removeLoading}
+                        onClick={() => handleConfirmRemove(member.id)}
+                      >
+                        Sim, remover
+                      </Button>
                     </div>
                   </div>
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Ativo"></span>
-                </div>
-              ))
+                ) : (
+                  <div
+                    key={member.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700/50 hover:border-gray-200 dark:hover:border-gray-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center font-bold text-sm shadow-sm">
+                        {member.display_name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-1.5">
+                          {member.display_name}
+                          {member.is_current_user && (
+                            <span className="text-[10px] bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded font-normal">
+                              Você
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-400">
+                          {member.role === 'admin' ? 'Administrador' : 'Membro da Família'}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" title="Ativo"></span>
+                      {isCurrentUserAdmin && !member.is_current_user && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMemberFeedback(null);
+                            setMemberToRemove(member);
+                          }}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors ml-1"
+                          title={`Remover ${member.display_name} da família`}
+                        >
+                          <Icon name="person_remove" size="sm" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              )
             ) : (
               <div className="p-3 text-center text-xs text-gray-400">
                 Nenhum membro encontrado

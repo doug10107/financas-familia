@@ -153,6 +153,33 @@ export function useFamily() {
     }
   };
 
+  const removeMember = async (memberId: string) => {
+    setError(null);
+    try {
+      const { data, error: rpcError } = await (supabase.rpc as any)('remove_family_member', {
+        p_member_id: memberId
+      });
+
+      if (rpcError) {
+        if (rpcError.message?.includes('function') && rpcError.message?.includes('remove_family_member')) {
+          throw new Error('Função de remoção ainda não aplicada no Supabase. Execute o script SQL no painel.');
+        }
+        throw rpcError;
+      }
+
+      if (data && !(data as any).success) {
+        throw new Error((data as any).message || 'Erro ao remover membro');
+      }
+
+      await fetchFamily();
+      return { success: true, message: (data as any)?.message || 'Membro removido com sucesso!' };
+    } catch (err: any) {
+      const msg = err.message || 'Erro ao remover membro da família';
+      setError(msg);
+      return { success: false, message: msg };
+    }
+  };
+
   return {
     family,
     loading,
@@ -161,6 +188,7 @@ export function useFamily() {
     fetchFamily,
     copyInviteCode,
     copyInviteLink,
-    joinFamily
+    joinFamily,
+    removeMember
   };
 }
