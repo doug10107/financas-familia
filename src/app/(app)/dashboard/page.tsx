@@ -24,6 +24,9 @@ import { useDashboard } from '@/hooks/useDashboard';
 import { useFamily } from '@/hooks/useFamily';
 import { FinancialProjectionChart } from '@/components/dashboard/FinancialProjectionChart';
 import { DailyExpenseHeatmap } from '@/components/dashboard/DailyExpenseHeatmap';
+import { useCreditCards } from '@/hooks/useCreditCards';
+import { useTransactions, isRefundTransaction } from '@/hooks/useTransactions';
+import { WalletCardStack, WalletCardItem } from '@/components/cartoes/WalletCardStack';
 
 ChartJS.register(
   CategoryScale,
@@ -47,6 +50,8 @@ export default function DashboardPage() {
   });
 
   const { data: dashboardData, loading, error } = useDashboard(filterMonth);
+  const { creditCards } = useCreditCards();
+  const { transactions } = useTransactions();
 
   const [expenseTab, setExpenseTab] = useState<'all' | 'fixed' | 'variable'>('all');
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
@@ -139,6 +144,118 @@ export default function DashboardPage() {
       netSavings
     };
   }, [dashboardData]);
+
+  // Wallet Card Stack integration for quick credit card visualization
+  const walletCards = useMemo<WalletCardItem[] | undefined>(() => {
+    if (!creditCards || creditCards.length === 0) return undefined;
+    const themes = ['graphite', 'ocean', 'copper', 'emerald', 'purple'];
+
+    const today = new Date();
+    const currentMonth = today.toISOString().substring(0, 7);
+    const nextMonthDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+    const nextMonth = nextMonthDate.toISOString().substring(0, 7);
+
+    return creditCards.map((card, idx) => {
+      // 1. Pending transactions in filterMonth
+      const filterTxs = (transactions || []).filter(
+        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(filterMonth)
+      );
+      const filterSpent = Math.max(0,
+        filterTxs.filter(t => !isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0) -
+        filterTxs.filter(t => isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0)
+      );
+
+      // 2. Pending transactions in currentMonth
+      const currentMonthTxs = (transactions || []).filter(
+        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(currentMonth)
+      );
+      const currentMonthSpent = Math.max(0,
+        currentMonthTxs.filter(t => !isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0) -
+        currentMonthTxs.filter(t => isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0)
+      );
+
+      // 3. Pending transactions in nextMonth
+      const nextMonthTxs = (transactions || []).filter(
+        t => t.credit_card_id === card.id && t.status === 'pendente' && t.date.startsWith(nextMonth)
+      );
+      const nextMonthSpent = Math.max(0,
+        nextMonthTxs.filter(t => !isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0) -
+        nextMonthTxs.filter(t => isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0)
+      );
+
+      // 4. All pending transactions on this card
+      const allPendingTxs = (transactions || []).filter(
+        t => t.credit_card_id === card.id && t.status === 'pendente'
+      );
+      const allPendingSpent = Math.max(0,
+        allPendingTxs.filter(t => !isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0) -
+        allPendingTxs.filter(t => isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0)
+      );
+
+      // 5. From upcomingBills
+      const upcomingBillsSpent = (dashboardData?.upcomingBills || [])
+        .filter((b: any) => b.isInvoice && (
+          (b.id && String(b.id).includes(card.id)) ||
+          (b.description && String(b.description).toLowerCase().includes(card.name.toLowerCase()))
+        ))
+        .reduce((acc: number, b: any) => acc + Number(b.amount || 0), 0);
+
+      // 6. Any transactions in current/filter month (even if already reconciled/paid)
+      const monthAllTxs = (transactions || []).filter(
+        t => t.credit_card_id === card.id && t.date.startsWith(filterMonth || currentMonth)
+      );
+      const monthAllSpent = Math.max(0,
+        monthAllTxs.filter(t => !isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0) -
+        monthAllTxs.filter(t => isRefundTransaction(t)).reduce((acc, t) => acc + Number(t.amount || 0), 0)
+      );
+
+      // Select actual invoice amount by priority
+      let currentSpent = 0;
+      if (filterSpent > 0) currentSpent = filterSpent;
+      else if (currentMonthSpent > 0) currentSpent = currentMonthSpent;
+      else if (nextMonthSpent > 0) currentSpent = nextMonthSpent;
+      else if (upcomingBillsSpent > 0) currentSpent = upcomingBillsSpent;
+      else if (allPendingSpent > 0) currentSpent = allPendingSpent;
+      else if (monthAllSpent > 0) currentSpent = monthAllSpent;
+
+      const available = Math.max(0, (card.limit_amount || 0) - currentSpent);
+
+      let theme = themes[idx % themes.length];
+      if (card.color) {
+        const c = card.color.toLowerCase();
+        if (c.includes('3b82f6') || c.includes('blue')) theme = 'ocean';
+        else if (c.includes('8b5cf6') || c.includes('purple')) theme = 'purple';
+        else if (c.includes('10b981') || c.includes('green') || c.includes('emerald')) theme = 'emerald';
+        else if (c.includes('f97316') || c.includes('orange') || c.includes('red') || c.includes('ef4444')) theme = 'copper';
+        else if (c.includes('1f2937') || c.includes('black') || c.includes('gray')) theme = 'graphite';
+      }
+
+      const brand = card.name.toLowerCase().includes('nubank')
+        ? 'Nubank'
+        : card.name.toLowerCase().includes('xp')
+        ? 'XP'
+        : card.name.toLowerCase().includes('mercado')
+        ? 'Mercado Pago'
+        : card.name.toLowerCase().includes('inter')
+        ? 'Inter'
+        : 'Crédito';
+
+      return {
+        id: card.id,
+        name: card.name,
+        type: 'Crédito',
+        balance: isBalanceHidden ? 0 : currentSpent,
+        num: `•••• ${card.id.replace(/\D/g, '').slice(-4) || String(4820 + idx)}`,
+        exp: `Fecha ${card.closing_day} • Vence ${card.due_day}`,
+        limitLabel: 'Limite disponível',
+        limitValue: isBalanceHidden ? 'R$ ••••••••' : formatCurrency(available),
+        spent: isBalanceHidden ? 'R$ ••••••••' : formatCurrency(available),
+        theme,
+        brand,
+        holder: userGreetingName || 'Douglas Menezes'
+      };
+    });
+  }, [creditCards, transactions, filterMonth, dashboardData, userGreetingName, isBalanceHidden]);
 
   if (loading) {
     return (
@@ -612,7 +729,7 @@ export default function DashboardPage() {
         </div>
 
         {/* =====================================================================
-            RIGHT COLUMN (4 COLS): BILLS, TOP EXPENSES, CATEGORIES & INSIGHTS
+            RIGHT COLUMN (4 COLS): BILLS, CARDS, TOP EXPENSES, CATEGORIES & INSIGHTS
            ===================================================================== */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           {/* 1. Próximos Vencimentos */}
@@ -710,6 +827,36 @@ export default function DashboardPage() {
               <Icon name="add_circle" className="text-[16px]" />
               <span>Agendar novo compromisso</span>
             </button>
+          </div>
+
+          {/* 2. Cartões de Crédito - Wallet Card Stack */}
+          <div className="bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col">
+            <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-slate-800/80">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+                  <Icon name="credit_card" className="text-[18px]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-gray-900 dark:text-white">Fatura dos Cartões</h3>
+                  <p className="text-[11px] text-gray-400">Toque para alternar ou ver detalhes</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => router.push('/cartoes')}
+                className="text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-0.5"
+              >
+                <span>Ver todos</span>
+                <Icon name="chevron_right" className="text-[14px]" />
+              </button>
+            </div>
+
+            <div className="w-full flex justify-center py-1">
+              <WalletCardStack
+                cards={walletCards}
+                titlePrefix="Fatura atual de"
+              />
+            </div>
           </div>
 
           {/* 2. Top 5 Despesas */}
