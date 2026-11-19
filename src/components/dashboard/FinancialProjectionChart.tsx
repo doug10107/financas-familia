@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Bar } from 'react-chartjs-2';
 import { ProjectionMonth } from '@/hooks/useDashboard';
+import { useTheme } from '@/components/ThemeProvider';
 
 type ProjectionRange = '6m' | '12m' | '2027' | 'max';
 
@@ -34,6 +35,8 @@ export function FinancialProjectionChart({
   const [range, setRange] = useState<ProjectionRange>('6m');
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showAccumulatedLine, setShowAccumulatedLine] = useState(false);
+  const { theme } = useTheme();
+  const isDarkMode = theme === 'dark' || (theme === 'system' && typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -108,8 +111,8 @@ export function FinancialProjectionChart({
       {
         label: 'Entradas',
         data: incomes,
-        backgroundColor: '#10b981',
-        borderRadius: 4,
+        backgroundColor: isDarkMode ? '#10b981' : '#2D5346',
+        borderRadius: isDarkMode ? 4 : 8,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -118,8 +121,8 @@ export function FinancialProjectionChart({
       {
         label: 'Saídas',
         data: expenses,
-        backgroundColor: '#ef4444',
-        borderRadius: 4,
+        backgroundColor: isDarkMode ? '#ef4444' : '#C46D5E',
+        borderRadius: isDarkMode ? 4 : 8,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -128,8 +131,8 @@ export function FinancialProjectionChart({
       {
         label: 'Saldo',
         data: balances,
-        backgroundColor: '#3b82f6',
-        borderRadius: 4,
+        backgroundColor: isDarkMode ? '#3b82f6' : '#AEBDA6',
+        borderRadius: isDarkMode ? 4 : 8,
         borderSkipped: false,
         barThickness,
         categoryPercentage: 0.7,
@@ -142,8 +145,8 @@ export function FinancialProjectionChart({
         type: 'line',
         label: 'Saldo Acumulado',
         data: filteredMonths.map(m => m.accumulatedBalance),
-        borderColor: '#a855f7',
-        backgroundColor: '#a855f7',
+        borderColor: isDarkMode ? '#a855f7' : '#5E7B66',
+        backgroundColor: isDarkMode ? '#a855f7' : '#5E7B66',
         borderWidth: 2.5,
         tension: 0.3,
         pointRadius: 4,
@@ -152,7 +155,7 @@ export function FinancialProjectionChart({
     }
 
     return { labels, datasets };
-  }, [filteredMonths, chartData, showAccumulatedLine]);
+  }, [filteredMonths, chartData, showAccumulatedLine, isDarkMode]);
 
   // Totais do período selecionado
   const periodTotals = useMemo(() => {

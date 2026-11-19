@@ -29,10 +29,10 @@ export function Button({
   };
 
   const variantClasses = {
-    primary: 'bg-[#006c49] hover:bg-[#10b981] text-white focus:ring-[#006c49] dark:bg-[#4edea3] dark:hover:bg-[#005236] dark:text-[#0f1419]',
-    secondary: 'bg-[#0058be]/10 hover:bg-[#0058be]/20 text-[#0058be] focus:ring-[#0058be] dark:bg-[#adc6ff]/10 dark:hover:bg-[#adc6ff]/20 dark:text-[#adc6ff]',
-    ghost: 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-gray-200',
-    danger: 'bg-[#ba1a1a] hover:bg-red-700 text-white focus:ring-[#ba1a1a] dark:bg-[#ffb4ab] dark:hover:bg-red-400 dark:text-[#0f1419]'
+    primary: 'bg-[#2D5346] hover:bg-[#234137] text-[#F7F6F3] focus:ring-[#2D5346] dark:bg-[#4edea3] dark:hover:bg-[#005236] dark:text-[#0f1419]',
+    secondary: 'bg-[#D8E2D4]/80 hover:bg-[#C6E379]/70 text-[#234137] focus:ring-[#5E7B66] dark:bg-[#adc6ff]/10 dark:hover:bg-[#adc6ff]/20 dark:text-[#adc6ff]',
+    ghost: 'hover:bg-[#E3E2DC] dark:hover:bg-gray-800 text-[#1B221E] dark:text-gray-200 focus:ring-[#D6D5CE]',
+    danger: 'bg-[#B84A39] hover:bg-[#9E3D2E] text-white focus:ring-[#B84A39] dark:bg-[#ffb4ab] dark:hover:bg-red-400 dark:text-[#0f1419]'
   };
 
   return (

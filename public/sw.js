@@ -1,4 +1,4 @@
-const CACHE_NAME = 'financas-familia-v2';
+const CACHE_NAME = 'financas-familia-v3';
 
 const PRECACHE_URLS = [
   '/manifest.json',
@@ -29,6 +29,7 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  if (event.request.url.includes('/_next/')) return;
 
   // Network-first strategy: try network, fallback to cache
   event.respondWith(

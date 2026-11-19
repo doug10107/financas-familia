@@ -134,7 +134,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
     <header 
       className={`sticky top-0 z-20 w-full transition-all duration-300 ${
         isScrolled 
-          ? 'bg-white/85 dark:bg-[#0f1419]/85 backdrop-blur-xl shadow-xs border-b border-gray-200/50 dark:border-slate-800/80' 
+          ? 'bg-white/85 dark:bg-[#08090c]/85 backdrop-blur-xl shadow-xs border-b border-gray-200/50 dark:border-white/[0.08]' 
           : 'bg-transparent'
       }`}
     >
@@ -154,7 +154,7 @@ export function TopAppBar({ userName = 'Usuário' }: TopAppBarProps) {
             {/* Mobile avatar */}
             <button
               onClick={() => setIsFamilyModalOpen(true)}
-              className="md:hidden w-8 h-8 rounded-full bg-gradient-to-tr from-[#006c49] to-[#10b981] flex items-center justify-center text-white font-extrabold text-xs shadow-xs"
+              className="md:hidden w-8 h-8 rounded-full bg-[#2D5346] dark:bg-gradient-to-tr dark:from-[#006c49] dark:to-[#10b981] flex items-center justify-center text-[#F7F6F3] dark:text-white font-semibold text-xs shadow-xs"
               title="Ver detalhes da Família"
             >
               {activeDisplayName.charAt(0).toUpperCase()}

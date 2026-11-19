@@ -161,15 +161,15 @@ export function DailyExpenseHeatmap({
       return 'bg-gradient-to-br from-rose-400 to-rose-500 text-white dark:from-rose-600 dark:to-rose-700 border-rose-400 shadow-sm font-bold hover:brightness-105';
     } else {
       if (ratio < 0.15) {
-        return 'bg-emerald-50/90 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-emerald-100 dark:border-emerald-900/40 hover:bg-emerald-100/80';
+        return 'bg-[#D8E2D4]/80 dark:bg-emerald-950/30 text-[#234137] dark:text-emerald-200 border-[#C8D5C3] dark:border-emerald-900/40 hover:bg-[#D8E2D4]';
       }
       if (ratio < 0.45) {
-        return 'bg-emerald-100/95 dark:bg-emerald-900/40 text-emerald-950 dark:text-emerald-100 border-emerald-200 dark:border-emerald-800/50 hover:bg-emerald-200/90';
+        return 'bg-[#AEBDA6]/90 dark:bg-emerald-900/40 text-[#1B221E] dark:text-emerald-100 border-[#9CAE93] dark:border-emerald-800/50 hover:bg-[#AEBDA6]';
       }
       if (ratio < 0.75) {
-        return 'bg-emerald-200 dark:bg-emerald-800/60 text-emerald-950 dark:text-emerald-50 border-emerald-300 dark:border-emerald-700/60 font-semibold hover:bg-emerald-300/80';
+        return 'bg-[#C6E379] dark:bg-emerald-800/60 text-[#1B221E] dark:text-emerald-50 border-[#B2D35E] dark:border-emerald-700/60 font-semibold hover:brightness-95';
       }
-      return 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white dark:from-emerald-600 dark:to-emerald-700 border-emerald-400 shadow-sm font-bold hover:brightness-105';
+      return 'bg-[#2D5346] text-[#F7F6F3] dark:bg-gradient-to-br dark:from-emerald-600 dark:to-emerald-700 border-[#234137] dark:border-emerald-400 shadow-sm font-bold hover:brightness-105';
     }
   };
 

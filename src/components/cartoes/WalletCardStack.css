@@ -44,14 +44,14 @@
 .dark,
 html.dark,
 html[data-theme="dark"] {
-  --stage-bg: var(--background, #0f1419);
-  --stage-surface: var(--surface, #1a2332);
-  --stage-fg: var(--on-surface, #e2e8f0);
-  --stage-muted: var(--outline, #8c9c91);
-  --stage-border: var(--glass-border, rgba(255, 255, 255, 0.1));
-  --stage-accent: var(--primary, #4edea3);
-  --stage-on-accent: #003822;
-  --hover: rgba(255, 255, 255, .04);
+  --stage-bg: var(--background, #08090c);
+  --stage-surface: #0c1017;
+  --stage-fg: #ffffff;
+  --stage-muted: #94a3b8;
+  --stage-border: rgba(255, 255, 255, 0.08);
+  --stage-accent: #00e5ff;
+  --stage-on-accent: #08090c;
+  --hover: rgba(255, 255, 255, .05);
 }
 
 :where(.wallet) button {
@@ -84,7 +84,11 @@ html[data-theme="dark"] {
 
 .dark .wallet,
 html.dark .wallet {
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, .05), 0 12px 32px -4px rgba(0, 0, 0, .4), 0 2px 6px 0 rgba(0, 0, 0, .3);
+  background: rgba(12, 16, 23, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 16px 40px -6px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.07);
 }
 
 .wallet :focus-visible {

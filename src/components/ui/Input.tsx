@@ -35,10 +35,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             type={inputType}
             className={`
-              w-full rounded-xl border-[1.5px] bg-white dark:bg-[#1a2332] px-4 py-2.5 text-base text-gray-900 dark:text-gray-100 placeholder-gray-400 transition-all duration-200
-              ${error ? 'border-[#ba1a1a] dark:border-[#ffb4ab] focus:border-[#ba1a1a] dark:focus:border-[#ffb4ab]' : 'border-gray-300 dark:border-gray-700 focus:border-[#2170e4] dark:focus:border-[#adc6ff]'}
+              w-full rounded-xl border-[1.5px] bg-[#F7F6F3] dark:bg-[#1a2332] px-4 py-2.5 text-base text-[#1B221E] dark:text-gray-100 placeholder-[#8A928C] dark:placeholder-gray-400 transition-all duration-200
+              ${error ? 'border-[#B84A39] dark:border-[#ffb4ab] focus:border-[#B84A39] dark:focus:border-[#ffb4ab]' : 'border-[#D6D5CE] dark:border-gray-700 focus:border-[#2D5346] dark:focus:border-[#adc6ff]'}
               focus:outline-none focus:ring-2 focus:ring-opacity-20
-              ${error ? 'focus:ring-[#ba1a1a]' : 'focus:ring-[#2170e4]'}
+              ${error ? 'focus:ring-[#B84A39]' : 'focus:ring-[#2D5346]/30 dark:focus:ring-[#adc6ff]'}
               ${prefix ? 'pl-9' : ''}
               ${suffix || showPasswordToggle ? 'pr-10' : ''}
               ${className}

@@ -397,8 +397,8 @@ export default function DashboardPage() {
          ========================================================================= */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
         {/* Card 1: Patrimônio Líquido Total / Saldo Consolidado */}
-        <div className="relative bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between overflow-hidden">
-          <div className="absolute -right-6 -bottom-6 w-28 h-28 rounded-full bg-emerald-500/5 dark:bg-emerald-500/10 pointer-events-none blur-xl" />
+        <div className="relative bg-white dark:bg-[#111827] rounded-2xl p-5 border border-gray-100 dark:border-slate-800 shadow-xs flex flex-col justify-between overflow-hidden group">
+          <div className="absolute -right-6 -bottom-6 w-32 h-32 rounded-full bg-emerald-500/5 dark:bg-cyan-500/15 pointer-events-none blur-2xl transition-all duration-500 group-hover:scale-125" />
 
           <div>
             <div className="flex items-center justify-between text-gray-500 dark:text-slate-400 mb-2">

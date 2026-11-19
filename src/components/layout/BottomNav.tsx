@@ -86,7 +86,7 @@ export function BottomNav() {
                 <div
                   className={`w-9 h-7 rounded-full flex items-center justify-center transition-all ${
                     isActive
-                      ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                      ? 'bg-[#2D5346] text-[#C6E379] dark:bg-emerald-500/20 dark:text-emerald-400'
                       : ''
                   }`}
                 >

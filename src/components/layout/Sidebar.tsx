@@ -93,17 +93,17 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
               onClick={() => {
                 if (isMobileOpen) setMobileOpen(false);
               }}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-semibold text-xs transition-all relative ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-xs transition-all relative ${
                 isActive
-                  ? 'bg-emerald-500/15 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 font-bold shadow-xs'
-                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/80 dark:hover:bg-slate-800/60'
+                  ? 'bg-[#2D5346] text-[#F7F6F3] dark:bg-cyan-500/15 dark:text-cyan-300 dark:border dark:border-cyan-500/20 font-semibold shadow-xs'
+                  : 'text-[#525C56] dark:text-slate-400 hover:text-[#1B221E] dark:hover:text-white hover:bg-[#E3E2DC]/75 dark:hover:bg-slate-800/60'
               } ${isCollapsed ? 'justify-center px-0' : ''}`}
             >
               <div className="relative shrink-0 flex items-center justify-center">
                 <Icon
                   name={item.icon}
                   className={`text-[20px] transition-transform duration-200 group-hover:scale-110 ${
-                    isActive ? 'text-emerald-600 dark:text-emerald-400' : ''
+                    isActive ? 'text-[#C6E379] dark:text-cyan-400' : ''
                   }`}
                   filled={isActive}
                 />
@@ -151,15 +151,15 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
           DESKTOP SIDEBAR
       ======================================================== */}
       <aside
-        className={`hidden md:flex flex-col shrink-0 h-screen sticky top-0 z-30 transition-all duration-300 ease-in-out border-r border-gray-200/80 dark:border-slate-800/80 bg-white/95 dark:bg-[#111827]/95 backdrop-blur-xl select-none ${
+        className={`hidden md:flex flex-col shrink-0 h-screen sticky top-0 z-30 transition-all duration-300 ease-in-out border-r border-[#D6D5CE]/80 dark:border-white/[0.08] bg-[#F2F1EC]/95 dark:bg-[#0c1017]/95 backdrop-blur-xl select-none ${
           isCollapsed ? 'w-[76px]' : 'w-64'
         }`}
       >
         {/* Header da Sidebar */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-gray-100 dark:border-slate-800/60 relative">
+        <div className="h-16 px-4 flex items-center justify-between border-b border-[#D6D5CE]/60 dark:border-white/[0.08] relative">
           <div className={`flex items-center gap-3 overflow-hidden ${isCollapsed ? 'justify-center w-full' : ''}`}>
             {/* Logo / Badge */}
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/20 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-[#2D5346] dark:bg-gradient-to-tr dark:from-cyan-500 dark:to-sky-400 flex items-center justify-center text-[#C6E379] dark:text-white shadow-sm shadow-[#2D5346]/20 dark:shadow-cyan-500/20 shrink-0">
               <Icon name="account_balance_wallet" className="text-[20px]" />
             </div>
 
@@ -168,7 +168,7 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
                 <span className="font-extrabold text-sm text-gray-900 dark:text-white tracking-tight truncate">
                   Finanças
                 </span>
-                <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold truncate">
+                <span className="text-[11px] text-emerald-600 dark:text-cyan-400 font-semibold truncate">
                   {familyName}
                 </span>
               </div>
@@ -199,24 +199,24 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
           {/* Botão de Ação Rápida */}
           <button
             onClick={handleQuickAdd}
-            className={`w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold transition-all shadow-md shadow-emerald-600/25 active:scale-98 ${
+            className={`w-full flex items-center justify-center gap-2 rounded-xl bg-[#2D5346] hover:bg-[#234137] dark:bg-gradient-to-r dark:from-emerald-600 dark:to-teal-600 dark:hover:from-emerald-500 dark:hover:to-teal-500 text-[#F7F6F3] dark:text-white font-semibold transition-all shadow-sm shadow-[#2D5346]/20 dark:shadow-emerald-600/25 active:scale-98 ${
               isCollapsed ? 'h-10 px-0' : 'py-2.5 px-3 text-xs'
             }`}
             title="Novo Lançamento Rápido"
           >
-            <Icon name="add" className="text-[18px]" />
+            <Icon name="add" className="text-[18px] text-[#C6E379] dark:text-white" />
             {!isCollapsed && <span>Novo Lançamento</span>}
           </button>
 
           {/* Mini Card de Perfil */}
           <div
             onClick={() => setIsFamilyModalOpen(true)}
-            className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-white dark:hover:bg-slate-800/70 border border-transparent hover:border-gray-200 dark:hover:border-slate-700/60 transition-all ${
+            className={`flex items-center gap-2.5 p-2 rounded-xl cursor-pointer hover:bg-[#F7F6F3] dark:hover:bg-slate-800/70 border border-transparent hover:border-[#D6D5CE] dark:hover:border-slate-700/60 transition-all ${
               isCollapsed ? 'justify-center' : ''
             }`}
             title="Gerenciar Família e Membros"
           >
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white font-extrabold text-xs shadow-xs shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#2D5346] dark:bg-gradient-to-tr dark:from-emerald-600 dark:to-teal-400 flex items-center justify-center text-[#F7F6F3] dark:text-white font-semibold text-xs shadow-xs shrink-0">
               {activeDisplayName.charAt(0).toUpperCase()}
             </div>
             {!isCollapsed && (
@@ -249,7 +249,7 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
             {/* Header da gaveta mobile */}
             <div className="h-16 px-4 flex items-center justify-between border-b border-gray-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md">
+                <div className="w-9 h-9 rounded-xl bg-[#2D5346] dark:bg-gradient-to-tr dark:from-emerald-600 dark:to-teal-400 flex items-center justify-center text-[#C6E379] dark:text-white shadow-sm">
                   <Icon name="account_balance_wallet" className="text-[20px]" />
                 </div>
                 <div className="flex flex-col">
@@ -280,9 +280,9 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
             <div className="p-4 border-t border-gray-100 dark:border-slate-800 space-y-3">
               <button
                 onClick={handleQuickAdd}
-                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/25"
+                className="w-full py-2.5 px-3 rounded-xl bg-[#2D5346] hover:bg-[#234137] dark:bg-gradient-to-r dark:from-emerald-600 dark:to-teal-600 text-[#F7F6F3] dark:text-white font-semibold text-xs flex items-center justify-center gap-2 shadow-sm shadow-[#2D5346]/20 dark:shadow-emerald-600/25"
               >
-                <Icon name="add" className="text-[18px]" />
+                <Icon name="add" className="text-[18px] text-[#C6E379] dark:text-white" />
                 <span>Novo Lançamento</span>
               </button>
 
@@ -291,9 +291,9 @@ export function Sidebar({ userName = 'Douglas' }: { userName?: string }) {
                   setMobileOpen(false);
                   setIsFamilyModalOpen(true);
                 }}
-                className="flex items-center gap-3 p-2 rounded-xl bg-gray-50 dark:bg-slate-900/50 cursor-pointer"
+                className="flex items-center gap-3 p-2 rounded-xl bg-[#ECEBE6] dark:bg-slate-900/50 cursor-pointer"
               >
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white font-extrabold text-xs">
+                <div className="w-9 h-9 rounded-full bg-[#2D5346] dark:bg-gradient-to-tr dark:from-emerald-600 dark:to-teal-400 flex items-center justify-center text-[#F7F6F3] dark:text-white font-semibold text-xs">
                   {activeDisplayName.charAt(0).toUpperCase()}
                 </div>
                 <div className="flex flex-col min-w-0 flex-1">

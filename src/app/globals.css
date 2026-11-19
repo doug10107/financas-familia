@@ -3,44 +3,78 @@
 
 @layer base {
   :root {
-    --background: #f8f9ff;
-    --surface: #ffffff;
-    --on-surface: #121c2a;
-    --primary: #006c49;
-    --primary-container: #10b981;
-    --secondary: #0058be;
-    --secondary-container: #2170e4;
-    --tertiary: #494bd6;
-    --error: #ba1a1a;
-    --outline: #6c7a71;
-    --glass-bg: rgba(255, 255, 255, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.5);
-    --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
-    --glass-elevated-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    /* Ochre Wealth Overview — Layered Sage-to-Lime Light Palette */
+    --background: #E8E7E3;
+    --surface: #F7F6F3;
+    --surface-muted: #ECEBE6;
+    --on-surface: #1B221E;
+    --on-surface-muted: #5F6963;
+    --primary: #2D5346;
+    --primary-container: #5E7B66;
+    --secondary: #8FA68E;
+    --secondary-container: #C6E379;
+    --tertiary: #D8E2D4;
+    --error: #B84A39;
+    --outline: #D6D5CE;
+    --glass-bg: rgba(247, 246, 243, 0.92);
+    --glass-border: rgba(45, 83, 70, 0.08);
+    --glass-shadow: 0 2px 16px rgba(27, 34, 30, 0.04);
+    --glass-elevated-shadow: 0 12px 36px rgba(27, 34, 30, 0.08);
   }
 
   .dark {
-    --background: #0f1419;
-    --surface: #1a2332;
-    --on-surface: #e2e8f0;
-    --primary: #4edea3;
-    --primary-container: #005236;
-    --secondary: #adc6ff;
-    --secondary-container: #004395;
-    --tertiary: #c0c1ff;
-    --error: #ffb4ab;
-    --outline: #8c9c91;
-    --glass-bg: rgba(26, 35, 50, 0.7);
-    --glass-border: rgba(255, 255, 255, 0.1);
-    --glass-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
-    --glass-elevated-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    /* Cobalt Fintech Dark Palette */
+    --background: #08090c;
+    --surface: #0c1017;
+    --surface-muted: #111827;
+    --on-surface: #ffffff;
+    --on-surface-muted: #94a3b8;
+    --primary: #00e5ff;
+    --primary-container: #083344;
+    --secondary: #38bdf8;
+    --secondary-container: #0c4a6e;
+    --tertiary: #818cf8;
+    --error: #fb7185;
+    --outline: #94a3b8;
+    --glass-bg: rgba(12, 16, 23, 0.82);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+    --glass-elevated-shadow: 0 16px 48px 0 rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.07);
   }
 }
 
 body {
   background-color: var(--background);
   color: var(--on-surface);
+  font-family: var(--font-ochre), 'DM Sans', system-ui, -apple-system, sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
   @apply transition-colors duration-300;
+}
+
+/* Ochre Editorial Typography for Light Mode */
+html:not(.dark) h1,
+html:not(.dark) h2,
+html:not(.dark) h3 {
+  letter-spacing: -0.025em;
+}
+
+html:not(.dark) h1.font-extrabold {
+  font-weight: 500;
+}
+
+/* Cobalt Cyan Pulse ambient atmosphere in dark mode */
+.dark body,
+html.dark body {
+  background-color: var(--background);
+  font-family: var(--font-inter), 'Inter', system-ui, -apple-system, sans-serif;
+  letter-spacing: normal;
+  background-image: 
+    radial-gradient(ellipse 90% 45% at 50% -12%, rgba(14, 146, 176, 0.16), transparent 70%),
+    radial-gradient(ellipse 50% 30% at 88% 2%, rgba(56, 189, 248, 0.08), transparent 60%),
+    radial-gradient(ellipse 40% 30% at 12% 18%, rgba(0, 229, 255, 0.04), transparent 50%);
+  background-attachment: fixed;
+  color: var(--on-surface);
 }
 
 .material-symbols-outlined {
@@ -68,18 +102,158 @@ body {
 @layer utilities {
   .glass-card {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
   }
 
   .glass-card-elevated {
     background: var(--glass-bg);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-elevated-shadow);
+  }
+
+  /* Ochre Bento Grid Card */
+  .bento-card {
+    background: var(--surface);
+    border: 1px solid rgba(45, 83, 70, 0.08);
+    box-shadow: 0 2px 12px -2px rgba(27, 34, 30, 0.04);
+    transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  html:not(.dark) .bento-card:hover {
+    border-color: rgba(45, 83, 70, 0.18);
+    box-shadow: 0 8px 24px -6px rgba(27, 34, 30, 0.07);
+  }
+
+  /* Ochre Light Mode Surface & Palette Harmony (leaves .dark untouched) */
+  html:not(.dark) .bg-white {
+    background-color: #F7F6F3;
+  }
+
+  html:not(.dark) .bg-white\/95,
+  html:not(.dark) .bg-white\/90,
+  html:not(.dark) .bg-white\/85 {
+    background-color: rgba(247, 246, 243, 0.92);
+  }
+
+  html:not(.dark) .bg-gray-50,
+  html:not(.dark) .bg-gray-50\/50,
+  html:not(.dark) .bg-gray-50\/80,
+  html:not(.dark) .bg-slate-50 {
+    background-color: #ECEBE6;
+  }
+
+  html:not(.dark) .bg-gray-100,
+  html:not(.dark) .bg-gray-100\/80,
+  html:not(.dark) .bg-slate-100 {
+    background-color: #E3E2DC;
+  }
+
+  html:not(.dark) .border-gray-50,
+  html:not(.dark) .border-gray-100,
+  html:not(.dark) .border-gray-200,
+  html:not(.dark) .border-gray-200\/80,
+  html:not(.dark) .border-gray-200\/50,
+  html:not(.dark) .border-slate-200 {
+    border-color: rgba(45, 83, 70, 0.10);
+  }
+
+  html:not(.dark) .text-gray-900,
+  html:not(.dark) .text-slate-900 {
+    color: #1B221E;
+  }
+
+  html:not(.dark) .text-gray-700,
+  html:not(.dark) .text-gray-600,
+  html:not(.dark) .text-slate-700,
+  html:not(.dark) .text-slate-600 {
+    color: #525C56;
+  }
+
+  html:not(.dark) .text-gray-500,
+  html:not(.dark) .text-slate-500 {
+    color: #6A746E;
+  }
+
+  html:not(.dark) .text-gray-400,
+  html:not(.dark) .text-slate-400 {
+    color: #8A928C;
+  }
+
+  html:not(.dark) .text-emerald-600,
+  html:not(.dark) .text-emerald-700 {
+    color: #2D5346;
+  }
+
+  html:not(.dark) .bg-emerald-50 {
+    background-color: #E2ECE0;
+  }
+
+  html:not(.dark) .bg-emerald-500\/15,
+  html:not(.dark) .bg-emerald-500\/10 {
+    background-color: rgba(45, 83, 70, 0.12);
+  }
+
+  html:not(.dark) .bg-emerald-500 {
+    background-color: #5E7B66;
+  }
+
+  html:not(.dark) .bg-emerald-600 {
+    background-color: #2D5346;
+  }
+
+  html:not(.dark) .border-emerald-500\/20,
+  html:not(.dark) .border-emerald-500\/30,
+  html:not(.dark) .border-emerald-200 {
+    border-color: rgba(45, 83, 70, 0.22);
+  }
+
+  html:not(.dark) .text-rose-600,
+  html:not(.dark) .text-rose-700 {
+    color: #B84A39;
+  }
+
+  html:not(.dark) .bg-rose-50 {
+    background-color: #F4E6E2;
+  }
+
+  .dark .bento-card,
+  html.dark .bento-card {
+    background: rgba(12, 16, 23, 0.82);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 8px 30px -4px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .dark .bento-card:hover,
+  html.dark .bento-card:hover {
+    border-color: rgba(0, 229, 255, 0.25);
+    box-shadow: 0 0 0 1px rgba(0, 229, 255, 0.12), 0 14px 40px -4px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  /* Cobalt Dark Mode Surface Harmony */
+  .dark .dark\:bg-\[\#111827\],
+  html.dark .dark\:bg-\[\#111827\] {
+    background-color: rgba(12, 16, 23, 0.88) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4), 0 8px 30px -4px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .dark .dark\:border-slate-800,
+  html.dark .dark\:border-slate-800 {
+    border-color: rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .dark .dark\:border-slate-800\/80,
+  .dark .dark\:border-slate-800\/60,
+  .dark .dark\:border-slate-700\/50 {
+    border-color: rgba(255, 255, 255, 0.06) !important;
   }
 
   .hide-scrollbar,
